@@ -1,4 +1,4 @@
-# MLOOP
+# M-LOOP
 Machine-learning online optimization package
 
 <><><><><><><>
