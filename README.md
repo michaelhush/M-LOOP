@@ -1,13 +1,15 @@
 # M-LOOP
 Machine-learning online optimization package
 
-<><><><><><><>
-Installation
-<><><><><><><>
+##Overview
 
-Get anaconda.
+M-LOOP is package written in python for online optimization of quantum experiments. It uses algorithms based on machine learning to efficiently find an optimal set of parameters for the experiment, all in real time.
 
-Here we describe the required formats for the files:
+In order to use M-LOOP, an experimentalist needs to first automate their experiment and determine a single real value, or cost, that measures its performance. They can then run a script in this package which will automatically optimize the experiment and find a set of parameters that minimize the cost. We choose a 
+
+## Installation
+
+M-LOOP uses a set of scientific computing 
 
 <><><><><><><>
 ExpOutput.mat
