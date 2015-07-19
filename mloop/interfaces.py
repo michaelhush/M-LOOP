@@ -4,6 +4,14 @@ Created on 16 Jul 2015
 @author: michaelhush
 '''
 
+import sys
+import numpy as nm
+import numpy.random as nr
+import scipy.io as si
+import time
+import os
+
+
 class ExpInterface():
     
     def __init__(self, timeDelay=None, fileAppend=None):

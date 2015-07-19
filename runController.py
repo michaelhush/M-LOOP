@@ -13,7 +13,7 @@ import os
 import dill
 import cProfile
 
-from mloop import *
+import mloop as ml
 
 #import scipy.optimize as so
 #import scipy.io as si
@@ -58,9 +58,9 @@ try:
     
     if 'TestInterface' in configDict and bool(configDict['TestInterface']):
         #For testing 
-        interface = lec.TestingExpInterface()
+        interface = ml.TestingExpInterface()
     else:
-        interface = lec.ExpInterface()
+        interface = ml.ExpInterface()
     
     if 'ProfileLearner' in configDict and bool(configDict['ProfileLearner']):
         profileLearner = True
@@ -150,7 +150,7 @@ try:
             
             sys.exit('No correct InitialConditionsSetup given.') 
             
-        controller = lec.NelderController(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, initParams, initSimplexDisp, configDict)
+        controller = ml.NelderController(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, initParams, initSimplexDisp, configDict)
         
         controller.runOptimization()
     
@@ -163,7 +163,7 @@ try:
         minBoundary = nm.array(configDict['MinimumBoundaries'], dtype=float)
         maxBoundary = nm.array(configDict['MaximumBoundaries'], dtype=float)
     
-        controller = lec.RandomController(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, configDict)
+        controller = ml.RandomController(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, configDict)
         
         controller.runOptimization()
         
@@ -194,7 +194,7 @@ try:
             
             numPlannedRuns = int(configDict['NumberOfTrainingRuns'])
             
-            initContr = lec.RandomController(interface, numPlannedRuns, numParams, minRandom, maxRandom, configDict)
+            initContr = ml.RandomController(interface, numPlannedRuns, numParams, minRandom, maxRandom, configDict)
             
             initContr.runOptimization()
             
@@ -235,7 +235,7 @@ try:
                 print("NumberOfTrainingRuns not provided setting to default for simplex NumberOrParameters + 1")
                 numPlannedRuns = numParams + 1
             
-            initContr = lec.NelderController(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, initParams, initSimplexDisp, configDict)
+            initContr = ml.NelderController(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, initParams, initSimplexDisp, configDict)
             
             initContr.runOptimization()
             
@@ -309,7 +309,7 @@ try:
             else:
                 leashSize = None
             
-            controller = lec.GlobalLearner(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, minCost, maxCost, trainingNum, trainingParams, trainingCosts, trainingUncers, trainingBads, initParams, configDict, leashSize, sweepRuns, particleNumber, thetaSearchs, paramsSearchs, corrLength)
+            controller = ml.GlobalLearner(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, minCost, maxCost, trainingNum, trainingParams, trainingCosts, trainingUncers, trainingBads, initParams, configDict, leashSize, sweepRuns, particleNumber, thetaSearchs, paramsSearchs, corrLength)
         
         else:
             

@@ -11,17 +11,8 @@ Python package for performing online optimization based on machine learning with
 @author: michaelhush
 '''
 
-import sys
-import numpy as nm
-import numpy.random as nr
-import numpy.linalg as nl
-import scipy.io as si
-import scipy.optimize as so
-import time
-import os
-import dill
-import math
+from .controllers import *
+from .interfaces import *
 
-from sklearn import gaussian_process as slgp
+__all__ = ['controllers', 'interfaces']
 
-__all__ = ["expcontroller","expinterface","learnercontrollers","neldercontroller","randomcontroller"]
