@@ -205,8 +205,7 @@ The GlobalLearner performs a set of sweeps where it goes from prioritizing new i
 
 Internally the learners attempts to logically normalize the parameters and costs internally to hopefully improve robustness and consistency of performance. It uses the boundaries to normalize the parameters. In order to normalize the costs it the user must provide an expected minimum and maximum cost. The algorithm should still function even if the cost occasionally falls slightly out of these bounds. But if the cost falls significantly outside of the prescribed minimum cost the algorithm can become unstable. So always try to use a lower bound when providing the minimum cost. 
 
-Common Learner Settings
-~~~~~~~~~~~~~~~~~~~~~~~
+#####Common Learner Settings
 
 All learners require the ControllerType currently it must be
 
@@ -226,7 +225,6 @@ Which are mostly self explanatory and/or the same as previous controllers.
 There are three options for the initial conditions: Random, Simplex or FromFile. 
 
 Random
-~~~~~~~
 
 The random initial training will simple try uniformly distributed random points inside the boundaries. The required definitions are:
 
@@ -241,7 +239,6 @@ MaximumInitialParameters= (array of floats of the size NumberOfParameters)
 Under the hood the controller will initiate a RandomSearch controller to get the training data.
 
 Simplex
-~~~~~~~~
 
 Here the controller will create the initial points from a simplex. Under the hood the controller actually initiates a NelderMead controller, hence if you can also prescribe a certain number of runs and the training data will then be formed from an initial Nelder Mead run. The required definitions are:
 
@@ -259,7 +256,6 @@ MinimumInitialParameters= (array of floats of the size NumberOfParameters)
 MaximumInitialParameters= (array of floats of the size NumberOfParameters)
 
 FromFile
-~~~~~~~~~
 
 Lastly you can train the learner from any previous run. This includes previous learning runs. Simply provide the _python_ archive of the previous run. By default this is output as 'ControllerArchive.pkl'. (In future version we may allow import from matlab files). The following is required to take from a file:
 
@@ -270,29 +266,22 @@ Optionally you can also provide the specific file name as:
 FileName=(string)
 
 Optional Common Parameters
-~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 All learners use common code when searching for the next point to sample. The only difference between the algorithms is how much they prioritize new information of minimizing cost. The learner can spend a vast amount of resources when trying to best estimate the next point to sample, if you're finding the solver it taking longer to find a new point then the downtime of the experiment. You can make reduce the learners Accuracy, but vastly increase it's speed with the following settings.
 
-The primary method to speed up your solver is by using the tag
+The primary method to speed up your solver is by using the following settings
 
 NumberOfParticles = (int)
 
-*DOCUMENT*
+Controls the maximum number of particles that is stored by the learner.
 
 NumberOfThetaSearches = (int)
 
-*DOCUMENT*
+Number of searches looking for the correlations lengths.
 
 NumberOfParameterSearches = (int)
 
-*DOCUMENT*
-
-Learner specific settings
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-GlobalLearner
-~~~~~~~~~~~~~
+Number of searches looking for best parameters.
 
 The global learner has a many unique setting related to how the sweep is performed. However, all of them have a default setting. The first quantity you can change is the number of runs in a sweep.
 
@@ -300,17 +289,11 @@ RunsInSweep = (int)
 
 The default value for RunsInSweep = 5. This gives reasonable performance for all dimensions.
 
-Custom Ramp
------------
-
 The default ramp is a linear sweep from SweepMinBias to SweepMaxBias. If this does not suit your needs you can actually completely customize the ramps function using:
 
 SweepRampFunction = (lambda function which takes one integer and returns a float between 0.0 and 1.0)
 
 Under the hood lambda functions are actually what are used to implement default ramp. Here we let the user directly make such a function. This is mostly included just to show off how flexible python is, and how clever the input method we are using is. If you use this trick make sure the lambda function behaves sanely. It will check it with a few random input integers, but that's it.
-
-Putting the solver on a leash
------------------------------
 
 In high dimensional spaces the learners propensity to search the space, and particularly the boundaries might become highly inefficient. If instead you want the learner to only randomly walk thought the search space instead of completely freely probing it you can put it on a leash. In practice the leash puts bounds on the minimizer when searching the predicted landscape based on the initial starting point it is given. This means there is a maximum distance the learner can travel from any of the points it has previously visited. Using this approach ensures that the learner can still in principle search the space, however it has to do so in a restricted manner. 
 
@@ -327,7 +310,6 @@ LeashFunction = (lambda function which takes one integer and returns a float bet
 Again under the hood, all leashes are implemented with lambda functions. Here we are just giving the user direct control. Note that if LeashFunction is defined the program will ignore LeashSize if it is also specified.
 
 Examples
---------
 
 ---
 
