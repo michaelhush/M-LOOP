@@ -172,8 +172,8 @@ class FakeExperiment(threading.Thread):
     
     def __init__(self,
                  test_landscape = None,
-                 out_file_type='mat',
-                 in_file_type='mat',
+                 out_file_type=mlu.default_in_file_type,
+                 in_file_type=mlu.default_out_file_type,
                  exp_wait = 0,
                  poll_wait = 1,
                  **kwargs):
@@ -190,8 +190,9 @@ class FakeExperiment(threading.Thread):
         self.poll_wait = float(poll_wait)
         self.out_file_type = str(out_file_type)
         self.in_file_type = str(in_file_type)
-        self.total_out_filename = 'ExpOutput.' + self.out_file_type
-        self.total_in_filename = 'ExpInput.' + self.in_file_type
+        
+        self.total_out_filename = mlu.default_in_filename + '.' + self.out_file_type
+        self.total_in_filename = mlu.default_out_filename + '.' + self.in_file_type
         self.end_event = threading.Event()
         self.test_count =0
     

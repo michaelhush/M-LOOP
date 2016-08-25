@@ -20,9 +20,9 @@ setup(
     },
     author = 'Michael R Hush',
     author_email = 'MichaelRHush@gmail.com',
-    description = 'M-LOOP: Machine-learning online optimization package. A python package of automated optimization tools - enhanced with machine-learning - for scientific experiments or other optimization tasks.',
+    description = 'M-LOOP: Machine-learning online optimization package. A python package of automated optimization tools - enhanced with machine-learning - for quantum scientific experiments, computer controlled systems or other optimization tasks.',
     license = 'MIT',
-    keywords = 'automated machine learning optimization science experiments quantum',
+    keywords = 'automated machine learning optimization optimisation science experiment quantum',
     url = 'https://github.com/michaelhush/M-LOOP/',  
 
     classifiers = ['Development Status :: 3 - Alpha',

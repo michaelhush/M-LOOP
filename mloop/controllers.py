@@ -13,7 +13,6 @@ import os
 
 controller_dict = {'random':1,'nelder_mead':2,'gaussian_process':3}
 number_of_controllers = 3
-
 default_controller_archive_filename = 'controller_archive'
 
 class ControllerInterrupt(Exception):

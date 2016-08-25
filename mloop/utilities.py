@@ -11,6 +11,11 @@ import os
 import numpy as np
 import mloop
 
+default_in_filename = 'exp_output'
+default_in_file_type = 'mat'
+default_out_filename = 'exp_input'
+default_out_file_type = 'mat'
+
 archive_foldername = './M-LOOP_archives/'
 log_foldername = './M-LOOP_logs/'
 default_log_filename = 'M-LOOP_'

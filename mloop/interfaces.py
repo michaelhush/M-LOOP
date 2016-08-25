@@ -135,10 +135,10 @@ class FileInterface(Interface):
     '''
     
     def __init__(self,
-                 out_filename='exp_input', 
-                 out_file_type='mat',
-                 in_filename='exp_output',
-                 in_file_type='mat',
+                 out_filename=mlu.default_out_filename, 
+                 out_file_type=mlu.default_out_file_type,
+                 in_filename=mlu.default_in_filename,
+                 in_file_type=mlu.default_in_file_type,
                  **kwargs):
         
         super().__init__(**kwargs)
