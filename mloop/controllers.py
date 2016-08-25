@@ -1,931 +1,710 @@
 '''
-Created on 16 Jul 2015
-
-@author: michaelhush
+Module of all the controllers used in M-LOOP. The controllers, as the name suggests, control the interface to the experiment and all the learners employed to find optimal parameters.
 '''
 
-import sys
-import numpy as nm
-import numpy.random as nr
-import numpy.linalg as nl
-import scipy.io as si
-import scipy.optimize as so
-import dill
-import math
-from sklearn import gaussian_process as slgp
+import queue
+import datetime
+import mloop.utilities as mlu
+import mloop.learners as mll
+import mloop.interfaces as mli
+import multiprocessing as mp
+import logging.handlers
+import os
 
+controller_dict = {'random':1,'nelder_mead':2,'gaussian_process':3}
+number_of_controllers = 3
 
-class ExpController():
+default_controller_archive_filename = 'controller_archive'
+
+class ControllerInterrupt(Exception):
+    '''
+    Exception that is raised when the controlled is ended with the end flag or event. 
+    '''
+    def __init__(self):
+        super().__init__()
+ 
+def create_controller(interface,
+                      controller_type='gaussian_process', 
+                      **controller_config_dict):
+    '''
+    Start the controller with the options provided.
     
-    def __init__(self, interface, numPlannedRuns, numParams, minBoundary, maxBoundary, configDict, fileAppend=None):
+    Args:
+        interface (interface): Interface with queues and events to be passed to controller
+    
+    Keyword Args:
+        controller_type (Optional [str]): Defines the type of controller can be 'random', 'nelder' or 'gaussian_process'. Defaults to 'gaussian_process'.
+        **controller_config_dict : Options to be passed to controller.
         
-        self.interface = interface
-        self.numPlannedRuns = numPlannedRuns
-        self.numParams = int(numParams)
-        self.minBoundary = minBoundary
-        self.maxBoundary = maxBoundary
-        self.diffBoundary = maxBoundary - minBoundary
+    Returns:
+        Controller : threadible object which must be started with start() to get the controller running.
         
-        self.numExpCalls = 0
+    Raises:
+        ValueError : if controller_type is an unrecognized string
+    '''
+    log = logging.getLogger(__name__)
+    
+    controller_type = str(controller_type)
+    if controller_type=='gaussian_process':
+        controller = GaussianProcessController(interface, **controller_config_dict)
+    elif controller_type=='nelder_mead':
+        controller = NelderMeadController(interface, **controller_config_dict)
+    elif controller_type=='random':
+        controller = RandomController(interface, **controller_config_dict)
+    else:
+        log.error('Unknown controller type:' + repr(controller_type))
+        raise ValueError
+    
+    return controller
+
+class Controller():
+    '''
+    Abstract class for controllers. The controller controls the entire M-LOOP process. The controller for each algorithm all inherit from this class. The class stores a variety of data which all algorithms use and also all of the achiving and saving features.
+    
+    In order to implement your own controller class the minimum requirement is to add a learner to the learner variable. And implement the next_parameters method, where you provide the appropriate information to the learner and get the next parameters.
+    
+    See the RandomController for a simple implementation of a controller.
+    
+    Note the first three keywords are all possible halting conditions for the controller. If any of them are satisfied the controller will halt (meaning an and condition is used).
+    
+    Also creates an empty variable learner. The simplest way to make a working controller is to assign a learner of some kind to this variable, and add appropriate queues and events from it.
+    
+    Args:
+        interface (interface): The interface process. Is run by learner.
         
-        self.configDict = configDict
+    Keyword Args:
+        max_num_runs (Optional [float]): The number of runs before the controller stops. If set to float('+inf') the controller will run forever. Default float('inf'), meaning the controller will run until another condition is met.
+        target_cost (Optional [float]): The target cost for the run. If a run achieves a cost lower than the target, the controller is stopped. Default float('-inf'), meaning the controller will run until another condition is met.
+        max_repeats_without_better_params (Otional [float]): Puts a limit on the number of runs are allowed before a new better set of parameters is found. Default float('inf'), meaning the controller will run until another condition is met. 
+        controller_archive_filename (Optional [string]): Filename for archive. Contains costs, parameter history and other details depending on the controller type. Default 'ControllerArchive.mat'
+        controller_archive_file_type (Optional [string]): File type for archive. Can be either 'txt' a human readable text file, 'pkl' a python dill file, 'mat' a matlab file or None if there is no archive. Default 'mat'.
+        archive_extra_dict (Optional [dict]): A dictionary with any extra variables that are to be saved to the archive. If None, nothing is added. Default None.
+        start_datetime (datetime): Datetime for when controller was started.
         
-        if fileAppend==None:
-            self.fileAppend = ""
+    Attributes:
+        params_out_queue (queue): Queue for parameters to next be run by experiment.
+        costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
+        end_interface (event): Event used to trigger the end of the interface
+        learner (None): The placeholder for the learner, creating this variable is the minimum requirement to make a working controller class.
+        learner_params_queue (queue): The parameters queue for the learner
+        learner_costs_queue (queue): The costs queue for the learner
+        end_learner (event): Event used to trigger the end of the learner
+        log_queue (queue): Queue used to safely pipe log data from the learner
+        num_in_costs (int): Counter for the number of costs received.
+        num_out_params (int): Counter for the number of parameters received. 
+        out_params (list): List of all parameters sent out by controller.
+        out_extras (list): Any extras associated with the output parameters.
+        in_costs (list): List of costs received by controller.
+        in_uncers (list): List of uncertainties receieved by controller.
+        best_cost (float): The lowest, and best, cost received by the learner.
+        best_uncer (float): The uncertainty associated with the best cost.
+        best_params (array): The best parameters recieved by the learner.
+        best_index (float): The run number that produced the best cost.  
+    
+    '''
+    
+    def __init__(self, interface,
+                 max_num_runs = float('+inf'),
+                 target_cost = float('-inf'),
+                 max_repeats_without_better_params = float('+inf'),
+                 controller_archive_filename=default_controller_archive_filename,
+                 controller_archive_file_type='pkl',
+                 archive_extra_dict = None,
+                 start_datetime = None,
+                 **kwargs):
+        
+        #Variable that are included in archive
+        self.num_in_costs = 0
+        self.num_out_params = 0
+        self.num_last_best_cost = 0
+        self.out_params = []
+        self.out_type = []
+        self.out_extras = []
+        self.in_costs = []
+        self.in_uncers = []
+        self.in_bads = []
+        self.in_extras = []
+        self.best_cost = float('inf')
+        self.best_uncer = float('nan')
+        self.best_index = float('nan')
+        self.best_params = float('nan')
+        
+        #Variables that used internally
+        self.last_out_params = None
+        self.curr_params = None
+        self.curr_cost = None
+        self.curr_uncer = None
+        self.curr_bad = None
+        self.curr_extras = None
+        
+        #Constants
+        self.controller_wait = float(1)
+        
+        #Learner related variables
+        self.learner_params_queue = None
+        self.learner_costs_queue = None
+        self.end_learner = None
+        self.learner = None
+        
+        #Create a logger that is multiprocessing safe.
+        self.log = logging.getLogger(__name__)
+        self.log_queue = mp.Queue()
+        self.log_queue_listener = logging.handlers.QueueListener(self.log_queue,
+                                                                 *logging.getLogger('mloop').handlers, 
+                                                                 respect_handler_level=True)
+        
+        #Variables set by user
+        
+        #save interface and extract important variables
+        if isinstance(interface, mli.Interface):
+            self.interface = interface
         else:
-            self.fileAppend = fileAppend
-    
-        #Do some basic checks 
+            self.log.error('interface is not a Interface as defined in the MLOOP package.')
+            raise TypeError
         
-        #Check data from file is formatted right
-        if ((self.minBoundary.size!=self.numParams)|(self.minBoundary.size!=self.numParams)):
-            sys.exit("Number of boundary elements does not match number of parameters.")
+        self.params_out_queue = interface.params_out_queue
+        self.costs_in_queue = interface.costs_in_queue
+        self.end_interface = interface.end_event
+        self.interface.add_mp_safe_log(self.log_queue)
+        
+        #Other options
+        if start_datetime is None:
+            self.start_datetime = datetime.datetime.now()
+        else:
+            self.start_datetime = datetime.datetime(start_datetime)
+        self.max_num_runs = float(max_num_runs)
+        if self.max_num_runs<=0:
+            self.log.error('Number of runs must be greater than zero. max_num_runs:'+repr(self.max_num_run))
+            raise ValueError
+        self.target_cost = float(target_cost)
+        self.max_repeats_without_better_params = float(max_repeats_without_better_params)
+        if self.max_repeats_without_better_params<=0:
+            self.log.error('Max number of repeats must be greater than zero. max_num_runs:'+repr(max_repeats_without_better_params))
+            raise ValueError
+        
+        if mlu.check_file_type_supported(controller_archive_file_type):
+            self.controller_archive_file_type = controller_archive_file_type
+        else:
+            self.log.error('File in type is not supported:' + repr(controller_archive_file_type))
+            raise ValueError
+        if controller_archive_filename is None:
+            self.controller_archive_filename = None
+        else:
+            if not os.path.exists(mlu.archive_foldername):
+                os.makedirs(mlu.archive_foldername)
+            self.controller_archive_filename =str(controller_archive_filename)
+            self.total_archive_filename = mlu.archive_foldername + self.controller_archive_filename + '_' + mlu.datetime_to_string(self.start_datetime) + '.' + self.controller_archive_file_type
+        
+        self.archive_dict = {'archive_type':'controller',
+                             'num_out_params':self.num_out_params,
+                             'out_params':self.out_params,
+                             'out_type':self.out_type,
+                             'out_extras':self.out_extras,
+                             'in_costs':self.in_costs,
+                             'in_uncers':self.in_uncers,
+                             'in_bads':self.in_bads,
+                             'in_extras':self.in_extras,
+                             'max_num_runs':self.max_num_runs,
+                             'start_datetime':mlu.datetime_to_string(self.start_datetime)}
+        
+        if archive_extra_dict is not None:
+            self.archive_dict.update(archive_extra_dict)
+        
+        self.remaining_kwargs = kwargs
+        
+        self.log.debug('Controller init completed.')
+    
+    def check_end_conditions(self):
+        '''
+        Check whether either of the three end contions have been met: number_of_runs, target_cost or max_repeats_without_better_params.
+        
+        Returns:
+            bool : True, if the controlled should continue, False if the controller should end. 
+        '''
+        return (self.num_in_costs < self.max_num_runs) and (self.best_cost > self.target_cost) and (self.num_last_best_cost < self.max_repeats_without_better_params)
+    
+    def _update_controller_with_learner_attributes(self):
+        '''
+        Update the controller with properties from the learner.
+        '''
+        self.learner_params_queue = self.learner.params_out_queue
+        self.learner_costs_queue = self.learner.costs_in_queue
+        self.end_learner = self.learner.end_event
+        self.learner.add_mp_safe_log(self.log_queue)
+        self.remaining_kwargs = self.learner.remaining_kwargs
+        
+        self.archive_dict.update({'num_params':self.learner.num_params,
+                                  'min_boundary':self.learner.min_boundary,
+                                  'max_boundary':self.learner.max_boundary})
+        
+    
+    def _put_params_and_out_dict(self, params,  param_type=None, **kwargs):
+        '''
+        Send parameters to queue and whatever additional keywords. Saves sent variables in appropriate storage arrays. 
+        
+        Args:
+            params (array) : array of values to be sent to file
+        
+        Keyword Args:
+            **kwargs: any additional data to be attached to file sent to experiment
+        '''
+        out_dict = {'params':params}
+        out_dict.update(kwargs)
+        self.params_out_queue.put(out_dict)
+        self.num_out_params += 1
+        self.last_out_params = params
+        self.out_params.append(params)
+        self.out_extras.append(kwargs)
+        if param_type is not None:
+            self.out_type.append(param_type)
+        self.log.debug('Controller params=' + repr(params))
+        self.log.debug('Put params num:' + repr(self.num_out_params ))
+        
+    def _get_cost_and_in_dict(self):
+        '''
+        Get cost, uncertainty, parameters, bad and extra data from experiment. Stores in a list of history and also puts variables in their appropriate 'current' variables
+        
+        Note returns nothing, stores everything in the internal storage arrays and the curr_variables
+        '''
+        while True:
+            try:
+                in_dict = self.costs_in_queue.get(True, self.controller_wait)
+            except queue.Empty:
+                continue
+            else:
+                break
+        
+        self.num_in_costs += 1
+        self.num_last_best_cost += 1
+        
+        if not ('cost' in in_dict) and (not ('bad' in in_dict) or not in_dict['bad']):
+            self.log.error('You must provide at least the key cost or the key bad with True.')
+            raise ValueError
+        try:
+            self.curr_cost = float(in_dict.pop('cost',float('nan')))  
+            self.curr_uncer = float(in_dict.pop('uncer',0)) 
+            self.curr_bad = bool(in_dict.pop('bad',False))
+            self.curr_extras = in_dict
+        except ValueError:
+            self.log.error('One of the values you provided in the cost dict could not be converted into the right type.')
+            raise
+        if self.curr_bad and 'cost' in dict:
+            self.log.warning('The cost provided with the bad run will be saved, but not used by the learners.')
+        
+        self.in_costs.append(self.curr_cost)
+        self.in_uncers.append(self.curr_uncer)
+        self.in_bads.append(self.curr_bad)
+        self.in_extras.append(self.curr_extras)
+        self.curr_params = self.last_out_params
+        if self.curr_cost < self.best_cost:
+            self.best_cost = self.curr_cost
+            self.best_uncer = self.curr_uncer
+            self.best_index =  self.num_in_costs
+            self.best_params = self.curr_params
+            self.num_last_best_cost = 0
+        self.log.debug('Controller cost=' + repr(self.curr_cost))
+        self.log.debug('Got cost num:' + repr(self.num_in_costs))
+    
+    def save_archive(self):
+        '''
+        Save the archive associated with the controller class. Only occurs if the filename for the archive is not None. Saves with the format previously set.
+        '''
+        if self.controller_archive_filename is not None:
+            self.archive_dict.update({'num_in_costs':self.num_in_costs,
+                                      'num_out_params':self.num_out_params,
+                                      'best_cost':self.best_cost,
+                                      'best_uncer':self.best_uncer,
+                                      'best_params':self.best_params,
+                                      'best_index':self.best_index})
+            try:
+                mlu.save_dict_to_file(self.archive_dict,self.total_archive_filename,self.controller_archive_file_type)
+            except ValueError:
+                self.log.error('Attempted to save with unknown archive file type, or some other value error.')
+                raise
+        else:
+            self.log.debug('Did not save controller archive file.')
+    
+    def optimize(self):
+        '''
+        Optimize the experiment. This code learner and interface processes/threads are launched and appropriately ended.
+        
+        Starts both threads and catches kill signals and shuts down appropriately.
+        '''
+        log = logging.getLogger(__name__)
+        
+        try:
+            log.info('Optimization started.')
+            self._start_up()
+            self._optimization_routine()
+            log.info('Controller finished. Closing down M-LOOP. Please wait a moment...')
+        except (KeyboardInterrupt,SystemExit):
+            log.warning('!!! Do not give the interrupt signal again !!! \n M-LOOP stopped with keyboard interupt or system exit. Please wait at least 1 minute for the threads to safely shut down. \n ')
+            log.warning('Closing down controller.')
+        except Exception:
+            self.log.warning('Controller ended due to exception of some kind. Starting shut down...')
+            self._shut_down()
+            self.log.warning('Safely shut down. Below are results found before exception.')
+            self.print_results()
+            raise
+        self._shut_down()
+        self.print_results()
+        self.log.info('M-LOOP Done.')
+    
+    def _start_up(self):
+        '''
+        Start the learner and interface threads/processes.
+        '''
+        self.log_queue_listener.start()
+        self.learner.start()
+        self.interface.start()
+    
+    def _shut_down(self):
+        '''
+        Shutdown and clean up resources of the controller. end the learners, queue_listener and make one last save of archive.
+        '''
+        self.log.debug('Learner end event set.')
+        self.end_learner.set()
+        self.log.debug('Interface end event set.')
+        self.end_interface.set()
+        self.learner.join()
+        self.log.debug('Learner joined.')
+        #After 3 or 4 executions of mloop in same python environment, sometimes excution can be trapped here
+        #Likely to be a bug with multiprocessing in python, but difficult to isolate.
+        #current solution is to join with a timeout and kill if that fails
+        self.interface.join(self.interface.interface_wait*3)
+        if self.interface.is_alive():
+            self.log.debug('Interface did not join in time had to terminate.')
+            self.interface.terminate()
+        self.log.debug('Interface joined.')
+        self.save_archive()
+        self.log_queue_listener.stop()
+        self.log.debug('Log listener stopped')     
+    
+    def print_results(self):
+        '''
+        Print results from optimization run to the logs
+        '''
+        self.log.info('Results:-')
+        self.log.info('Best parameters found:' + str(self.best_params))
+        self.log.info('Best cost returned:' + str(self.best_cost) + ' +/- ' + str(self.best_uncer))
+        self.log.info('Best run number:' + str(self.best_index))
 
-        if (nm.all(self.diffBoundary>0.0)==False):
-            sys.exit("Maximum boundary values are not larger than minimum values.")
-  
+    def _optimization_routine(self):
+        '''
+        Runs controller main loop. Gives parameters to experiment and saves costs returned. 
+        '''
+        self.log.debug('Start controller loop.')
+        try:
+            next_params = self._first_params()
+            self._put_params_and_out_dict(next_params)
+            self.log.info('Run:' + str(self.num_in_costs +1))
+            self.save_archive()
+            self._get_cost_and_in_dict()
+            while self.check_end_conditions():
+                next_params = self._next_params()
+                self._put_params_and_out_dict(next_params)
+                self.log.info('Run:' + str(self.num_in_costs +1))
+                self.save_archive()
+                self._get_cost_and_in_dict()
+            self.log.debug('End controller loop.')
+        except ControllerInterrupt:
+            self.log.warning('Controller ended by interruption.')
     
-    def checkInBoundary(self,param):
-        param = nm.array(param)
-        testbool = nm.all(param >= self.minBoundary)&nm.all(self.maxBoundary >= param)
-        return testbool
+    def _first_params(self):
+        '''
+        Checks queue to get first  parameters. 
+        
+        Returns:
+            Parameters for first experiment
+        '''
+        return self.learner_params_queue.get()
     
-    def wrapGetCost(self,param):
-        self.numExpCalls += 1
-        return self.interface.sendParametersGetCost(param)
+    def _next_params(self):
+        '''
+        Abstract method.
+        
+        When implemented should send appropriate information to learner and get next parameters.
+        
+        Returns:
+            Parameters for next experiment.
+        '''
+        pass
     
-    def saveEverything(self):
-        with open('ControllerArchive' + self.fileAppend + '.pkl','wb') as learnerDump:
-            dill.dump(self,learnerDump)
+class RandomController(Controller):
+    '''
+    Controller that simply returns random variables for the next parameters. Costs are stored but do not influence future points picked.
+    
+    Args:
+        params_out_queue (queue): Queue for parameters to next be run by experiment.
+        costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
+        **kwargs (Optional [dict]): Dictionary of options to be passed to Controller and Random Learner.
+    
+    '''
+    def __init__(self, interface,**kwargs):
+        
+        super().__init__(interface, **kwargs)
+        self.learner = mll.RandomLearner(start_datetime = self.start_datetime,
+                                         **self.remaining_kwargs)
+        
+        self._update_controller_with_learner_attributes()
+        self.out_type.append('random')
+        
+        self.log.debug('Random controller init completed.')    
+        
+    def _next_params(self):
+        '''
+        Sends cost uncer and bad tuple to learner then gets next parameters.
+        
+        Returns:
+            Parameters for next experiment.
+        '''
+        self.learner_costs_queue.put(self.best_params)
+        return self.learner_params_queue.get()      
+     
 
-
-class NelderController(ExpController):
+class NelderMeadController(Controller):
+    '''
+    Controller for the Nelder-Mead solver. Suggests new parameters based on the Nelder-Mead algorithm. Can take no boundaries or hard boundaries. More details for the Nelder-Mead options are in the learners section.
     
-    def nelderGetCost(self,param):
-        self.numExpCalls += 1
-        cost, _, bad = self.interface.sendParametersGetCost(param)
-        if bad:
+    Args:
+        params_out_queue (queue): Queue for parameters to next be run by experiment.
+        costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
+        **kwargs (Optional [dict]): Dictionary of options to be passed to Controller parent class and Nelder-Mead learner.
+    '''
+    def __init__(self, interface,
+                **kwargs):
+        super().__init__(interface, **kwargs)    
+        
+        self.learner = mll.NelderMeadLearner(start_datetime = self.start_datetime,
+                                             **self.remaining_kwargs)
+        
+        self._update_controller_with_learner_attributes()
+        self.out_type.append('nelder_mead')
+    
+    def _next_params(self):
+        '''
+        Gets next parameters from Nelder-Mead learner.
+        '''
+        if self.curr_bad:
             cost = float('inf')
-        return cost
+        else:
+            cost = self.curr_cost       
+        self.learner_costs_queue.put(cost)
+        return self.learner_params_queue.get()
+
+
+
+class GaussianProcessController(Controller):
+    '''
+    Controller for the Gaussian Process solver. Primarily suggests new points from the Gaussian Process learner. However, during the initial few runs it must rely on a different optimization algorithm to get some points to seed the learner. 
     
-    def nelderInitGetCost(self,param):
-        self.numExpCalls += 1
-        cost, _, _ = self.interface.sendParametersGetCost(param)
-        return cost
+    Args:
+        interface (Interface): The interface to the experiment under optimization.
+        **kwargs (Optional [dict]): Dictionary of options to be passed to Controller parent class, initial training learner and Gaussian Process learner.
     
-    def __init__(self, interface, numPlannedRuns, numParams, minBoundary, maxBoundary, initParams, initSimplexDisp, configDict):
-        
-        super(NelderController,self).__init__(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, configDict)
-        
-        self.initParams = nm.asfarray(initParams).flatten()
-        self.initSimplexDisp = nm.asfarray(initSimplexDisp).flatten()
-        
-        self.numBoundaryHits = 0
-        
-        N = len(self.initParams)
-        self.sim = nm.zeros((N + 1, N), dtype=self.initParams.dtype)
-        self.fsim = nm.zeros((N + 1,), float)
-        
-        self.saveEverything()
-        
-        #Run some extra checks
-        
-        if self.numPlannedRuns < self.numParams:
-            sys.exit("Not enough runs to form initial simplex. Increase the number of experimental runs (much more than number of parameters).")
-        
-        if initParams.size!= numParams :
-            sys.exit("Number of initial parameters elements does not match number of parameters.")
-         
-        if initSimplexDisp.size!= numParams:
-            sys.exit("Number of initial simplex displacements does not match number of parameters.")
-        
-        if nm.any(self.initParams < self.minBoundary) :
-            sys.exit("Initial parameters outside of minimum boundary.")
-            
-        if nm.any(self.maxBoundary < (self.initParams + self.initSimplexDisp)) :
-            print("WARNING: Initial simplex outside of maximum boundary. Projecting to be within boundaries")
-            self.initSimplexDisp = nm.minimum(self.initParams + self.initSimplexDisp,self.maxBoundary) - self.initParams
-            
-        if not nm.all(nm.isfinite(self.initParams)):
-            sys.exit('Initial parameters are infinite of Nan.')
-            
-        if not nm.all(nm.isfinite(self.initSimplexDisp)):
-            sys.exit('Initial simplex displacements are infinite of Nan.')
-        
-        
-            
-    def runOptimization(self):
-        """
-        Optimises attached experiment of simulation.
-        
-        Uses nelder-mead algorithm
-        """
-        
-        N = len(self.initParams)
-        rho = 1
-        chi = 2
-        psi = 0.5
-        sigma = 0.5
-        one2np1 = list(range(1, N + 1))
+    Keyword Args:
+        initial_training_source (Optional [string]): The type for the initial training source can be 'random' for the random learner or 'nelder_mead' for the Nelder-Mead learner. This leaner is also called if the Gaussian process learner is too slow and a new point is needed. Default 'random'.
+        num_training_runs (Optional [int]): The number of training runs to before starting the learner. If None, will by ten or double the number of parameters, whatever is larger. 
+        no_delay (Optional [bool]): If True, there is never any delay between a returned cost and the next parameters to run for the experiment. In practice, this means if the gaussian process has not prepared the next parameters in time the learner defined by the initial training source is used instead. If false, the controller will wait for the gaussian process to predict the next parameters and there may be a delay between runs. 
+    '''
     
-        self.sim[0] = self.initParams
+    def __init__(self, interface, 
+                 training_type='random',
+                 num_training_runs=None,
+                 no_delay=True,
+                 num_params=None,
+                 min_boundary=None,
+                 max_boundary=None,
+                 trust_region=None, 
+                 **kwargs):
+        super().__init__(interface, **kwargs)   
         
-        if not self.checkInBoundary(self.initParams):
-            sys.exit("Initial condition outside of boundaries. Pick an initial condition inside bounds.")
-        self.fsim[0] = self.nelderInitGetCost(self.initParams)
+        self.last_training_cost = None
+        self.last_training_bad = None
+        self.last_training_run_flag = False
         
-        #Create initial simplex
-        #Use provided initial condition as a corner then stretch simplex by scale factor in all directions
-        for k in range(0, N):
-            y = nm.array(self.initParams, copy=True)
-            y[k] = y[k] + self.initSimplexDisp[k]
-            self.sim[k + 1] = y
-            if not self.checkInBoundary(y):
-                sys.exit("Initial simplex outside of boundaries. Pick a different initial condition and/or smaller simplex scale.")
-            f = self.nelderInitGetCost(y)
-            
-            self.fsim[k + 1] = f
-    
-        ind = nm.argsort(self.fsim)
-        self.fsim = nm.take(self.fsim, ind, 0)
-        # sort so sim[0,:] has the lowest function value
-        self.sim = nm.take(self.sim, ind, 0)
-    
-        while (self.numExpCalls < self.numPlannedRuns):
-            
-            xbar = nm.add.reduce(self.sim[:-1], 0) / N
-            xr = (1 + rho) * xbar - rho * self.sim[-1]
-            
-            if self.checkInBoundary(xr):
-                fxr = self.nelderGetCost(xr)    
+        if num_training_runs is None:
+            if num_params is None:
+                self.num_training_runs = 10
             else:
-                #Hit boundary so set the cost to positive infinite to ensure reflection
-                fxr = float('inf')
-                self.numBoundaryHits+=1
-                print("Hit boundary (reflect): "+str(self.numBoundaryHits)+" times.")
-            
-            
-            
-            doshrink = 0
-            
-            if fxr < self.fsim[0]:
-                xe = (1 + rho * chi) * xbar - rho * chi * self.sim[-1]
-                
-                if self.checkInBoundary(xe):
-                    fxe = self.nelderGetCost(xe)
-                else:
-                    #Hit boundary so set the cost above maximum this ensures the algorithm does a contracting reflection
-                    fxe = fxr+1.0 
-                    self.numBoundaryHits+=1
-                    print("Hit boundary (expand): "+str(self.numBoundaryHits)+" times.")
-                
-                if fxe < fxr:
-                    self.sim[-1] = xe
-                    self.fsim[-1] = fxe
-                else:
-                    self.sim[-1] = xr
-                    self.fsim[-1] = fxr
-            else:  # fsim[0] <= fxr
-                if fxr < self.fsim[-2]:
-                    self.sim[-1] = xr
-                    self.fsim[-1] = fxr
-                else:  # fxr >= fsim[-2]
-                    # Perform contraction
-                    if fxr < self.fsim[-1]:
-                        xc = (1 + psi * rho) * xbar - psi * rho * self.sim[-1]
-                        
-                        #if check_boundary(xc):
-                        fxc = self.nelderGetCost(xc)
-                        #else:
-                        #    print("Outside of boundary on contraction: THIS SHOULDNT HAPPEN")
-                        #    numB+=1
-                        #    fxc = self.interface.nelderGetCost(xc)
-                            
-                        if fxc <= fxr:
-                            self.sim[-1] = xc
-                            self.fsim[-1] = fxc
-                        else:
-                            doshrink = 1
-                    else:
-                        # Perform an inside contraction
-                        xcc = (1 - psi) * xbar + psi * self.sim[-1]
-                        
-                        #if check_s(xcc):
-                        fxcc = self.nelderGetCost(xcc)
-                        #else:
-                        #    print("Outside of boundary on inside contraction: THIS SHOULDNT HAPPEN")
-                        #    numB+=1
-                        #    fxcc = self.interface.nelderGetCost(xcc)
-    
-                        if fxcc < self.fsim[-1]:
-                            self.sim[-1] = xcc
-                            self.fsim[-1] = fxcc
-                        else:
-                            doshrink = 1
-    
-                    if doshrink:
-                        for j in one2np1:
-                            self.sim[j] = self.sim[0] + sigma * (self.sim[j] - self.sim[0])
-                            
-                            #if self.checkIn(self.sim[j]):
-                            self.fsim[j] = self.nelderGetCost(self.sim[j])
-                            #else:
-                            #    print("Outside of boundary on shrink contraction: THIS SHOULDNT HAPPEN")
-                            #    fsim[j] = self.interface.nelderGetCost(sim[j])
-                                
-    
-            ind = nm.argsort(self.fsim)
-            self.sim = nm.take(self.sim, ind, 0)
-            self.fsim = nm.take(self.fsim, ind, 0)
-            
-            self.saveEverything()
-        
-        return
-
-    def nextParams(self):
-        
-        N = len(self.initParams)
-        rho = 1
-        psi = 0.5
-        
-        xbar = nm.add.reduce(self.sim[:-1], 0) / N
-        xr = (1 + rho) * xbar - rho * self.sim[-1]
-        
-        if self.checkInBoundary(xr):
-            return xr    
+                self.num_training_runs = max(10, 2*int(num_params))
         else:
-            return (1 - psi) * xbar + psi * self.sim[-1]
-  
+            self.num_training_runs = int(num_training_runs) 
+        if self.num_training_runs<=0:
+            self.log.error('Number of training runs must be larger than zero:'+repr(self.num_training_runs))
+            raise ValueError
+        self.no_delay = bool(no_delay)
+        
+        self.training_type = str(training_type)
+        if self.training_type == 'random':
+            self.learner = mll.RandomLearner(start_datetime=self.start_datetime,
+                                             num_params=num_params,
+                                             min_boundary=min_boundary,
+                                             max_boundary=max_boundary,
+                                             trust_region=trust_region,
+                                             **self.remaining_kwargs)
 
-class RandomController(ExpController):
+        elif self.training_type == 'nelder_mead':
+            self.learner = mll.NelderMeadLearner(start_datetime=self.start_datetime,
+                                                 num_params=num_params,
+                                                 min_boundary=min_boundary,
+                                                 max_boundary=max_boundary,
+                                                 **self.remaining_kwargs)
+        else:
+            self.log.error('Unknown training type provided to Gaussian process controller:' + repr(training_type))
+        
+        self.archive_dict.update({'training_type':self.training_type})
+        self._update_controller_with_learner_attributes()
+        
+        self.gp_learner = mll.GaussianProcessLearner(start_datetime=self.start_datetime,
+                                                  num_params=num_params,
+                                                  min_boundary=min_boundary,
+                                                  max_boundary=max_boundary,
+                                                  trust_region=trust_region,
+                                                  **self.remaining_kwargs)
+        
+        self.gp_learner_params_queue = self.gp_learner.params_out_queue
+        self.gp_learner_costs_queue = self.gp_learner.costs_in_queue
+        self.end_gp_learner = self.gp_learner.end_event
+        self.new_params_event = self.gp_learner.new_params_event
+        self.gp_learner.add_mp_safe_log(self.log_queue)
+        self.remaining_kwargs = self.gp_learner.remaining_kwargs
+        self.generation_num = self.gp_learner.generation_num
+        
+    def _put_params_and_out_dict(self, params):
+        '''
+        Override _put_params_and_out_dict function, used when the training learner creates parameters. Makes the defualt param_type the training type and sets last_training_run_flag.
+        '''
+        super()._put_params_and_out_dict(params, param_type=self.training_type)
+        self.last_training_run_flag = True 
     
-    def __init__(self, interface, numPlannedRuns, numParams, minBoundary, maxBoundary, configDict):
+    def _get_cost_and_in_dict(self):
+        '''
+        Call _get_cost_and_in_dict() of parent Controller class. But also sends cost to Gaussian process learner and saves the cost if the parameters came from a trainer. 
         
-        super(RandomController,self).__init__(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, configDict)
-        
-        if ((nm.all(nm.isfinite(self.minBoundary))&nm.all(nm.isfinite(self.maxBoundary)))==False):
-            sys.exit('Minimum and/or maximum boundaries are NaN or inf. Must both be finite for random controller.')
-        
-    def runOptimization(self):
-        
-        while (self.numExpCalls < self.numPlannedRuns):
-            
-            paramsSample = self.minBoundary + nr.rand(self.numParams) * self.diffBoundary
-            
-            self.wrapGetCost(paramsSample)
-        
-        self.saveEverything()
+        '''
+        super()._get_cost_and_in_dict()
+        if self.last_training_run_flag:
+            self.last_training_cost = self.curr_cost
+            self.last_training_bad = self.curr_bad
+            self.last_training_run_flag = False
+        self.gp_learner_costs_queue.put((self.curr_params,
+                                         self.curr_cost,
+                                         self.curr_uncer,
+                                         self.curr_bad))
     
-    def nextParams(self):
-        
-        return self.minBoundary + nr.rand(self.numParams) * self.diffBoundary
-
-
-
-
-class LearnerController(ExpController):
+    def _next_params(self):
+        '''
+        Gets next parameters from training learner.
+        '''
+        if self.training_type == 'nelder_mead':
+            temp = NelderMeadController._next_params(self)
+        elif self.training_type == 'random':
+            temp = RandomController._next_params(self)
+        else:
+            self.log.error('Unknown training type called. THIS SHOULD NOT HAPPEN')
+        return temp
     
-    def __init__(self,interface, numPlannedRuns, numParams, minBoundary, maxBoundary, minCost, maxCost, trainingNum, trainingParams, trainingCosts, trainingUncers, trainingBads, initParams, configDict, thetaParticleNumber=None, thetaSearchNumber=None, paramsSearchNumber=None, corrLengths=None) :
+    def _start_up(self):
+        '''
+        Runs pararent method and also starts training_learner.
+        '''
+        super()._start_up()
+        self.log.debug('GP learner started.')
+        self.gp_learner.start()
+
+    def _optimization_routine(self):
+        '''
+        Overrides _optimization_routine. Uses the parent routine for the training runs. Implements a customized _optimization_rountine when running the Gaussian Process learner. 
+        '''
+        #Run the training runs using the standard optimization routine. Adjust the number of max_runs
+        save_max_num_runs = self.max_num_runs
+        self.max_num_runs = self.num_training_runs - 1
+        self.log.debug('Starting training optimization.')
+        super()._optimization_routine()
         
-        if ((nm.all(nm.isfinite(minBoundary))&nm.all(nm.isfinite(maxBoundary)))==False):
-            sys.exit('Minimum and/or maximum boundaries are NaN or inf. Must both be finite for learning controller.')
+        #Start last training run
+        next_params = self._next_params()
+        self._put_params_and_out_dict(next_params)
         
-        super(LearnerController,self).__init__(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, configDict)
+        #Begin GP optimization routine
+        self.max_num_runs = save_max_num_runs
         
-        self.minCost = minCost
-        self.maxCost = maxCost
-        self.diffCost = maxCost - minCost
+        self.log.debug('Starting GP optimization.')
+        self.new_params_event.set()
+        self.log.info('Run:' + str(self.num_in_costs +1))
+        self.save_archive()
+        self._get_cost_and_in_dict()
         
-        if self.diffCost<0:
-            sys.exit("Minimum cost not less than maximum cost")
-        
-        
-        self.defaultMinNugget = 1.0e-8
-        self.samePointTol = 1.0e-5
-        self.sameLogThetaTol = 1.0e-1
-        self.relLogWeightTol = 2
-        
-        #Parameters are all scaled to be between 0.0 and 1.0
-        self.normParamsFunc = lambda p: nm.array((p - self.minBoundary)/self.diffBoundary)
-        #Cost function is normalized to be between 1.0 and 10.0 (in other words 10^0 to 10^1)
-        self.normCostFunc = lambda c: float(((c - self.minCost)/self.diffCost)*9.0+1.0)
-        #Uncertainty appropriately scaled given cost scaling
-        self.normUncerFunc = lambda u: float(abs(u)*9.0/self.diffCost)
-        #Function for determining nugget given normalized costs
-        self.nuggetFunc = lambda c,u: float(max((u/c)**2,self.defaultMinNugget))
-        #Normalising bads    
-        self.normBadFunc = lambda b: bool(b)
-        
-        #Translation of scaled parameters back to real values
-        self.realParamsFunc = lambda n: self.minBoundary + self.diffBoundary*n
-        #Translation for jacobian and hessian
-        self.realDerivFunc = lambda i: 1.0/float(self.diffBoundary[i])
-        #Translate internal cost back to real value
-        self.realCostFunc = lambda nc: float(self.minCost + self.diffCost*(nc - 1.0)/9.0) 
-        
-        #Bias between learning and searching
-        self.currBias = None
-        self.histBias = []
-        #Variables for storing max uncertainty and costs, neccesary when biasing costs.
-        self.minCUncer = None
-        self.maxUUncer = None
-        self.maxUCost = None
-        self.minUCost = None
-        
-        #Storage arrays for all parameters
-        self.allParams = []
-        self.allCosts = []
-        self.allUncers = []
-        self.allNuggets = []
-        self.allBads = []
-        self.allEvals = []
-        
-        #Run some checks to make sure the training data is sane
-        if any(trainingNum!= len(tlist) for tlist in [trainingParams, trainingCosts, trainingUncers, trainingBads]):
-            sys.exit("One set of training data is not the expected length (trainingNum)")
-        
-        if trainingNum<=2:
-            sys.exit("Not enough training data, take a few more poitns")
-        
-        #Array used to determine what the best training run was
-        self.bestIndex = 0
-        self.bestCost = float('inf')
-        self.bestParams = None
-        
-        #Need to check for duplicates of points, so just add each point and check as we add.
-        for p,c,u,b in zip(trainingParams,trainingCosts,trainingUncers,trainingBads):
-        
-            self.currParams = self.normParamsFunc(p)
-            self.currCost = self.normCostFunc(c)
-            self.currUncer = self.normUncerFunc(u)
-            self.currBad = self.normBadFunc(b)
-            
-            self.saveCurrRun()
-        
-        if not self.checkInBoundary(initParams):
-            sys.exit("Initial parameters provided to learner not within boundaries.")
-            
-        #Array with first set of parameters to be run
-        self.currParams = self.normParamsFunc(initParams)
-        
-        #array used to store nextParams
-        self.nextParams = self.currParams
-        
-        if corrLengths is None:
-        
-            if thetaParticleNumber is None:
-                self.thetaParticleNumber = min(16,int(self.numParams)*3)
+        gp_consec = 0
+        gp_count = 0
+        while self.check_end_conditions():
+            if gp_consec==self.generation_num or (self.no_delay and self.gp_learner_params_queue.empty()):
+                next_params = self._next_params()
+                self._put_params_and_out_dict(next_params)
+                gp_consec = 0
             else:
-                self.thetaParticleNumber = int(thetaParticleNumber)
-            if self.thetaParticleNumber<1:
-                sys.exit("Number of theta particles must be greater than or equal to 1")
-        
-            #Fitting parameters and fits to check.
-            if thetaSearchNumber is None:
-                self.thetaSearchNumber = self.numParams*3
-            else:
-                self.thetaSearchNumber = int(thetaSearchNumber)
-            #print("thetaSearchFac:"+ str(self.thetaSearchFac))
-            if self.thetaSearchNumber<1:
-                sys.exit("Number of theta searchs must be greater than or equal to 1")
-        
-            self.minLogTheta = -5;
-            self.maxLogTheta = 2;
+                next_params = self.gp_learner_params_queue.get()
+                super()._put_params_and_out_dict(next_params, param_type='gaussian_process')
+                gp_consec += 1
+                gp_count += 1
             
-            self.minTheta = nm.array([10**(self.minLogTheta) for _ in range(self.numParams)])
-            self.maxTheta = nm.array([10**(self.maxLogTheta) for _ in range(self.numParams)])
-        
-            self.logThetaParticles = []
-            self.logThetaParticles.append(nm.array([-1 for _ in range(self.numParams)])) 
-        
-            self.corrFixed = False
+            if gp_count%self.generation_num == 2:
+                self.new_params_event.set()
             
-        else:
-            
-            self.bestTheta = nm.array(corrLengths, dtype=float)
-            
-            self.numParticles = 1
-            self.normWeights = []
-            self.normWeights.append(1.0)
-            self.weightEntropy = 1.0
-            self.corrFixed = True
-            
-            if (self.bestTheta.size!=self.numParams):
-                sys.exit("Number of correlation lengths does not match number of parameters.")
-                
-        self.histBestTheta = []
-        self.histBestRLFV = []
-        self.histNumParticles = []
-        self.histWeightEntropy = []    
+            self.log.info('Run:' + str(self.num_in_costs +1))
+            self.save_archive()
+            self._get_cost_and_in_dict()
         
-        #Leash variable if needed
-        self.currLeash = None
-        self.histLeash = []
-        
-        if paramsSearchNumber is None:
-            self.paramsSearchNumber = self.numParams*3
-        else:
-            self.paramsSearchNumber  = int(paramsSearchNumber)
-        if self.paramsSearchNumber<1:
-            sys.exit("Number of parameters search base factor must be greater than or equal to 1")
-        #print("maxNumParams:"+ str(self.maxNumParams))
-        
-        #Bounds which can change when using leash
-        self.optBounds = [(0,1) for _ in range(numParams) ]
-        self.currMinBoundary = self.minBoundary
-        self.currMaxBoundary = self.maxBoundary
-        
-        #Storage of best parameters parameters etc
-        self.bestParams = None
-        self.histBestParams = []
-        
-        
-        #Create a dictionary with all the variables to be output to the matlab file
-        self.learnerMatDict = {}
-        self.learnerMatDict['allParams'] = self.allParams
-        self.learnerMatDict['allCosts'] = self.allCosts 
-        self.learnerMatDict['allUncers'] = self.allUncers
-        self.learnerMatDict['allNuggets'] = self.allNuggets
-        self.learnerMatDict['allBads'] = self.allBads
-        self.learnerMatDict['allEvals'] = self.allEvals
-        self.learnerMatDict['histLeash'] = self.histLeash
-        self.learnerMatDict['histBias'] = self.histBias
-        self.learnerMatDict['histBestParams'] = self.histBestParams
-        self.learnerMatDict['histBestTheta'] = self.histBestTheta
-        self.learnerMatDict['histBestRLFV'] = self.histBestRLFV
-        self.learnerMatDict['histNumParticles'] = self.histNumParticles
-        self.learnerMatDict['histWeightEntropy'] = self.histWeightEntropy
-        
-    def findLeashedBoundsAndSearchParams(self):
-        self.bestParams = self.allParams[nm.argmin(self.allCosts)]
-        self.histBestParams.append(self.bestParams)
-        self.currMinBoundary = nm.maximum(0, self.bestParams - self.currLeash)
-        self.currMaxBoundary = nm.minimum(1, self.bestParams + self.currLeash)
-        self.currDiffBoundary = self.currMaxBoundary - self.currMinBoundary
-        self.optBounds = [(float(tmin),float(tmax)) for tmin,tmax in zip(self.currMinBoundary,self.currMaxBoundary) ]
-        self.localParams = [t for t,b in zip(self.allParams,self.allBads) if (not b) and nm.all(t >= self.currMinBoundary) and nm.all(self.currMaxBoundary >= t)]
-        self.searchParams = [self.currMinBoundary + nr.rand(self.numParams)*self.currDiffBoundary for _ in range(self.paramsSearchNumber)]
-        self.searchParams.append(self.bestParams)
-    
-        
-    def predBiasedCost(self,params):
-        (predCost, predUnc) = self.predictCostAndUncer(params)
-        return self.currBias*predCost - (1.0-self.currBias)*predUnc
-    
-    def predictCostAndUncer(self, params):
-        costNUnc = nm.array([gp.predict(params.reshape(1,self.numParams), eval_MSE=True) for gp in self.gaussProcessParticles])
-        costs = costNUnc[:,0,0]
-        MSEs = costNUnc[:,1,0]
-        predCost = float(nm.average(costs, weights=self.normWeights))
-        predUnc = float(nm.sqrt(nm.average(MSEs + costs**2, weights=self.normWeights) - predCost**2))
-        return (predCost, predUnc)
-    
-    def predictJustCost(self, params):
-        costs = nm.array([gp.predict(params.reshape(1,self.numParams)) for gp in self.gaussProcessParticles])
-        costs = costs[:,0]
-        predCost = float(nm.average(costs, weights=self.normWeights))
-        return predCost
-    
-    def checkNextParamsForRepeat(self):
-        if any([nm.all(nm.absolute(t - self.nextParams)<=self.samePointTol) for t in self.localParams]):
-            print("Repeat predicted parameter (now resampling):" + str(self.nextParams))
-            self.nextParams = self.currMinBoundary + nr.rand(self.numParams)*self.currDiffBoundary
-    
-    def findNextParamsBiased(self):
-        #Find biased minimum
-        firstRunFlag = True
-        tempCost = None
-        for sp in self.searchParams:
-            res = so.minimize(self.predBiasedCost, sp, bounds = self.optBounds, tol=1e-6)
-            if firstRunFlag or res.fun < tempCost:
-                self.nextParams = nm.array(res.x)
-                tempCost = res.fun
-                firstRunFlag = False
-        
-        #self.checkNextParamsForRepeat()
-    
-    def makeGaussianProcess(self):
-        
-        tempNuggs = nm.reshape(nm.array(self.allNuggets),len(self.allNuggets))
-        
-        if self.corrFixed:
-            self.gaussProcess = slgp.GaussianProcess(nugget=tempNuggs, theta0 = self.bestTheta)
-            self.gaussProcess.fit(self.allParams, self.allCosts)
-            self.gaussProcessParticles = []
-            self.gaussProcessParticles.append(self.gaussProcess)
-          
-        else:
-            tempThetaParticles = self.logThetaParticles
-            self.logThetaParticles = []
-            self.logWeights = []
-            self.gaussProcessParticles = []
-            
-            for ttp in tempThetaParticles:
-                testTheta = nm.exp(ttp)
-                #print("saved currTestTheta:" + str(testTheta))
-                self.gaussProcess = slgp.GaussianProcess(nugget=tempNuggs, theta0 = testTheta, thetaL=self.minTheta, thetaU=self.maxTheta)
-                self.gaussProcess.fit(self.allParams, self.allCosts)
-                self.saveParticles()
-            for _ in range(self.thetaSearchNumber):
-                testTheta = nm.power(10,self.minLogTheta + nr.rand(self.numParams)*(self.maxLogTheta - self.minLogTheta))
-                #print("random currTestTheta:" + str(testTheta))
-                self.gaussProcess = slgp.GaussianProcess(nugget=tempNuggs, theta0 = testTheta, thetaL=self.minTheta, thetaU=self.maxTheta)
-                self.gaussProcess.fit(self.allParams, self.allCosts)
-                self.saveParticles()
-            
-            self.dropSmallParticles()
-            
-            self.normWeights = nm.exp(nm.array(self.logWeights))
-            self.normWeights = self.normWeights/nm.sum(self.normWeights)
-            self.numParticles = len(self.normWeights)
-            
-            #Diagnostics 
-            maxLogWeight = max(self.logWeights)
-            thetaRef = self.logWeights.index(maxLogWeight)
-            self.bestTheta = 10. ** self.logThetaParticles[thetaRef]
-            self.weightEntropy = -float(nm.sum(self.normWeights*nm.log(self.normWeights)))
-            
-            self.histBestTheta.append(nm.ravel(self.bestTheta))
-            self.histBestRLFV.append(maxLogWeight)
-            self.histNumParticles.append(self.numParticles)
-            self.histWeightEntropy.append(self.weightEntropy)
-            
-    def saveParticles(self):
-        saveFlag = False
-        
-        currLogTheta = nm.log10(self.gaussProcess.theta_)
-        currRLFV = self.gaussProcess.reduced_likelihood_function_value_
-        
-        if len(self.logThetaParticles) ==0:
-            saveFlag = True
-        else:
-            boolArray = [nm.all(nm.absolute(currLogTheta - tp)<=self.sameLogThetaTol) for tp in self.logThetaParticles]
-            
-            if any(boolArray):
-                repInd = boolArray.index(True)
-                if currRLFV > self.logWeights[repInd]:
-                    del self.logWeights[repInd]
-                    del self.logThetaParticles[repInd]
-                    del self.gaussProcessParticles[repInd]
-                    saveFlag=True
-            else:
-                if len(self.logWeights) < self.thetaParticleNumber:
-                    saveFlag = True
-                else:
-                    lowestLogWeight = min(self.logWeights) 
-                    if currRLFV > lowestLogWeight:
-                        lowestRef = self.logWeights.index(lowestLogWeight)
-                        del self.logWeights[lowestRef]
-                        del self.logThetaParticles[lowestRef]
-                        del self.gaussProcessParticles[lowestRef]
-                        saveFlag = True
-        
-        if saveFlag:
-            self.logThetaParticles.append(currLogTheta)
-            self.logWeights.append(currRLFV)
-            self.gaussProcessParticles.append(self.gaussProcess)
-        #print("All Theta Particles:"+str(self.logThetaParticles))
-        #print("All Weights Particles:"+str(self.logWeights))
-    
-    def dropSmallParticles(self):
-        maxLogWeight = max(self.logWeights)
-        smallRefs = [ref for (ref,lw) in zip(range(len(self.logWeights)),self.logWeights) if lw <= maxLogWeight - self.relLogWeightTol]
-        for iind in reversed(smallRefs):
-            del self.logWeights[iind]
-            del self.logThetaParticles[iind]
-            del self.gaussProcessParticles[iind]
-     
-    def saveCurrRun(self):
-        
-        #print(self.allParams)
-        #print(self.currParams)
-        
-        if len(self.allParams)>0:
-            boolArray = [nm.all(nm.absolute(self.currParams - t)<=self.samePointTol) for t in self.allParams]
-        else:
-            boolArray = [False];
-        if any(boolArray):    
-            print("Repeated saved point: not a problem probably but CHAT TO MICHAEL")
-            #Found a repeat evaluation, replace appropriately
-            #print("found repeat value")
-            repInd = boolArray.index(True)
-            if self.currBad==self.allBads[repInd]:
-                #Both points are good or both are bad, so average the parameters costs and uncertainties 
-                self.allEvals[repInd] += 1
-                self.allParams[repInd] = (self.allParams[repInd]*(self.allEvals[repInd] - 1) + self.currParams)/self.allEvals[repInd]
-                self.allCosts[repInd] = (self.allCosts[repInd]*(self.allEvals[repInd] - 1) + self.currCost)/self.allEvals[repInd]
-                self.allUncers[repInd] = math.sqrt((self.allUncers[repInd]*(self.allEvals[repInd] - 1))**2 + self.currUncer**2)/self.allEvals[repInd]
-                self.allNuggets[repInd] = self.nuggetFunc(self.allCosts[repInd],self.allUncers[repInd])
-            else :
-                if self.allBads[repInd]:
-                    #This means last bad is False while b = True, so just replace the data   
-                    self.allEvals[repInd] = 1     
-                    self.allParams[repInd] = self.currParams
-                    self.allCosts[repInd] = self.currCost
-                    self.allUncers[repInd] = self.currUncer
-                    self.allNuggets[repInd] = self.nuggetFunc(self.currCost,self.currUncer)
-                    self.allBads[repInd] = self.currBad
-        else:
-            #Non duplicate point so add to the list
-            #print("no repeat value")
-            self.allEvals.append(1)
-            self.allParams.append(self.currParams)
-            self.allCosts.append(self.currCost)
-            self.allUncers.append(self.currUncer)
-            self.allNuggets.append(self.nuggetFunc(self.currCost,self.currUncer))
-            self.allBads.append(self.currBad)
-            
-    
-    def runExperiment(self):
-        
-        postParams = self.realParamsFunc(self.nextParams)
-        self.interface.sendParameters(postParams)
-        
-    def getExperiment(self):
-        
-        preCost, preUncer, preBad = self.interface.getCost()
-        self.currCost = self.normCostFunc(preCost)
-        self.currUncer = self.normUncerFunc(preUncer)
-        self.currBad = self.normBadFunc(preBad)
-    
-    def getExpRunExpSaveData(self):
-        
-        self.getExperiment()
-        self.runExperiment()
-        
-        #Save last loop data
-        self.saveCurrRun()
-        self.saveLearnerMatlab()
-        self.saveEverything()
-            
-        #Set currParams to what is currently running on experiment
-        self.currParams = self.nextParams
-        
-    def findAllMinima(self):
-        
-        self.minimaTol = 1e-3
-        
-        self.bestIndex = nm.argmin(self.allCosts)
-        self.bestParams = self.allParams[self.bestIndex]
-        self.bestCost = self.allCosts[self.bestIndex]
-        
-        self.allMinima = []
-        self.allMinCosts = []
-        self.allMinReps = []
-        self.bestMinima = None
-        self.bestJacobian = None
-        #self.bestHessian = None
-        self.bestMinCost = float('inf')
-        
-        self.learnerMatDict
-        
-        for p in reversed(self.allParams):
-            
-            res = so.minimize(self.predictJustCost, p, bounds = self.optBounds)
-            currMinima = res.x
-            currMinCost = res.fun
-            
-            distArray = nm.array([nl.norm(currMinima - t) for t in self.allMinima]) 
-            boolArray = distArray<self.minimaTol
-            
-            if nm.any(boolArray):    
-                #Found a repeat evaluation, replace appropriately
-                minInd = int(nm.flatnonzero(boolArray)[0])
-                if currMinCost < self.allMinCosts[minInd]:
-                    self.allMinima[minInd] = currMinima
-                    self.allMinCosts[minInd] = currMinCost
-                    self.allMinReps[minInd] += 1
-            else:
-                #Non duplicate point so add to the list
-                self.allMinima.append(currMinima)
-                self.allMinCosts.append(currMinCost)
-                self.allMinReps.append(1)
-            
-            if currMinCost<self.bestMinCost:
-                self.bestMinima = currMinima
-                self.bestMinCost = currMinCost
-                self.bestJacobian = res.jac
-        
-        self.numMinima = len(self.allMinCosts)
-        self.realBest = self.realParamsFunc(self.bestParams)
-        self.allRealMinima = [self.realParamsFunc(t) for t in self.allMinima]
-        self.bestRealMinima = self.realParamsFunc(self.bestMinima)
-        self.realJacobian = self.bestJacobian * nm.array([[self.realDerivFunc(ind) for ind in range(self.numParams)] for _ in range(self.numParams)])
-        #self.realHessian =  self.bestHessian * nm.array([[self.realDerivFunc(ind)*self.realDerivFunc(jnd) for ind in range(self.numParams)] for jnd in range(self.numParams)])
-        
-    def calculateMatlabFileExtras(self):
-        
-        print('Performing final processing of Learner (this may take a little time)...')
-        
-        self.makeGaussianProcess()
-        
-        self.findAllMinima()
-        
-        (xvec,costvecs,uncervecs) = self.get1DCrossSectionsAboutBestScaledCost(100)
-        
-        print('Writing results to file LearnerTracking.mat...')
-        
-        self.learnerMatDict['numMinima'] = self.numMinima
-        self.learnerMatDict['bestIndex'] = self.bestIndex 
-        self.learnerMatDict['bestParams'] = self.bestParams
-        self.learnerMatDict['bestCost'] = self.bestCost
-        self.learnerMatDict['allMinima'] = self.allMinima
-        self.learnerMatDict['allMinCosts'] = self.allMinCosts
-        self.learnerMatDict['allMinReps'] = self.allMinReps
-        self.learnerMatDict['bestMinima'] = self.bestMinima
-        self.learnerMatDict['bestJacobian'] = self.bestJacobian
-        self.learnerMatDict['bestMinCost'] = self.bestMinCost
-        self.learnerMatDict['crossXvec'] = xvec
-        self.learnerMatDict['crossCostVecs'] = costvecs
-        self.learnerMatDict['crossUncerVecs'] = uncervecs
-        
-        si.savemat('LearnerTracking.mat', self.learnerMatDict)
-        
-    def saveLearnerMatlab(self):
-        
-        si.savemat('LearnerTracking.mat', self.learnerMatDict)
 
-    def get1DCrossSectionsAboutBestScaledCost(self, pts):
-        
-        xvec = nm.linspace(0,1,pts)
-        
-        costvecs = []
-        uncervecs = []
-        
-        for iind in range(self.numParams):
-            sampParams = nm.array([self.bestParams for _ in range(pts)])
-            sampParams[:, iind] = xvec
-            costNUnc = nm.array([self.predictCostAndUncer(sampParams[jind,:]) for jind in range(pts)])
-            costs = costNUnc[:,0]
-            uncers = costNUnc[:,1]
-            costvecs.append(costs)
-            uncervecs.append(uncers)
-       
-        return (xvec,costvecs,uncervecs)
-    
-    def get2DCrossSectionsAboutBestScaledCost(self, pts, dims):
-        
-        dimA = dims[0]
-        dimB = dims[1]
-        
-        xvec = nm.linspace(0,1,pts)
-        
-        costMat = nm.zeros((pts,pts))
-        uncerMat = nm.zeros((pts,pts))
-        
-        sampParams = nm.array(self.bestParams)
-        
-        for x1 in range(pts):
-            for x2 in range(pts):
-                sampParams[dimA] = xvec[x1]
-                sampParams[dimB] = xvec[x2]
-                (costs,uncers) = self.predictCostAndUncer(sampParams)
-                costMat[x1,x2] = costs
-                uncerMat[x1,x2] = uncers
-       
-        return (xvec,costMat,uncerMat)
-     
-        
-class GlobalLearner(LearnerController):
-
-    def __init__(self, interface, numPlannedRuns, numParams, minBoundary, maxBoundary, minCost, maxCost, trainingNum, trainingParams, trainingCosts, trainingUncers, trainingBads, initParams, configDict, leashLength=None, sweepLength=None, thetaParticleNumber=None, thetaSearchNumber=None, paramsSearchNumber=None, corrLength=None):
-        
-        super(GlobalLearner,self).__init__(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, minCost, maxCost, trainingNum, trainingParams, trainingCosts, trainingUncers, trainingBads, initParams, configDict, thetaParticleNumber, thetaSearchNumber, paramsSearchNumber, corrLength)
-        
-        if sweepLength==None:
-            self.sweepLength=5
+    def _shut_down(self):
+        '''
+        Shutdown and clean up resources of the Gaussian process controller.
+        '''
+        self.log.debug('GP learner end set.')
+        self.end_gp_learner.set()
+        self.gp_learner.join()
+        self.log.debug('GP learner joined')   
+        last_dict = None
+        while not self.gp_learner_params_queue.empty():
+            last_dict = self.gp_learner_params_queue.get_nowait()
+        if isinstance(last_dict, dict):
+            try:
+                self.predicted_best_parameters = last_dict['predicted_best_parameters']
+                self.predicted_best_cost = last_dict['predicted_best_cost']
+                self.predicted_best_uncertainty = last_dict['predicted_best_uncertainty']
+            except KeyError:
+                pass
+            try:
+                self.number_of_local_minima = last_dict['number_of_local_minima']
+                self.local_minima_parameters = last_dict['local_minima_parameters']
+                self.local_minima_costs = last_dict['local_minima_costs']
+                self.local_minima_uncers = last_dict['local_minima_uncers']
+            except KeyError:
+                pass
+            self.archive_dict.update(last_dict)
         else:
-            self.sweepLength = int(self.numParams)+1
-            
-        if leashLength==None:
-            self.leashLength=1.0
-        else:
-            self.leashLength = float(leashLength)
+            if self.gp_learner.predict_global_minima_at_end or self.gp_learner.predict_local_minima_at_end:
+                self.log.warning('GP Learner may not have closed properly unable to get best and/or all minima.')
+        super()._shut_down()
         
-        self.sweepFunc = lambda x : ((x - 2) % self.sweepLength ) / (self.sweepLength - 1.0)
-        self.leashFunc = lambda x : self.leashLength
-    
-    def runOptimization(self):
-        
-        self.numExpCalls = 0
-        
-        #Very First run just try and get the best cost
-        self.runExperiment()
-        
-        while (self.numExpCalls < self.numPlannedRuns):
-            #currParams stores what is running on the experiment now
-            #nextParams now needs to found and replaced
+    def print_results(self):
+        '''
+        Adds some additional output to the results specific to controller. 
+        '''
+        super().print_results()
+        try:
+            self.log.info('Predicted best parameters:' + str(self.predicted_best_parameters))
+            self.log.info('Predicted best cost:' + str(self.predicted_best_cost) + ' +/- ' + str(self.predicted_best_uncertainty))
             
-            print("Determining next parameters...")
-            
-            self.numExpCalls += 1
-            
-            self.makeGaussianProcess()
-            print("BestTheta:"+str(self.bestTheta))
-            print("WeightEntropy:"+str(self.weightEntropy))
-            
-            self.currLeash = float(self.leashFunc(self.numExpCalls))
-            self.histLeash.append(self.currLeash)
-            print("CurrLeash:"+str(self.currLeash))
-            
-            self.findLeashedBoundsAndSearchParams()
-            print("BestParams:" + str(self.bestParams))
-            #print("allParams:"+ str(self.allParams))
-            #print("MinBoundary:" + str(self.currMinBoundary))
-            #print("MaxBoundary:" + str(self.currMaxBoundary))
-            #print("LocalParams:" + str(self.localParams))
-            #print("SearchParams:"+ str(self.searchParams))
-            
-            self.currBias = float(self.sweepFunc(self.numExpCalls))
-            self.histBias.append(self.currBias)
-            print("CurrBias:"+str(self.currBias))
-            
-            self.findNextParamsBiased()
-            print("NextParams:"+str(self.nextParams))
-            
-            print("Getting result from experiment.")
-            
-            self.getExpRunExpSaveData()
-        
-        #Save last run data
-        self.getExperiment() 
-        self.saveCurrRun()
-        self.saveLearnerMatlab()
-        self.saveEverything()
-    
-class AutoLearner(LearnerController):
+        except AttributeError:
+            pass
+        try:
+            self.log.info('Predicted number of local minima:' + str(self.number_of_local_minima))
+        except AttributeError:
+            pass
 
-    def __init__(self, interface, numPlannedRuns, numParams, minBoundary, maxBoundary, minCost, maxCost, trainingNum, trainingParams, trainingCosts, trainingUncers, trainingBads, initParams, configDict, thetaSearchFac=None, paramsSearchFac=None, runsInCycle=None, leashInit = None, leashMax = None, leashMin=None):
-        
-        super(AutoLearner,self).__init__(interface, numPlannedRuns, numParams, minBoundary, maxBoundary, minCost, maxCost, trainingNum, trainingParams, trainingCosts, trainingUncers, trainingBads, initParams, configDict, thetaSearchFac, paramsSearchFac)
-        
-        if runsInCycle is None:
-            self.runsInCycle = int(self.numParams+1) 
-        else:
-            self.runsInCycle = int(runsInCycle)
-            
-        if runsInCycle < 2:
-            sys.exit("Learning cycle for simple learner must be greater than 1.") 
-            
-        if leashInit is None:
-            self.currLeashSize = 1.0/8.0
-        
-        self.currBiasBase = 1.0
-    
-    def runOptimization(self):
-        
-        self.numExpCalls = 0
-        
-        #Very First run just try and get the best cost
-        self.runExperiment()
-        
-        while (self.numExpCalls < self.numPlannedRuns):
-            
-            self.numExpCalls += 1
-            
-            self.makeGaussianProcess()
-            
-            self.findLeashedBoundsAndSearchParams()
-            
-            if (self.numExpCalls-1)%(self.runsInCycle) == 0:
-                #Just do a simple optimal search for the next best point
-                self.findNextParamsOptimal()
-            else:
-                #Do a randomised balanced search 
-                #Make new gaussian process based on it's own prediction of current run coming true
-                self.makeAnticipatingGaussianProcess()
-                
-                self.currBias = float(nr.random()*self.currBiasBase)
-                
-                self.findNextParamsBiased()
-            
-            self.getExpRunExpSaveData()
-        
-        #Save last run data
-        self.getExperiment()
-        self.saveCurrRun()
-        self.saveLearnerMatlab()
-        self.saveEverything()
 
-class CopiedLearner(LearnerController):
     
-    def __init__(self, learnerCont):
+
         
-        #Translation of scaled parameters back to real values
-        self.realParamsFunc = learnerCont.realParamsFunc
-        #Translate internal cost back to real value
-        self.realCostFunc = learnerCont.realParamsFunc
-        
-        #Storage arrays for all parameters
-        self.allParams = learnerCont.allParams
-        self.allCosts = learnerCont.allCosts
-        self.allUncers = learnerCont.allUncers
-        self.allNuggets = learnerCont.allNuggets
-        self.allBads = learnerCont.allBads
-        self.allEvals = learnerCont.allEvals
-        
-        #Storage of best parameters parameters etc
-        self.bestParams = learnerCont.bestParams
-        
-        self.gaussProcess = learnerCont.gaussProcess
-  

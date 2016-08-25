@@ -1,254 +1,238 @@
 '''
-Created on 16 Jul 2015
-
-@author: michaelhush
+Module of the interfaces used to connect the controller to the experiment. 
 '''
 
-import sys
-import numpy as nm
-import numpy.random as nr
-import scipy.io as si
 import time
 import os
+import queue
+import multiprocessing as mp
+import mloop.utilities as mlu
+import mloop.testing as mlt
+import logging
 
-
-class ExpInterface():
+def create_interface(interface_type='file', 
+                      **interface_config_dict):
+    '''
+    Start a new interface with the options provided.
     
-    def __init__(self, timeDelay=None, fileAppend=None):
+    Args:
+        interface_type (Optional [str]): Defines the type of interface, currently the only option is 'file'. Default 'file'.
+        **interface_config_dict : Options to be passed to interface.
         
-        #Configurations
-        if (timeDelay==None):
-            self.timeDelay = 1
-        else:
-            self.timeDelay = timeDelay
-        if fileAppend==None:
-            self.fileAppend = ""
-        else:
-            self.fileAppend = fileAppend
-        
-        #Counters
-        self.numRuns = 0
-        
-        self.expOutFileName = 'ExpOutput.mat'
-        self.expInFileName = 'ExpInput.txt'
-        
-        #Best history of relevant properties for immediate access for future training
-        self.histParams = []
-        self.histCosts = []
-        self.histUncers = []
-        self.histBads = []
-        
-        #Best Parameters and cost
-        self.bestParams = nm.array([0]);
-        self.bestCost = float('nan');
+    Returns:
+        interface : An interface as defined by the keywords
+    '''
+    log = logging.getLogger(__name__)
+    
+    if interface_type=='file':
+        file_interface = FileInterface(**interface_config_dict)
+        log.info('Using the file interface with the experiment.')
+    else:
+        log.error('Unknown interface type:' + repr(interface_type))
+        raise ValueError
+    
+    return file_interface
 
-        self.matFileDict = {'parameters':[],'runNumber':[]}
-        self.lastParams = None
+class InterfaceInterrupt(Exception):
+    '''
+    Exception that is raised when the interface is ended with the end event, or some other interruption.  
+    '''
+    def __init__(self):
+        super().__init__()
+    
+
+class Interface(mp.Process):
+    '''
+    A abstract class for interfaces which populate the costs_in_queue and read from the params_out_queue. Inherits from Thread
+    
+    Args:
+        interface_wait (Optional [float]): Time between polling when needed in interface.
         
-        self.repExp = 0
+    Keyword Args: 
+        interface_wait (float): Wait time when polling for files or queues is needed.
         
-    def sendParameters(self,currParams):
+    Arguments:
+        params_out_queue (queue): Queue for parameters to next be run by experiment.
+        costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
+        end_event (event): Event which triggers the end of the interface. 
+    
+    
+    '''
+
+    def __init__(self,
+                 interface_wait = 1, 
+                 **kwargs):
         
-        self.lastParams = nm.copy(currParams)
-        self.repExp = 0
+        super().__init__()
+        self.log = logging.getLogger(__name__)
+        self.log.debug('Creating interface.')
         
-        self.numRuns += 1
-        print("Starting experiment number: " + str(self.numRuns))
+        self.params_out_queue = mp.Queue()
+        self.costs_in_queue = mp.Queue()
+        self.end_event = mp.Event()
         
-        #Write file with parameters to trigger experiment to run
-        with open(self.expInFileName,'w') as expInputFile:
-            for param in list(self.lastParams.ravel()):
-                expInputFile.write(str(param) + " ")
+        self.interface_wait = float(interface_wait)
+        if self.interface_wait<=0:
+            self.log.error('Interface wait time must be a positive number.')
+            raise ValueError
         
-        return
-        
-    def getCost(self):
-        
-        #Check directory for files 
-        print("Waiting for experiment...")
-        
-        readFileFlag = False
-        while not readFileFlag:
-            while not os.path.isfile(self.expOutFileName):
-                #Give a time delay in seconds before we check the for output file again
-                time.sleep(self.timeDelay)
-            
-            #Give some time to make sure the file is written to disk
-            time.sleep(self.timeDelay)
-            
-            try:
-                #Get cost from file
-                tempDict = si.loadmat(self.expOutFileName)
-                os.remove(self.expOutFileName)
-                readFileFlag = True
-            except FileNotFoundError:
-                print("FileNotFoundError thrown when trying to read ExpOutput.mat. Trying again...")
-            
+        self.remaining_kwargs = kwargs
+    
+    def add_mp_safe_log(self,log_queue):
+        '''
+        Add a multiprocess safe log based using a queue (which is presumed to be listened to by a QueueListener).
+        '''
+        self.log = logging.getLogger(__name__)
+        que_handler = logging.handlers.QueueHandler(log_queue)
+        self.log.addHandler(que_handler)
+        self.log.propagate = False
+    
+    def run(self):
+        '''
+        The run sequence for the interface. This method does not need to be overloaded create a working interface. 
         
         '''
-        ExpOutput.mat file is a matlab file with many points of data in it
+        self.log.debug('Entering main loop of interface.')
+        try:
+            while not self.end_event.is_set():
+                try:
+                    params_dict = self.params_out_queue.get(True, self.interface_wait)
+                except queue.Empty:
+                    continue
+                else:
+                    cost_dict = self._get_next_cost_dict(params_dict)
+                    self.costs_in_queue.put(cost_dict)
+        except InterfaceInterrupt:
+            pass
+        self.log.debug('Interface ended')
+        #self.log = None
+        
+    def _get_next_cost_dict(self,params_dict):
+        '''
+        Abstract method. This is the only method that needs to be implemented to make a working interface. Given the parameters the interface must then produce a new cost. This may occur by running an experiment or program. If you wish to abruptly end this interface for whatever rease please raise the exception InterfaceInterrupt, which will then be safely caught.
+        
+        Args:
+            params_dict (dictionary): A dictionary containing the parameters. Use params_dict['params'] to access them.
+        
+        Returns:
+            cost_dict (dictionary): The cost and other properties derived from the experiment when it was run with the parameters. If just a cost was produced provide {'cost':[float]}, if you also have an uncertainty provide {'cost':[float],'uncer':[float]}. If the run was bad you can simply provide {'bad':True}. For completeness you can always provide all three using {'cost':[float],'uncer':[float],'bad':[bool]}. Providing any extra keys will also be saved byt he controller.
+        '''
+        pass
+    
+class FileInterface(Interface):
+    '''
+    Interfaces between the files produced by the experiment and the queues accessed by the controllers. 
+    
+    Args:
+        params_out_queue (queue): Queue for parameters to next be run by experiment.
+        costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
+        
+    Keyword Args:
+        out_filename (Optional [string]): filename for file written with parameters.
+        out_file_type (Optional [string]): currently supports: 'txt' where the output is a text file with the parameters as a list of numbers, and 'mat' a matlab file with variable parameters with the next_parameters. Default is 'mat'. 
+        in_filename (Optional [string]): filename for file written with parameters.
+        in_file_type (Optional [string]): file type to be written either 'mat' for matlab or 'txt' for readible text file. Defaults to 'mat'.
+    '''
+    
+    def __init__(self,
+                 out_filename='exp_input', 
+                 out_file_type='mat',
+                 in_filename='exp_output',
+                 in_file_type='mat',
+                 **kwargs):
+        
+        super().__init__(**kwargs)
+        
+        self.out_file_count = 0
+        self.in_file_count = 0
+        
+        if mlu.check_file_type_supported(out_file_type):
+            self.out_file_type = str(out_file_type)
+        else:
+            self.log.error('File out type is not supported:' + out_file_type)
+        self.out_filename = str(out_filename)
+        self.total_out_filename = self.out_filename + '.' + self.out_file_type
+        if mlu.check_file_type_supported(in_file_type):
+            self.in_file_type = str(in_file_type)
+        else:
+            self.log.error('File in type is not supported:' + in_file_type)
+            raise ValueError
+        self.in_filename = str(in_filename)
+        self.total_in_filename = self.in_filename + '.' + self.in_file_type
+
+    def _get_next_cost_dict(self,params_dict):
+        '''
+        Implementation of file read in and out. Put parameters into a file and wait for a cost file to be returned.
+        '''
+        self.out_file_count += 1
+        self.log.debug('Writing out_params to file. Count:' + repr(self.out_file_count))
+        self.last_params_dict = params_dict
+        mlu.save_dict_to_file(self.last_params_dict,self.total_out_filename,self.out_file_type)
+        while not self.end_event.is_set():
+            if os.path.isfile(self.total_in_filename):
+                try:
+                    in_dict = mlu.get_dict_from_file(self.total_in_filename, self.in_file_type)
+                except IOError:
+                    self.log.warning('Unable to open ' + self.total_in_filename + '. Trying again.')
+                    continue
+                except (ValueError,SyntaxError):
+                    self.log.error('There is something wrong with the syntax or type of your file:' + self.in_filename + '.' + self.in_file_type)
+                    raise
+                os.remove(self.total_in_filename)
+                self.in_file_count += 1
+                self.log.debug('Putting dict from file onto in queue. Count:' + repr(self.in_file_count))
+                break
+            else:
+                time.sleep(self.interface_wait)
+        else:
+            raise InterfaceInterrupt
+        return in_dict
+        
+    
+class TestInterface(Interface):
+    '''
+    Interface for testing. Returns fake landscape data directly to learner.
+    
+    Args:
+        params_out_queue (queue): Parameters to be used to evaluate fake landscape.
+        costs_in_queue (queue): Queue for costs (and other details) that have been calculated from fake landscape.
+        
+    Keyword Args:
+        test_landscape (Optional [TestLandscape]): Landscape that can be given a set of parameters and a cost and other values. If None creates a the default landscape. Default None 
+        out_queue_wait (Optional [float]): Time in seconds to wait for queue before checking end flag.
+    
+    '''
+    def __init__(self, 
+                 test_landscape=None,
+                 **kwargs):
+        
+        super().__init__(**kwargs)
+        if test_landscape is None:
+            self.test_landscape = mlt.TestLandscape()
+        else:
+            self.test_landscape = test_landscape
+        self.test_count = 0
+    
+    def add_mp_safe_log(self,log_queue):
+        super().add_mp_safe_log(log_queue)
+        self.test_landscape.add_mp_safe_log(log_queue)
+    
+    def _get_next_cost_dict(self, params_dict):
+        '''
+        Test implementation. Gets the next cost from the test_landscape.
         '''
         
-        if self.numRuns==1:
-            #First time for a run.
-            self.matFileDict['parameters'].append(self.lastParams)
-            self.matFileDict['runNumber'].append(self.numRuns)
-            
-            if 'parameters' in tempDict:
-                sys.exit("You can't have an object in ExpOutput.mat called parameters. Call it something else.")
-            
-            if 'runNumber' in tempDict:
-                sys.exit("You can't have an object in ExpOutput.mat called runNumber. Call it something else.")
-                
-            if not ('bad' in tempDict):
-                sys.exit("You're missing bad in your output file, you have to provide it.")
-            
-            if not ('cost' in tempDict):
-                sys.exit("You're missing cost in your output file, you have to provide it.")
-            
-            if not ('uncer' in tempDict):
-                sys.exit("You're missing uncer in your output file, you have to provide it.")
-            
-            for key in tempDict:
-                self.matFileDict[key] = []
-                self.matFileDict[key].append(tempDict[key])
-            
-        else:
-            
-            self.matFileDict['parameters'].append(self.lastParams)
-            self.matFileDict['runNumber'].append(self.numRuns)
-            
-            try:
-                #Save everything in the dictionary into our running array
-                for key in tempDict:
-                    self.matFileDict[key].append(tempDict[key])
-                    
-            except KeyError:
-                print("Key was missing from your matlab file. You probably added an extra variable that wasn't in the first one you submitted. Don't do that.")
-                raise
+        self.test_count +=1
+        self.log.debug('Test interface evaluating cost. Num:' + repr(self.test_count))
+        try:
+            params = params_dict['params']
+        except KeyError as e:
+            self.log.error('You are missing ' + repr(e.args[0]) + ' from the in params dict you provided through the queue.')
+            raise
+        cost_dict = self.test_landscape.get_cost_dict(params)
+        return cost_dict
         
-        currCost = float(tempDict['cost'])
-        currUncer = float(tempDict['uncer'])
-        currBad = bool(tempDict['bad'])
         
-        #Save history locally as well easy access
-        self.histParams.append(self.lastParams)
-        self.histCosts.append(currCost)
-        self.histUncers.append(currUncer)
-        self.histBads.append(currBad)
         
-        #Write history to file
-        self.saveHistory()
         
-        if currBad and self.repExp < 1:
-            
-            print("Bad run, repeating experiment")
-            
-            self.repExp += 1
-            
-            #Write file with parameters to trigger experiment to run
-            with open(self.expInFileName,'w') as expInputFile:
-                for param in list(self.lastParams.ravel()):
-                    expInputFile.write(str(param) + " ")
-                    
-            return self.getCost()
-        
-        if (self.numRuns==1):
-            self.bestCost = currCost
-            self.bestParams = self.lastParams
-        else:
-            if (not currBad) and (currCost < self.bestCost):
-                self.bestCost = currCost
-                self.bestParams = self.lastParams
-        
-         
-        #Return cost
-        return currCost,currUncer,currBad
-        
-    def sendParametersGetCost(self,currParams):
-        
-        self.sendParameters(currParams)
-        return self.getCost()
-        
-            
-    def saveHistory(self):
-        """
-        Adds to a file currently tracking the experiment
-        """
-        
-        si.savemat('ExpTracking'+self.fileAppend+'.mat', self.matFileDict)
     
-
-class TestingExpInterface():
-    
-    def __init__(self, fileAppend=None):
-        
-        #Configurations
-        if fileAppend==None:
-            self.fileAppend = ""
-        else:
-            self.fileAppend = fileAppend
-        
-        #Counters
-        self.numRuns = 0
-        
-        self.histParams = []
-        self.histCosts = []
-        self.histUncers = []
-        self.histBads = []
-        
-        #Best Parameters and cost
-        self.bestParams = nm.array([0]);
-        self.bestCost = float('nan');
-    
-        self.lastParams = None
-    
-    def sendParameters(self,currParams):
-    
-        self.lastParams = currParams
-        self.numRuns += 1
-        print("Parameters sent to experiment. "+str(self.numRuns))
-    
-    def getCost(self):
-        
-        noP = self.lastParams.size
-        costArray = -nm.sinc(self.lastParams)/noP
-        currCost = nm.sum(costArray)
-        currUncer =10**(-2.0*currCost - 3.7)
-        currCost = currCost + nr.normal()*currUncer
-        currBad = False
-        
-        #distToMin = math.sqrt(nm.sum(nm.square(currParams - minR)))
-        #currCost = distToMin 
-                
-        #Save history for this run
-        self.histCosts.append(currCost)
-        self.histUncers.append(currUncer)
-        self.histParams.append(self.lastParams)
-        self.histBads.append(currBad)
-                
-        if (self.numRuns==1):
-            self.bestCost = currCost
-            self.bestParams = self.lastParams
-        else:
-            if (currCost < self.bestCost):
-                self.bestCost = currCost
-                self.bestParams = self.lastParams
-            
-        #Write history to file
-        self.saveHistory()
-        
-        #Return cost
-        return currCost, currUncer, currBad
-
-    def saveHistory(self):
-        """
-        Adds to a file currently tracking the experiment
-        """
-        
-        si.savemat('ExpTracking'+self.fileAppend+'.mat', self.__dict__)
-
-    def sendParametersGetCost(self,currParams):
-        
-        self.sendParameters(currParams)
-        return self.getCost()
