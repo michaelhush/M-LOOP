@@ -23,9 +23,10 @@ setup(
     description = 'M-LOOP: Machine-learning online optimization package. A python package of automated optimization tools - enhanced with machine-learning - for quantum scientific experiments, computer controlled systems or other optimization tasks.',
     license = 'MIT',
     keywords = 'automated machine learning optimization optimisation science experiment quantum',
-    url = 'https://github.com/michaelhush/M-LOOP/',  
+    url = 'https://github.com/michaelhush/M-LOOP/', 
+    download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v2.0.0',
 
-    classifiers = ['Development Status :: 3 - Alpha',
+    classifiers = ['Development Status :: 2 - Pre-Alpha',
                   'Intended Audience :: Science/Research',
                   'Intended Audience :: Manufacturing',
                   'License :: OSI Approved :: MIT License',

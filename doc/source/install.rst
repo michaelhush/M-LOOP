@@ -70,9 +70,9 @@ In the M-LOOP source code directory. The tests should take around three minutes 
 Documentation
 -------------
 
-If you would also like a local copy of the documentation enter the docs folder and use the command::
+If you would also like a local copy of the documentation enter the doc folder and use the command::
 
    make html
    
-Which will generate the documentation in docs/build/html.
+Which will generate the documentation in doc/build/html.
 
