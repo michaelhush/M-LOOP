@@ -11,7 +11,6 @@ The installation process involves four steps.
 3. Install the development version of :ref:`sec-M-LOOP`.
 4. :ref:`Test<sec-Testing>` your M-LOOP install.
 
-
 .. _sec-anaconda:
 
 Anaconda
@@ -56,6 +55,12 @@ M-LOOP can be installed from the source code with three commands::
 
 The first command downloads the latest source code for M-LOOP from github into the current directory, the second moves into the M-LOOP source directory, and the third link builds the package and creates a link from you python package to the source. You may need admin privileges to run the setup script.
 
+At any time you can update M-LOOP to the latest version from github by running the command::
+
+   git pull origin master
+
+in the M-LOOP directory. 
+
 .. _sec-Testing:
 
 Test Installation
@@ -63,9 +68,9 @@ Test Installation
 
 To test your M-LOOP installation use the command::
 
-   python setup.py pytest
+   python setup.py test
    
-In the M-LOOP source code directory. The tests should take around three minutes to complete. If you find a error please consider contributing to the project by reporting a bug on the github.
+In the M-LOOP source code directory. The tests should take around five minutes to complete. If you find a error please consider :ref:`sec-contributing` to the project and report a bug on the `github <https://github.com/michaelhush/M-LOOP>`_.
 
 Documentation
 -------------

@@ -4,7 +4,7 @@
 #General options
 max_num_runs = 1000                   #number of planned runs
 target_cost = 0.1                         #cost to beat
-max_repeats_without_better_params = 10    #max allowed number of runs between finding better parameters
+max_num_runs_without_better_params = 10    #max allowed number of runs between finding better parameters
 controller_archive_filename = 'test'      #filename prefix for controller archive
 controller_archive_file_type = 'mat'      #file_type for controller archive 
 archive_extra_dict = {'test':'this_is'}   #dictionary of any data to be put in archive

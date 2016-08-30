@@ -14,6 +14,7 @@ import os
 controller_dict = {'random':1,'nelder_mead':2,'gaussian_process':3}
 number_of_controllers = 3
 default_controller_archive_filename = 'controller_archive'
+default_controller_archive_file_type = 'txt'
 
 class ControllerInterrupt(Exception):
     '''
@@ -74,7 +75,7 @@ class Controller():
     Keyword Args:
         max_num_runs (Optional [float]): The number of runs before the controller stops. If set to float('+inf') the controller will run forever. Default float('inf'), meaning the controller will run until another condition is met.
         target_cost (Optional [float]): The target cost for the run. If a run achieves a cost lower than the target, the controller is stopped. Default float('-inf'), meaning the controller will run until another condition is met.
-        max_repeats_without_better_params (Otional [float]): Puts a limit on the number of runs are allowed before a new better set of parameters is found. Default float('inf'), meaning the controller will run until another condition is met. 
+        max_num_runs_without_better_params (Otional [float]): Puts a limit on the number of runs are allowed before a new better set of parameters is found. Default float('inf'), meaning the controller will run until another condition is met. 
         controller_archive_filename (Optional [string]): Filename for archive. Contains costs, parameter history and other details depending on the controller type. Default 'ControllerArchive.mat'
         controller_archive_file_type (Optional [string]): File type for archive. Can be either 'txt' a human readable text file, 'pkl' a python dill file, 'mat' a matlab file or None if there is no archive. Default 'mat'.
         archive_extra_dict (Optional [dict]): A dictionary with any extra variables that are to be saved to the archive. If None, nothing is added. Default None.
@@ -105,9 +106,9 @@ class Controller():
     def __init__(self, interface,
                  max_num_runs = float('+inf'),
                  target_cost = float('-inf'),
-                 max_repeats_without_better_params = float('+inf'),
+                 max_num_runs_without_better_params = float('+inf'),
                  controller_archive_filename=default_controller_archive_filename,
-                 controller_archive_file_type='pkl',
+                 controller_archive_file_type=default_controller_archive_file_type,
                  archive_extra_dict = None,
                  start_datetime = None,
                  **kwargs):
@@ -176,9 +177,9 @@ class Controller():
             self.log.error('Number of runs must be greater than zero. max_num_runs:'+repr(self.max_num_run))
             raise ValueError
         self.target_cost = float(target_cost)
-        self.max_repeats_without_better_params = float(max_repeats_without_better_params)
-        if self.max_repeats_without_better_params<=0:
-            self.log.error('Max number of repeats must be greater than zero. max_num_runs:'+repr(max_repeats_without_better_params))
+        self.max_num_runs_without_better_params = float(max_num_runs_without_better_params)
+        if self.max_num_runs_without_better_params<=0:
+            self.log.error('Max number of repeats must be greater than zero. max_num_runs:'+repr(max_num_runs_without_better_params))
             raise ValueError
         
         if mlu.check_file_type_supported(controller_archive_file_type):
@@ -215,12 +216,12 @@ class Controller():
     
     def check_end_conditions(self):
         '''
-        Check whether either of the three end contions have been met: number_of_runs, target_cost or max_repeats_without_better_params.
+        Check whether either of the three end contions have been met: number_of_runs, target_cost or max_num_runs_without_better_params.
         
         Returns:
             bool : True, if the controlled should continue, False if the controller should end. 
         '''
-        return (self.num_in_costs < self.max_num_runs) and (self.best_cost > self.target_cost) and (self.num_last_best_cost < self.max_repeats_without_better_params)
+        return (self.num_in_costs < self.max_num_runs) and (self.best_cost > self.target_cost) and (self.num_last_best_cost < self.max_num_runs_without_better_params)
     
     def _update_controller_with_learner_attributes(self):
         '''
@@ -365,11 +366,11 @@ class Controller():
         self.end_learner.set()
         self.log.debug('Interface end event set.')
         self.end_interface.set()
-        self.learner.join()
-        self.log.debug('Learner joined.')
         #After 3 or 4 executions of mloop in same python environment, sometimes excution can be trapped here
         #Likely to be a bug with multiprocessing in python, but difficult to isolate.
         #current solution is to join with a timeout and kill if that fails
+        self.learner.join()
+        self.log.debug('Learner joined.')
         self.interface.join(self.interface.interface_wait*3)
         if self.interface.is_alive():
             self.log.debug('Interface did not join in time had to terminate.')
@@ -383,6 +384,13 @@ class Controller():
         '''
         Print results from optimization run to the logs
         '''
+        self.log.debug('Optimization ended because:')
+        if self.num_in_costs >= self.max_num_runs:
+            self.log.debug('Maximum number of runs reached.')
+        if self.best_cost <= self.target_cost:
+            self.log.debug('Target cost reached.')
+        if self.num_last_best_cost >= self.max_num_runs_without_better_params:
+            self.log.debug('Maximum number of runs without better params reached.')
         self.log.info('Results:-')
         self.log.info('Best parameters found:' + str(self.best_params))
         self.log.info('Best cost returned:' + str(self.best_cost) + ' +/- ' + str(self.best_uncer))
@@ -443,6 +451,7 @@ class RandomController(Controller):
         
         super().__init__(interface, **kwargs)
         self.learner = mll.RandomLearner(start_datetime = self.start_datetime,
+                                         learner_archive_filename=None,
                                          **self.remaining_kwargs)
         
         self._update_controller_with_learner_attributes()
@@ -515,6 +524,7 @@ class GaussianProcessController(Controller):
                  min_boundary=None,
                  max_boundary=None,
                  trust_region=None, 
+                 learner_archive_filename = 'learner_archive',
                  **kwargs):
         super().__init__(interface, **kwargs)   
         
@@ -541,6 +551,7 @@ class GaussianProcessController(Controller):
                                              min_boundary=min_boundary,
                                              max_boundary=max_boundary,
                                              trust_region=trust_region,
+                                             learner_archive_filename=None,
                                              **self.remaining_kwargs)
 
         elif self.training_type == 'nelder_mead':
@@ -548,6 +559,7 @@ class GaussianProcessController(Controller):
                                                  num_params=num_params,
                                                  min_boundary=min_boundary,
                                                  max_boundary=max_boundary,
+                                                 learner_archive_filename='training_learner_archive',
                                                  **self.remaining_kwargs)
         else:
             self.log.error('Unknown training type provided to Gaussian process controller:' + repr(training_type))
@@ -560,6 +572,7 @@ class GaussianProcessController(Controller):
                                                   min_boundary=min_boundary,
                                                   max_boundary=max_boundary,
                                                   trust_region=trust_region,
+                                                  learner_archive_filename=learner_archive_filename,
                                                   **self.remaining_kwargs)
         
         self.gp_learner_params_queue = self.gp_learner.params_out_queue
@@ -662,7 +675,10 @@ class GaussianProcessController(Controller):
         '''
         self.log.debug('GP learner end set.')
         self.end_gp_learner.set()
-        self.gp_learner.join()
+        self.gp_learner.join(self.gp_learner.learner_wait*3)
+        if self.gp_learner.is_alive():
+            self.log.debug('GP Learner did not join in time had to terminate.')
+            self.gp_learner.terminate()
         self.log.debug('GP learner joined')   
         last_dict = None
         while not self.gp_learner_params_queue.empty():

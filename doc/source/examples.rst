@@ -1,3 +1,6 @@
+.. _sec-examples:
+
 Examples
---------
-I like turtles side 8
+========
+
+Blah

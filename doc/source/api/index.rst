@@ -1,3 +1,5 @@
+.. _sec-api:
+
 M-LOOP API
 ==========
 

@@ -18,8 +18,8 @@ import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
 
 learner_thread_count = 0
-default_nelder_mead_archive_filename = 'nelder_mead_archive'
-default_gp_archive_filename = 'gaussian_process_archive' 
+default_learner_filename = 'learner_archive' 
+default_learner_archive_file_type = 'txt'
 
 class LearnerInterrupt(Exception):
     '''
@@ -43,6 +43,7 @@ class Learner():
         min_boundary (Optional [array]): Array with minimimum values allowed for each parameter. Note if certain values have no minimum value you can set them to -inf for example [-1, 2, float('-inf')] is a valid min_boundary. If None sets all the boundaries to '-1'. Default None.
         max_boundary (Optional [array]): Array with maximum values allowed for each parameter. Note if certain values have no maximum value you can set them to +inf for example [0, float('inf'),3,-12] is a valid max_boundary. If None sets all the boundaries to '1'. Default None.
         learner_archive_filename (Optional [string]): Name for python archive of the learners current state. If None, no archive is saved. Default None. But this is typically overloaded by the child class.
+        learner_archive_file_type (Optional [string]):  File type for archive. Can be either 'txt' a human readable text file, 'pkl' a python dill file, 'mat' a matlab file or None if there is no archive. Default 'mat'.
         log_queue (Optional [queue]): Queue for sending log messages to main logger. If None, default behavoir is to send warnings and above to console level. Default None.
         log_level (Optional [int]): Level for the learners logger. If None, set to warning. Default None.
         start_datetime (Optional [datetime]): Start date time, if None, is automatically generated.
@@ -57,8 +58,8 @@ class Learner():
                  num_params=None,
                  min_boundary=None, 
                  max_boundary=None, 
-                 learner_archive_filename=None,
-                 learner_archive_file_type='pkl',
+                 learner_archive_filename=default_learner_filename,
+                 learner_archive_file_type=default_learner_archive_file_type,
                  start_datetime=None,
                  **kwargs):
 
@@ -269,20 +270,15 @@ class RandomLearner(Learner, threading.Thread):
     Keyword Args:
         min_boundary (Optional [array]): If set to None, overrides default learner values and sets it to a set of value 0. Default None.
         max_boundary (Optional [array]): If set to None overides default learner values and sets it to an array of value 1. Default None.
-        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
-        random_archive_filename: Name for python archive of the learners current state. If None, no archive is saved. Default None.
-        random_archive_file_type: Type of archive. 'pkl' for pickle, 'mat' for matlab and 'txt' for text.  
+        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction.   
     '''
     
     def __init__(self, 
                  trust_region=None,
                  first_params=None,
-                 random_archive_filename=None,
-                 random_archive_file_type='pkl',
                  **kwargs):
         
-        super().__init__(learner_archive_filename=random_archive_filename,
-                         **kwargs)
+        super().__init__(**kwargs)
         
         if not np.all(self.diff_boundary>0.0):
             self.log.error('All elements of max_boundary are not larger than min_boundary')
@@ -359,12 +355,9 @@ class NelderMeadLearner(Learner, threading.Thread):
                  initial_simplex_corner=None, 
                  initial_simplex_displacements=None, 
                  initial_simplex_scale=None,
-                 nelder_mead_archive_filename=default_nelder_mead_archive_filename,
-                 nelder_mead_archive_file_type='pkl',
                  **kwargs):
         
-        super().__init__(learner_archive_filename=nelder_mead_archive_filename,
-                         **kwargs)
+        super().__init__(**kwargs)
         
         self.num_boundary_hits = 0
         self.rho = 1
@@ -592,11 +585,7 @@ class GaussianProcessLearner(Learner, mp.Process):
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
         default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
         default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
-        gp_archive_filename (Optional [string]): Name for the python pickle archive of the learner. Default GaussianProcessLearnerArchive.
-        gp_archive_file_type (Optional [string]): File type of the training file_type archive. Can be 'mat' for matlabe file, 'pkl' for python pickle file, 'txt' for text file.
         minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
-        gp_training_filename (Optional [string]): Filename of a previously archive that will be used to train the gaussian process. Note if this is provided, only the data from the previous experiment, properties of the GP, boundary values, and number of parameters are copied into the new learner. Be sure to also provide the same other configuration details if you want the experiment to continue identically, for example the trust region of the previous experiment is not included.
-        gp_training_file_type (Optional [string]): File type of the training file_type archive. Can be 'mat' for matlabe file, 'pkl' for python pickle file, 'txt' for text file. 
         predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
         predict_local_minima_at_end (Optional [bool]): If True finds the all minima when the learner is ended. Does not if False. Default False.
         
@@ -631,11 +620,9 @@ class GaussianProcessLearner(Learner, mp.Process):
                  trust_region=None,
                  default_bad_cost = None,
                  default_bad_uncertainty = None,
-                 gp_archive_filename=default_gp_archive_filename,
-                 gp_archive_file_type='pkl',
                  minimum_uncertainty = 1e-8,
                  gp_training_filename =None,
-                 gp_training_file_type ='pkl',
+                 gp_training_file_type ='txt',
                  predict_global_minima_at_end = True,
                  predict_local_minima_at_end = False,
                  **kwargs):
@@ -695,18 +682,14 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.has_local_minima = False
             
         
-            super().__init__(learner_archive_filename=gp_archive_filename,
-                             learner_archive_file_type=gp_archive_file_type,
-                             num_params=num_params,
+            super().__init__(num_params=num_params,
                              min_boundary=min_boundary, 
                              max_boundary=max_boundary, 
                              **kwargs)
             
         else:
             
-            super().__init__(learner_archive_filename=gp_archive_filename,
-                             learner_archive_file_type=gp_archive_file_type,
-                             **kwargs)
+            super().__init__(**kwargs)
             
             #Storage variables, archived
             self.all_params = np.array([], dtype=float)

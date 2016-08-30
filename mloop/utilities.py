@@ -11,14 +11,15 @@ import os
 import numpy as np
 import mloop
 
-default_in_filename = 'exp_output'
-default_in_file_type = 'mat'
-default_out_filename = 'exp_input'
-default_out_file_type = 'mat'
+default_interface_in_filename = 'exp_output'
+default_interface_out_filename = 'exp_input'
+default_interface_file_type = 'txt'
 
 archive_foldername = './M-LOOP_archives/'
 log_foldername = './M-LOOP_logs/'
 default_log_filename = 'M-LOOP_'
+
+filewrite_wait = 0.1
 
 mloop_path = os.path.dirname(mloop.__file__)
 
@@ -97,9 +98,10 @@ def txt_file_to_dict(filename):
             temp = (line.partition('#')[0]).strip('\n').strip()
             if temp != '':
                 tdict_string += temp+','    
-    #Setting up words for parsing a dict
+    #Setting up words for parsing a dict, ignore eclipse warnings
     array = np.array
     inf = float('inf')
+    nan = float('nan')
     tdict = eval('dict('+tdict_string+')')
     return tdict
     

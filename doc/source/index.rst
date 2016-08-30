@@ -32,8 +32,12 @@ Contents
    
    install
    tutorial
+   interfaces
+   data
+   visualizations
    options
    examples
+   contributing
    api/index
    
 Indices

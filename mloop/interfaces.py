@@ -128,17 +128,15 @@ class FileInterface(Interface):
         costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
         
     Keyword Args:
-        out_filename (Optional [string]): filename for file written with parameters.
-        out_file_type (Optional [string]): currently supports: 'txt' where the output is a text file with the parameters as a list of numbers, and 'mat' a matlab file with variable parameters with the next_parameters. Default is 'mat'. 
-        in_filename (Optional [string]): filename for file written with parameters.
-        in_file_type (Optional [string]): file type to be written either 'mat' for matlab or 'txt' for readible text file. Defaults to 'mat'.
+        interface_out_filename (Optional [string]): filename for file written with parameters.
+        interface_in_filename (Optional [string]): filename for file written with parameters.
+        interface_file_type (Optional [string]): file type to be written either 'mat' for matlab or 'txt' for readible text file. Defaults to 'txt'.
     '''
     
     def __init__(self,
-                 out_filename=mlu.default_out_filename, 
-                 out_file_type=mlu.default_out_file_type,
-                 in_filename=mlu.default_in_filename,
-                 in_file_type=mlu.default_in_file_type,
+                 interface_out_filename=mlu.default_interface_out_filename, 
+                 interface_in_filename=mlu.default_interface_in_filename,
+                 interface_file_type=mlu.default_interface_file_type,
                  **kwargs):
         
         super().__init__(**kwargs)
@@ -146,18 +144,14 @@ class FileInterface(Interface):
         self.out_file_count = 0
         self.in_file_count = 0
         
-        if mlu.check_file_type_supported(out_file_type):
-            self.out_file_type = str(out_file_type)
+        if mlu.check_file_type_supported(interface_file_type):
+            self.out_file_type = str(interface_file_type)
+            self.in_file_type = str(interface_file_type)
         else:
-            self.log.error('File out type is not supported:' + out_file_type)
-        self.out_filename = str(out_filename)
+            self.log.error('File out type is not supported:' + interface_file_type)
+        self.out_filename = str(interface_out_filename)
         self.total_out_filename = self.out_filename + '.' + self.out_file_type
-        if mlu.check_file_type_supported(in_file_type):
-            self.in_file_type = str(in_file_type)
-        else:
-            self.log.error('File in type is not supported:' + in_file_type)
-            raise ValueError
-        self.in_filename = str(in_filename)
+        self.in_filename = str(interface_in_filename)
         self.total_in_filename = self.in_filename + '.' + self.in_file_type
 
     def _get_next_cost_dict(self,params_dict):
@@ -170,6 +164,7 @@ class FileInterface(Interface):
         mlu.save_dict_to_file(self.last_params_dict,self.total_out_filename,self.out_file_type)
         while not self.end_event.is_set():
             if os.path.isfile(self.total_in_filename):
+                time.sleep(mlu.filewrite_wait) #wait for file to be written to disk
                 try:
                     in_dict = mlu.get_dict_from_file(self.total_in_filename, self.in_file_type)
                 except IOError:

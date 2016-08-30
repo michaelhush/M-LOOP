@@ -129,7 +129,7 @@ class ControllerVisualizer():
         self.num_in_costs = int(controller_dict['num_in_costs'])
         self.num_out_params = int(controller_dict['num_out_params'])
         self.out_params = np.array(controller_dict['out_params'])
-        self.out_type = list(controller_dict['out_type'])
+        self.out_type = [x.strip() for x in list(controller_dict['out_type'])]
         self.in_costs = np.squeeze(np.array(controller_dict['in_costs']))
         self.in_uncers = np.squeeze(np.array(controller_dict['in_uncers']))
         self.in_bads = np.squeeze(list(controller_dict['in_bads']))

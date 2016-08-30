@@ -163,17 +163,15 @@ class FakeExperiment(threading.Thread):
     
     Keyword Args:
         test_landscape (Optional TestLandscape): landscape to generate costs from.
-        out_file_type (Optional [string]): currently supports: 'txt' where the output is a text file with the parameters as a list of numbers, and 'mat' a matlab file with variable parameters with the next_parameters. Default is 'mat'. 
-        in_file_type (Optional [string]): file type to be written either 'mat' for matlab or 'txt' for readible text file. Defaults to 'mat'.
-    
+        experiment_file_type (Optional [string]): currently supports: 'txt' where the output is a text file with the parameters as a list of numbers, and 'mat' a matlab file with variable parameters with the next_parameters. Default is 'txt'. 
+        
     Attributes
         self.end_event (Event): Used to trigger end of experiment. 
     '''
     
     def __init__(self,
                  test_landscape = None,
-                 out_file_type=mlu.default_in_file_type,
-                 in_file_type=mlu.default_out_file_type,
+                 experiment_file_type=mlu.default_interface_file_type,
                  exp_wait = 0,
                  poll_wait = 1,
                  **kwargs):
@@ -188,11 +186,11 @@ class FakeExperiment(threading.Thread):
         self.log = logging.getLogger(__name__)
         self.exp_wait = float(exp_wait)
         self.poll_wait = float(poll_wait)
-        self.out_file_type = str(out_file_type)
-        self.in_file_type = str(in_file_type)
+        self.out_file_type = str(experiment_file_type)
+        self.in_file_type = str(experiment_file_type)
         
-        self.total_out_filename = mlu.default_in_filename + '.' + self.out_file_type
-        self.total_in_filename = mlu.default_out_filename + '.' + self.in_file_type
+        self.total_out_filename = mlu.default_interface_in_filename + '.' + self.out_file_type
+        self.total_in_filename = mlu.default_interface_out_filename + '.' + self.in_file_type
         self.end_event = threading.Event()
         self.test_count =0
     
@@ -213,6 +211,7 @@ class FakeExperiment(threading.Thread):
         self.log.debug('Entering FakeExperiment loop')
         while not self.end_event.is_set():
             if os.path.isfile(self.total_in_filename):
+                time.sleep(mlu.filewrite_wait) #wait for file to be written
                 try:
                     in_dict = mlu.get_dict_from_file(self.total_in_filename, self.in_file_type)
                 except IOError:
