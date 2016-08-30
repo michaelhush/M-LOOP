@@ -32,8 +32,7 @@ import os
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
-    'sphinx.ext.mathjax',
-    'sphinx.ext.githubpages',
+    'sphinx.ext.mathjax'
 ]
 
 # Napoleon settings
