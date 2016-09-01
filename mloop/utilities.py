@@ -23,6 +23,9 @@ filewrite_wait = 0.1
 
 mloop_path = os.path.dirname(mloop.__file__)
 
+#Set numpy to have no limit on printing to ensure all values are saved
+np.set_printoptions(threshold=np.inf)
+
 def config_logger(**kwargs):
     '''
     Wrapper for _config_logger.

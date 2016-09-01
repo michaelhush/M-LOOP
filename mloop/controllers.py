@@ -257,8 +257,8 @@ class Controller():
         self.out_extras.append(kwargs)
         if param_type is not None:
             self.out_type.append(param_type)
-        self.log.debug('Controller params=' + repr(params))
-        self.log.debug('Put params num:' + repr(self.num_out_params ))
+        self.log.info('params ' + str(params))
+        #self.log.debug('Put params num:' + repr(self.num_out_params ))
         
     def _get_cost_and_in_dict(self):
         '''
@@ -302,8 +302,11 @@ class Controller():
             self.best_index =  self.num_in_costs
             self.best_params = self.curr_params
             self.num_last_best_cost = 0
-        self.log.debug('Controller cost=' + repr(self.curr_cost))
-        self.log.debug('Got cost num:' + repr(self.num_in_costs))
+        if self.curr_bad:
+            self.log.info('bad run')
+        else:
+            self.log.info('cost ' + str(self.curr_cost) + ' +/- ' + str(self.curr_uncer))
+        #self.log.debug('Got cost num:' + repr(self.num_in_costs))
     
     def save_archive(self):
         '''
@@ -384,13 +387,13 @@ class Controller():
         '''
         Print results from optimization run to the logs
         '''
-        self.log.debug('Optimization ended because:')
+        self.log.info('Optimization ended because:-')
         if self.num_in_costs >= self.max_num_runs:
-            self.log.debug('Maximum number of runs reached.')
+            self.log.info('Maximum number of runs reached.')
         if self.best_cost <= self.target_cost:
-            self.log.debug('Target cost reached.')
+            self.log.info('Target cost reached.')
         if self.num_last_best_cost >= self.max_num_runs_without_better_params:
-            self.log.debug('Maximum number of runs without better params reached.')
+            self.log.info('Maximum number of runs without better params reached.')
         self.log.info('Results:-')
         self.log.info('Best parameters found:' + str(self.best_params))
         self.log.info('Best cost returned:' + str(self.best_cost) + ' +/- ' + str(self.best_uncer))
@@ -402,15 +405,15 @@ class Controller():
         '''
         self.log.debug('Start controller loop.')
         try:
+            self.log.info('Run:' + str(self.num_in_costs +1))
             next_params = self._first_params()
             self._put_params_and_out_dict(next_params)
-            self.log.info('Run:' + str(self.num_in_costs +1))
             self.save_archive()
             self._get_cost_and_in_dict()
             while self.check_end_conditions():
+                self.log.info('Run:' + str(self.num_in_costs +1))
                 next_params = self._next_params()
                 self._put_params_and_out_dict(next_params)
-                self.log.info('Run:' + str(self.num_in_costs +1))
                 self.save_archive()
                 self._get_cost_and_in_dict()
             self.log.debug('End controller loop.')
@@ -524,7 +527,8 @@ class GaussianProcessController(Controller):
                  min_boundary=None,
                  max_boundary=None,
                  trust_region=None, 
-                 learner_archive_filename = 'learner_archive',
+                 learner_archive_filename = mll.default_learner_archive_filename,
+                 learner_archive_file_type = mll.default_learner_archive_file_type,
                  **kwargs):
         super().__init__(interface, **kwargs)   
         
@@ -552,6 +556,7 @@ class GaussianProcessController(Controller):
                                              max_boundary=max_boundary,
                                              trust_region=trust_region,
                                              learner_archive_filename=None,
+                                             learner_archive_file_type=learner_archive_file_type,
                                              **self.remaining_kwargs)
 
         elif self.training_type == 'nelder_mead':
@@ -560,6 +565,7 @@ class GaussianProcessController(Controller):
                                                  min_boundary=min_boundary,
                                                  max_boundary=max_boundary,
                                                  learner_archive_filename='training_learner_archive',
+                                                 learner_archive_file_type=learner_archive_file_type,
                                                  **self.remaining_kwargs)
         else:
             self.log.error('Unknown training type provided to Gaussian process controller:' + repr(training_type))
@@ -573,6 +579,7 @@ class GaussianProcessController(Controller):
                                                   max_boundary=max_boundary,
                                                   trust_region=trust_region,
                                                   learner_archive_filename=learner_archive_filename,
+                                                  learner_archive_file_type=learner_archive_file_type,
                                                   **self.remaining_kwargs)
         
         self.gp_learner_params_queue = self.gp_learner.params_out_queue
@@ -636,6 +643,7 @@ class GaussianProcessController(Controller):
         super()._optimization_routine()
         
         #Start last training run
+        self.log.info('Run:' + str(self.num_in_costs +1))
         next_params = self._next_params()
         self._put_params_and_out_dict(next_params)
         
@@ -644,13 +652,13 @@ class GaussianProcessController(Controller):
         
         self.log.debug('Starting GP optimization.')
         self.new_params_event.set()
-        self.log.info('Run:' + str(self.num_in_costs +1))
         self.save_archive()
         self._get_cost_and_in_dict()
         
         gp_consec = 0
         gp_count = 0
         while self.check_end_conditions():
+            self.log.info('Run:' + str(self.num_in_costs +1))
             if gp_consec==self.generation_num or (self.no_delay and self.gp_learner_params_queue.empty()):
                 next_params = self._next_params()
                 self._put_params_and_out_dict(next_params)
@@ -664,7 +672,6 @@ class GaussianProcessController(Controller):
             if gp_count%self.generation_num == 2:
                 self.new_params_event.set()
             
-            self.log.info('Run:' + str(self.num_in_costs +1))
             self.save_archive()
             self._get_cost_and_in_dict()
         

@@ -18,7 +18,7 @@ import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
 
 learner_thread_count = 0
-default_learner_filename = 'learner_archive' 
+default_learner_archive_filename = 'learner_archive' 
 default_learner_archive_file_type = 'txt'
 
 class LearnerInterrupt(Exception):
@@ -58,7 +58,7 @@ class Learner():
                  num_params=None,
                  min_boundary=None, 
                  max_boundary=None, 
-                 learner_archive_filename=default_learner_filename,
+                 learner_archive_filename=default_learner_archive_filename,
                  learner_archive_file_type=default_learner_archive_file_type,
                  start_datetime=None,
                  **kwargs):
@@ -182,15 +182,15 @@ class Learner():
         Returns:
             cost from the cost queue
         '''
-        self.log.debug('Learner params='+repr(params))
+        #self.log.debug('Learner params='+repr(params))
         if not self.check_num_params(params):
             self.log.error('Incorrect number of parameters sent to queue.Params' + repr(params))
             raise ValueError
         if not self.check_in_boundary(params):
             self.log.warning('Parameters sent to queue are not within boundaries. Params:' + repr(params))
-        self.log.debug('Learner puts params.')
+        #self.log.debug('Learner puts params.')
         self.params_out_queue.put(params)
-        self.log.debug('Learner waiting for costs.')
+        #self.log.debug('Learner waiting for costs.')
         self.save_archive()
         while not self.end_event.is_set():
             try:
@@ -202,7 +202,7 @@ class Learner():
         else:
             self.log.debug('Learner end signal received. Ending')
             raise LearnerInterrupt
-        self.log.debug('Learner cost='+repr(cost))
+        #self.log.debug('Learner cost='+repr(cost))
         return cost
     
     def save_archive(self):
@@ -212,8 +212,6 @@ class Learner():
         self.update_archive()
         if self.learner_archive_filename is not None:
             mlu.save_dict_to_file(self.archive_dict, self.total_archive_filename, self.learner_archive_file_type)
-        else:
-            self.log.debug('Did not save archive file.')
     
     def update_archive(self):
         '''
@@ -1042,10 +1040,10 @@ class GaussianProcessLearner(Learner, mp.Process):
         '''
         try:
             while not self.end_event.is_set():
-                self.log.debug('Learner waiting for new params event')
+                #self.log.debug('Learner waiting for new params event')
                 self.save_archive()
                 self.wait_for_new_params_event()
-                self.log.debug('Gaussian process learner reading costs')
+                #self.log.debug('Gaussian process learner reading costs')
                 self.get_params_and_costs()
                 self.fit_gaussian_process()
                 for _ in range(self.generation_num):

@@ -1,5 +1,5 @@
-#Controller Options
-#------------------
+#Random Complete Options
+#-----------------------
 
 #General options
 max_num_runs = 20              #number of planned runs

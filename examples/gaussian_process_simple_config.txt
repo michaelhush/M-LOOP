@@ -1,5 +1,5 @@
-#Controller Options
-#-----------------
+#Gaussian Process Basic Options
+#------------------------------
 
 #General options
 max_num_runs = 100                #number of planned runs

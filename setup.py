@@ -24,7 +24,7 @@ setup(
     license = 'MIT',
     keywords = 'automated machine learning optimization optimisation science experiment quantum',
     url = 'https://github.com/michaelhush/M-LOOP/', 
-    download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v2.0.1',
+    download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v2.0.2',
 
     classifiers = ['Development Status :: 2 - Pre-Alpha',
                   'Intended Audience :: Science/Research',

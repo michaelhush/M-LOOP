@@ -24,51 +24,50 @@ class TestExamples(unittest.TestCase):
         cls.fake_experiment.end_event.set()
         cls.fake_experiment.join()
     
-    def test_complete_controller_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/complete_controller_config.txt', 
-                                          num_params=1,
+    def test_controller_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/controller_config.txt', 
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
     
-    def test_complete_extras_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/complete_extras_config.txt', 
+    def test_extras_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/extras_config.txt', 
                                           num_params=1,
                                           target_cost = 0.1,
                                           **self.override_dict) 
         self.asserts_for_cost_and_params(controller)
     
-    def test_complete_logging_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/complete_logging_config.txt',
+    def test_logging_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/logging_config.txt',
                                           num_params=1,
                                           target_cost = 0.1,
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
         
-    def test_simple_random_config(self):
-        _ = mll.launch_from_file(mlu.mloop_path+'/../examples/simple_random_config.txt', 
+    def test_random_simple_config(self):
+        _ = mll.launch_from_file(mlu.mloop_path+'/../examples/random_simple_config.txt', 
                                  **self.override_dict)
         
-    def test_complete_random_config(self):
-        _ = mll.launch_from_file(mlu.mloop_path+'/../examples/complete_random_config.txt', 
+    def test_random_complete_config(self):
+        _ = mll.launch_from_file(mlu.mloop_path+'/../examples/random_complete_config.txt', 
                                  **self.override_dict)
         
-    def test_simple_nelder_mead_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/simple_nelder_mead_config.txt',
+    def test_nelder_mead_simple_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/nelder_mead_simple_config.txt',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
         
-    def test_complete_nelder_mead_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/complete_nelder_mead_config.txt',
+    def test_nelder_mead_complete_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/nelder_mead_complete_config.txt',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
     
-    def test_simple_gaussian_process_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/simple_gaussian_process_config.txt',
+    def test_gaussian_process_simple_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/gaussian_process_simple_config.txt',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
         
-    def test_complete_gaussian_process_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/complete_gaussian_process_config.txt',
+    def test_gaussian_process_complete_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/gaussian_process_complete_config.txt',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
     

@@ -3,7 +3,7 @@
 Tutorial
 ========
 
-Here we provide a tutorial on how to use M-LOOP to optimize a generic experiment. M-LOOP is flexible and can be customized with a variety of :ref:`sec-options` and :ref:`sec-interfaces`, it can be run from the command line or used as a :ref:`python API <sec-api>`. Here we introduce the basic settings to get M-LOOP up and running as quick as possible. 
+Here we provide a tutorial on how to use M-LOOP to optimize a generic experiment. M-LOOP is flexible and can be customized with a variety of :ref:`options <sec-examples>` and :ref:`sec-interfaces`, it can be run from the command line or used as a :ref:`python API <sec-api>`. Here we introduce the basic settings to get M-LOOP up and running as quick as possible. 
 
 Overview
 --------
@@ -12,7 +12,7 @@ The basic operation of M-LOOP is sketched below.
 
 .. _fig-mloop-diag:
 
-.. figure:: images/M-LOOP_diagram.png
+.. figure:: _static/M-LOOP_diagram.png
    :alt: M-LOOP in a loop with an experiment sending parameters and receiving costs.
    
 There are three stages: 
@@ -47,7 +47,7 @@ The configuration file contains a list of options and settings for the optimizat
 
    [keyword] = [value]
    
-You can add comments to your file using #, everything past # will be ignored. Examples of relevant keywords and syntax for the values is provided in :ref:`sec-examples` and a comprehensive list of options is described in :ref:`sec-options`. The values should be formatted with python syntax, strings should be surrounded with single or double quotes and arrays of values can be surrounded with square brackets/parentheses with numbers separated with commas. In this tutorial we will examine the example file *tutoral_config.txt*::
+You can add comments to your file using #, everything past # will be ignored. Examples of relevant keywords and syntax for the values is provided in :ref:`sec-examples` and a comprehensive list of options is described in :ref:`sec-examples`. The values should be formatted with python syntax, strings should be surrounded with single or double quotes and arrays of values can be surrounded with square brackets/parentheses with numbers separated with commas. In this tutorial we will examine the example file *tutoral_config.txt*::
 
    #Tutorial Config
    #---------------
@@ -110,7 +110,7 @@ If you do not want one of the halting conditions, simply delete it from your fil
 Learner specific options
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-There are many learner specific options (and different learner algorithms) described in :ref:`sec-options`. Here we consider just a couple of the most commonly used ones. M-LOOP has been designed to find an optimum quickly with no custom configuration as long as the experiment is able to provide a cost for every parameter it provides.
+There are many learner specific options (and different learner algorithms) described in :ref:`sec-examples`. Here we consider just a couple of the most commonly used ones. M-LOOP has been designed to find an optimum quickly with no custom configuration as long as the experiment is able to provide a cost for every parameter it provides.
 
 However if your experiment will fail to work if there are sudden and significant changes to your parameters you may need to set the following options::
 

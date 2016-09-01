@@ -12,7 +12,7 @@ In the M-LOOP source folder.
 
 For more details on how to use the package see the documentation. You can see it online at
 
-?
+http://m-loop.readthedocs.io/
 
 Or you can build it by entering the docs folder and running:
 

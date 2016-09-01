@@ -163,7 +163,7 @@ class ControllerVisualizer():
         plt.scatter(self.in_numbers,self.in_costs,marker='o',c=self.cost_colors,s=5*mpl.rcParams['lines.markersize'])
         plt.xlabel(run_label)
         plt.ylabel(cost_label)
-        plt.title('Controller: Cost against number.')
+        plt.title('Controller: Cost vs run number.')
         artists = []
         for ut in self.unique_types:
             artists.append(plt.Line2D((0,1),(0,0), color=_color_from_controller_name(ut), marker='o', linestyle=''))
@@ -187,7 +187,7 @@ class ControllerVisualizer():
                 plt.ylabel(run_label)
         plt.xlabel(run_label)
         
-        plt.title('Controller: Parameters against run number.')
+        plt.title('Controller: Parameters vs run number.')
         artists=[]
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
@@ -217,7 +217,7 @@ class ControllerVisualizer():
                 plt.plot(self.out_params[:,ind],self.in_costs,'o',color=self.param_colors[ind])
                 plt.xlabel(run_label)
         plt.ylabel(cost_label)
-        plt.title('Controller: Cost against parameters.')
+        plt.title('Controller: Cost vs parameters.')
         artists=[]
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
@@ -395,7 +395,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         plt.xlabel(scale_param_label)
         plt.xlim((0,1))
         plt.ylabel(cost_label)
-        plt.title('GP Learner: Cost against parameters.')
+        plt.title('GP Learner: Cost vs parameters.')
         artists = []
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
@@ -416,7 +416,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
                 plt.plot(self.fit_numbers,self.log_length_scale_history[:,ind],'o',color=self.param_colors[ind])
         plt.xlabel(run_label)
         plt.ylabel(log_length_scale_label)
-        plt.title('GP Learner: Log_10 of lengths scales vs run number.')
+        plt.title('GP Learner: Log of lengths scales vs fit number.')
         if scale_num!=1:
             artists=[]
             for ind in range(self.num_params):
@@ -430,5 +430,5 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plt.plot(self.fit_numbers,self.noise_level_history,'o',color='k')
             plt.xlabel(run_label)
             plt.ylabel(noise_label)
-            plt.title('GP Learner: Noise level vs run number.')
+            plt.title('GP Learner: Noise level vs fit number.')
             

@@ -10,7 +10,7 @@ To contribute to the project or report a bug visit the project's github https://
 
 import os
 
-__version__= "2.0.1"
+__version__= "2.0.2"
 __all__ = ['controllers','interfaces','launchers','learners','testing','utilities','visualizations']
 
 #Add a null handler in case the user does not run config_logger() before running the optimization
