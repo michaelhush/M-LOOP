@@ -1,8 +1,8 @@
 '''
 Setup script for M-LOOP using setuptools. See the documentation of setuptools for further details. 
 '''
-
 import mloop as ml
+
 from setuptools import setup, find_packages
 setup(
     name = 'M-LOOP',
