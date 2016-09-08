@@ -13,9 +13,9 @@ import logging.handlers
 import datetime
 import os
 import mloop.utilities as mlu
-import sklearn.gaussian_process as skg
-import sklearn.gaussian_process.kernels as skk
-import sklearn.preprocessing as skp
+import mloop.localsklearn.gaussian_process as skg
+import mloop.localsklearn.gaussian_process.kernels as skk
+import mloop.localsklearn.preprocessing as skp
 
 learner_thread_count = 0
 default_learner_archive_filename = 'learner_archive' 

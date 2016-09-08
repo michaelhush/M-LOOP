@@ -5,6 +5,7 @@ Module of the interfaces used to connect the controller to the experiment.
 import time
 import os
 import queue
+import threading
 import multiprocessing as mp
 import mloop.utilities as mlu
 import mloop.testing as mlt
@@ -41,7 +42,7 @@ class InterfaceInterrupt(Exception):
         super().__init__()
     
 
-class Interface(mp.Process):
+class Interface(threading.Thread):
     '''
     A abstract class for interfaces which populate the costs_in_queue and read from the params_out_queue. Inherits from Thread
     
