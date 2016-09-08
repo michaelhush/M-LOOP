@@ -4,12 +4,11 @@ Installation
 ============
 M-LOOP is available on PyPI and can be installed with your favorite package manager. However, we currently recommend you install from the source code to ensure you have the latest improvements and bug fixes. 
 
-The installation process involves four steps.
+The installation process involves three steps.
 
 1. Get a Python 3 distribution with the standard scientific packages. We recommend installing :ref:`sec-anaconda`.
-2. Install the development version of :ref:`sec-scikit-learn`.
-3. Install the development version of :ref:`sec-M-LOOP`.
-4. :ref:`Test<sec-Testing>` your M-LOOP install.
+2. Install the development version of :ref:`sec-M-LOOP`.
+3. :ref:`Test<sec-Testing>` your M-LOOP install.
 
 .. _sec-anaconda:
 
@@ -25,25 +24,7 @@ M-LOOP requires a python 3.\* environment. If you want to retain compatibility w
 
 http://conda.pydata.org/docs/py2or3.html#create-python-2-or-3-environments. 
 
-.. _sec-scikit-learn:
-
-scikit-learn
-------------
-M-LOOP currently uses some of the machine learning algorithms from the development version of scikit-learn. This means you must also install scikit-learn from source in order to use M-LOOP.
-
-To install the development version of scikit-learn you can follow the instructions here:
-
-http://scikit-learn.org/stable/developers/contributing.html#git-repo 
-   
-Or simply run these three commands::
-
-   git clone git://github.com/scikit-learn/scikit-learn.git
-   cd ./scikit-learn
-   python setup.py develop
-
-The first command downloads the latest source code for scikit-learn from github into the current directory, the second moves into the scikit-learn source directory, and the third link builds the package and creates a link from you python package to the source. You may need admin privileges to run the setup script.
-
-.. _sec-M-LOOP:
+.. _sec-m-loop:
 
 M-LOOP
 ------
