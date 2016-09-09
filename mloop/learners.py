@@ -17,7 +17,6 @@ import mloop.localsklearn.gaussian_process as skg
 import mloop.localsklearn.gaussian_process.kernels as skk
 import mloop.localsklearn.preprocessing as skp
 
-learner_thread_count = 0
 default_learner_archive_filename = 'learner_archive' 
 default_learner_archive_file_type = 'txt'
 
@@ -47,6 +46,7 @@ class Learner():
         log_queue (Optional [queue]): Queue for sending log messages to main logger. If None, default behavoir is to send warnings and above to console level. Default None.
         log_level (Optional [int]): Level for the learners logger. If None, set to warning. Default None.
         start_datetime (Optional [datetime]): Start date time, if None, is automatically generated.
+        log_queue (Optional [queue]): queue to pipe log information through if the class is run as a process (rather than a log)
     
     Attributes:
         params_out_queue (queue): Queue for parameters created by learner.
@@ -61,14 +61,13 @@ class Learner():
                  learner_archive_filename=default_learner_archive_filename,
                  learner_archive_file_type=default_learner_archive_file_type,
                  start_datetime=None,
+                 log_queue=None,
                  **kwargs):
 
         super().__init__()
         
-        global learner_thread_count
-        learner_thread_count += 1
-        
         self.log = logging.getLogger(__name__)
+        self.log_queue = log_queue
         
         self.learner_wait=float(1)
         
@@ -129,12 +128,12 @@ class Learner():
         
         self.log.debug('Learner init completed.')   
     
-    def add_mp_safe_log(self,log_queue):
+    def add_mp_safe_log(self):
         '''
         Add a multiprocess safe log based using a queue (which is presumed to be listened to by a QueueListener).
         '''
-        self.log = logging.getLogger(__name__ + '.' + str(learner_thread_count))
-        que_handler = logging.handlers.QueueHandler(log_queue)
+        self.log = logging.getLogger(__name__)
+        que_handler = logging.handlers.QueueHandler(self.log_queue)
         self.log.addHandler(que_handler)
         self.log.propagate = False
     
@@ -813,7 +812,11 @@ class GaussianProcessLearner(Learner, mp.Process):
                                   'has_trust_region':self.has_trust_region,
                                   'predict_global_minima_at_end':self.predict_global_minima_at_end,
                                   'predict_local_minima_at_end':self.predict_local_minima_at_end})
-    
+        
+        #Remove logger so it can be safely picked for multiprocessing on Windows
+        self.log = None
+            
+        
     def create_gaussian_process(self):
         '''
         Create the initial Gaussian process.
@@ -1038,6 +1041,8 @@ class GaussianProcessLearner(Learner, mp.Process):
         '''
         Starts running the Gaussian process learner. When the new parameters event is triggered, reads the cost information provided and updates the Gaussian process with the information. Then searches the Gaussian process for new optimal parameters to test based on the biased cost. Parameters to test next are put on the output parameters queue.
         '''
+        self.add_mp_safe_log()
+        
         try:
             while not self.end_event.is_set():
                 #self.log.debug('Learner waiting for new params event')

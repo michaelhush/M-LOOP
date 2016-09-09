@@ -79,7 +79,7 @@ class Controller():
         controller_archive_filename (Optional [string]): Filename for archive. Contains costs, parameter history and other details depending on the controller type. Default 'ControllerArchive.mat'
         controller_archive_file_type (Optional [string]): File type for archive. Can be either 'txt' a human readable text file, 'pkl' a python dill file, 'mat' a matlab file or None if there is no archive. Default 'mat'.
         archive_extra_dict (Optional [dict]): A dictionary with any extra variables that are to be saved to the archive. If None, nothing is added. Default None.
-        start_datetime (datetime): Datetime for when controller was started.
+        start_datetime (Optional datetime): Datetime for when controller was started.
         
     Attributes:
         params_out_queue (queue): Queue for parameters to next be run by experiment.
@@ -146,7 +146,7 @@ class Controller():
         self.end_learner = None
         self.learner = None
         
-        #Create a logger that is multiprocessing safe.
+        #Create a logger that is multiprocessing safe. If needed
         self.log = logging.getLogger(__name__)
         self.log_queue = mp.Queue()
         self.log_queue_listener = logging.handlers.QueueListener(self.log_queue,
@@ -165,7 +165,6 @@ class Controller():
         self.params_out_queue = interface.params_out_queue
         self.costs_in_queue = interface.costs_in_queue
         self.end_interface = interface.end_event
-        self.interface.add_mp_safe_log(self.log_queue)
         
         #Other options
         if start_datetime is None:
@@ -230,7 +229,6 @@ class Controller():
         self.learner_params_queue = self.learner.params_out_queue
         self.learner_costs_queue = self.learner.costs_in_queue
         self.end_learner = self.learner.end_event
-        self.learner.add_mp_safe_log(self.log_queue)
         self.remaining_kwargs = self.learner.remaining_kwargs
         
         self.archive_dict.update({'num_params':self.learner.num_params,
@@ -580,13 +578,13 @@ class GaussianProcessController(Controller):
                                                   trust_region=trust_region,
                                                   learner_archive_filename=learner_archive_filename,
                                                   learner_archive_file_type=learner_archive_file_type,
+                                                  log_queue = self.log_queue,
                                                   **self.remaining_kwargs)
         
         self.gp_learner_params_queue = self.gp_learner.params_out_queue
         self.gp_learner_costs_queue = self.gp_learner.costs_in_queue
         self.end_gp_learner = self.gp_learner.end_event
         self.new_params_event = self.gp_learner.new_params_event
-        self.gp_learner.add_mp_safe_log(self.log_queue)
         self.remaining_kwargs = self.gp_learner.remaining_kwargs
         self.generation_num = self.gp_learner.generation_num
         

@@ -79,15 +79,6 @@ class Interface(threading.Thread):
         
         self.remaining_kwargs = kwargs
     
-    def add_mp_safe_log(self,log_queue):
-        '''
-        Add a multiprocess safe log based using a queue (which is presumed to be listened to by a QueueListener).
-        '''
-        self.log = logging.getLogger(__name__)
-        que_handler = logging.handlers.QueueHandler(log_queue)
-        self.log.addHandler(que_handler)
-        self.log.propagate = False
-    
     def run(self):
         '''
         The run sequence for the interface. This method does not need to be overloaded create a working interface. 
