@@ -1,6 +1,9 @@
 '''
 Modules of launchers used to start M-LOOP.  
 '''
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
 import logging
 import mloop.utilities as mlu
 import mloop.controllers as mlc

@@ -3,8 +3,9 @@ Module of learners used to determine what parameters to try next given previous 
 
 Each learner is created and controlled by a controller.
 '''
-import queue
-import multiprocessing as mp
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
 import threading
 import numpy as np
 import numpy.random as nr
@@ -16,6 +17,8 @@ import mloop.utilities as mlu
 import mloop.localsklearn.gaussian_process as skg
 import mloop.localsklearn.gaussian_process.kernels as skk
 import mloop.localsklearn.preprocessing as skp
+import multiprocessing as mp
+
 
 default_learner_archive_filename = 'learner_archive' 
 default_learner_archive_file_type = 'txt'
@@ -28,7 +31,7 @@ class LearnerInterrupt(Exception):
         '''
         Create LearnerInterrupt.
         '''
-        super().__init__()
+        super(LearnerInterrupt,self).__init__()
     
 
 class Learner():
@@ -64,7 +67,7 @@ class Learner():
                  log_queue=None,
                  **kwargs):
 
-        super().__init__()
+        super(Learner,self).__init__()
         
         self.log = logging.getLogger(__name__)
         self.log_queue = log_queue
@@ -132,11 +135,15 @@ class Learner():
         '''
         Add a multiprocess safe log based using a queue (which is presumed to be listened to by a QueueListener).
         '''
-        self.log = logging.getLogger(__name__)
-        que_handler = logging.handlers.QueueHandler(self.log_queue)
-        self.log.addHandler(que_handler)
-        self.log.propagate = False
-    
+        #QueueListener and handler only available in python 3. Just send to stderr if python 2.
+        if mlu.python_version < 3:
+            self.log = mp.log_to_stderr(logging.WARNING)
+        else:
+            self.log = logging.getLogger(__name__)
+            que_handler = logging.handlers.QueueHandler(self.log_queue)
+            self.log.addHandler(que_handler)
+            self.log.propagate = False
+        
     def check_num_params(self,param):
         '''
         Check the number of parameters is right.
@@ -194,7 +201,7 @@ class Learner():
         while not self.end_event.is_set():
             try:
                 cost = self.costs_in_queue.get(True, self.learner_wait)
-            except queue.Empty:
+            except mlu.empty_exception:
                 continue
             else:
                 break
@@ -275,7 +282,7 @@ class RandomLearner(Learner, threading.Thread):
                  first_params=None,
                  **kwargs):
         
-        super().__init__(**kwargs)
+        super(RandomLearner,self).__init__(**kwargs)
         
         if not np.all(self.diff_boundary>0.0):
             self.log.error('All elements of max_boundary are not larger than min_boundary')
@@ -354,7 +361,7 @@ class NelderMeadLearner(Learner, threading.Thread):
                  initial_simplex_scale=None,
                  **kwargs):
         
-        super().__init__(**kwargs)
+        super(NelderMeadLearner,self).__init__(**kwargs)
         
         self.num_boundary_hits = 0
         self.rho = 1
@@ -679,14 +686,14 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.has_local_minima = False
             
         
-            super().__init__(num_params=num_params,
+            super(GaussianProcessLearner,self).__init__(num_params=num_params,
                              min_boundary=min_boundary, 
                              max_boundary=max_boundary, 
                              **kwargs)
             
         else:
             
-            super().__init__(**kwargs)
+            super(GaussianProcessLearner,self).__init__(**kwargs)
             
             #Storage variables, archived
             self.all_params = np.array([], dtype=float)

@@ -1,8 +1,9 @@
 '''
 Module of all the controllers used in M-LOOP. The controllers, as the name suggests, control the interface to the experiment and all the learners employed to find optimal parameters.
 '''
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
-import queue
 import datetime
 import mloop.utilities as mlu
 import mloop.learners as mll
@@ -21,7 +22,7 @@ class ControllerInterrupt(Exception):
     Exception that is raised when the controlled is ended with the end flag or event. 
     '''
     def __init__(self):
-        super().__init__()
+        super(ControllerInterrupt,self).__init__()
  
 def create_controller(interface,
                       controller_type='gaussian_process', 
@@ -149,9 +150,14 @@ class Controller():
         #Create a logger that is multiprocessing safe. If needed
         self.log = logging.getLogger(__name__)
         self.log_queue = mp.Queue()
-        self.log_queue_listener = logging.handlers.QueueListener(self.log_queue,
-                                                                 *logging.getLogger('mloop').handlers, 
-                                                                 respect_handler_level=True)
+        #only create a QueueListener if using python 3
+        if mlu.python_version < 3:
+            self.log_queue_listener = mlu.NullQueueListener()
+        else:
+            self.log_queue_listener = logging.handlers.QueueListener(self.log_queue,
+                                                                     *logging.getLogger('mloop').handlers, 
+                                                                     respect_handler_level=True)
+        
         
         #Variables set by user
         
@@ -267,7 +273,7 @@ class Controller():
         while True:
             try:
                 in_dict = self.costs_in_queue.get(True, self.controller_wait)
-            except queue.Empty:
+            except mlu.empty_exception:
                 continue
             else:
                 break
@@ -450,7 +456,7 @@ class RandomController(Controller):
     '''
     def __init__(self, interface,**kwargs):
         
-        super().__init__(interface, **kwargs)
+        super(RandomController,self).__init__(interface, **kwargs)
         self.learner = mll.RandomLearner(start_datetime = self.start_datetime,
                                          learner_archive_filename=None,
                                          **self.remaining_kwargs)
@@ -482,7 +488,7 @@ class NelderMeadController(Controller):
     '''
     def __init__(self, interface,
                 **kwargs):
-        super().__init__(interface, **kwargs)    
+        super(NelderMeadController,self).__init__(interface, **kwargs)    
         
         self.learner = mll.NelderMeadLearner(start_datetime = self.start_datetime,
                                              **self.remaining_kwargs)
@@ -528,7 +534,7 @@ class GaussianProcessController(Controller):
                  learner_archive_filename = mll.default_learner_archive_filename,
                  learner_archive_file_type = mll.default_learner_archive_file_type,
                  **kwargs):
-        super().__init__(interface, **kwargs)   
+        super(GaussianProcessController,self).__init__(interface, **kwargs)   
         
         self.last_training_cost = None
         self.last_training_bad = None
@@ -592,7 +598,7 @@ class GaussianProcessController(Controller):
         '''
         Override _put_params_and_out_dict function, used when the training learner creates parameters. Makes the defualt param_type the training type and sets last_training_run_flag.
         '''
-        super()._put_params_and_out_dict(params, param_type=self.training_type)
+        super(GaussianProcessController,self)._put_params_and_out_dict(params, param_type=self.training_type)
         self.last_training_run_flag = True 
     
     def _get_cost_and_in_dict(self):
@@ -600,7 +606,7 @@ class GaussianProcessController(Controller):
         Call _get_cost_and_in_dict() of parent Controller class. But also sends cost to Gaussian process learner and saves the cost if the parameters came from a trainer. 
         
         '''
-        super()._get_cost_and_in_dict()
+        super(GaussianProcessController,self)._get_cost_and_in_dict()
         if self.last_training_run_flag:
             self.last_training_cost = self.curr_cost
             self.last_training_bad = self.curr_bad
@@ -615,9 +621,19 @@ class GaussianProcessController(Controller):
         Gets next parameters from training learner.
         '''
         if self.training_type == 'nelder_mead':
-            temp = NelderMeadController._next_params(self)
+            #Copied from NelderMeadController
+            if self.curr_bad:
+                cost = float('inf')
+            else:
+                cost = self.curr_cost       
+            self.learner_costs_queue.put(cost)
+            temp = self.learner_params_queue.get()
+            
         elif self.training_type == 'random':
-            temp = RandomController._next_params(self)
+            #Copied from RandomController
+            self.learner_costs_queue.put(self.best_params)
+            temp = self.learner_params_queue.get()  
+            
         else:
             self.log.error('Unknown training type called. THIS SHOULD NOT HAPPEN')
         return temp
@@ -626,7 +642,7 @@ class GaussianProcessController(Controller):
         '''
         Runs pararent method and also starts training_learner.
         '''
-        super()._start_up()
+        super(GaussianProcessController,self)._start_up()
         self.log.debug('GP learner started.')
         self.gp_learner.start()
 
@@ -638,7 +654,7 @@ class GaussianProcessController(Controller):
         save_max_num_runs = self.max_num_runs
         self.max_num_runs = self.num_training_runs - 1
         self.log.debug('Starting training optimization.')
-        super()._optimization_routine()
+        super(GaussianProcessController,self)._optimization_routine()
         
         #Start last training run
         self.log.info('Run:' + str(self.num_in_costs +1))
@@ -663,7 +679,7 @@ class GaussianProcessController(Controller):
                 gp_consec = 0
             else:
                 next_params = self.gp_learner_params_queue.get()
-                super()._put_params_and_out_dict(next_params, param_type='gaussian_process')
+                super(GaussianProcessController,self)._put_params_and_out_dict(next_params, param_type='gaussian_process')
                 gp_consec += 1
                 gp_count += 1
             
@@ -706,13 +722,13 @@ class GaussianProcessController(Controller):
         else:
             if self.gp_learner.predict_global_minima_at_end or self.gp_learner.predict_local_minima_at_end:
                 self.log.warning('GP Learner may not have closed properly unable to get best and/or all minima.')
-        super()._shut_down()
+        super(GaussianProcessController,self)._shut_down()
         
     def print_results(self):
         '''
         Adds some additional output to the results specific to controller. 
         '''
-        super().print_results()
+        super(GaussianProcessController,self).print_results()
         try:
             self.log.info('Predicted best parameters:' + str(self.predicted_best_parameters))
             self.log.info('Predicted best cost:' + str(self.predicted_best_cost) + ' +/- ' + str(self.predicted_best_uncertainty))

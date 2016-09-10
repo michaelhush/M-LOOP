@@ -1,6 +1,7 @@
 '''
 Unit test for all of the example scripts provided in the examples folder.
 '''
+from __future__ import absolute_import, division, print_function
 
 import os
 import unittest

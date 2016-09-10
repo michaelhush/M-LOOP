@@ -1,6 +1,8 @@
 '''
 Module of classes used to create visualizations of data produced by the experiment and learners.
 '''
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
 import mloop.utilities as mlu
 import mloop.learners as mll
@@ -261,10 +263,10 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     
     def __init__(self, filename, file_type = 'pkl', **kwargs):
         
-        super().__init__(gp_training_filename = filename,
-                 gp_training_file_type = file_type,
-                 update_hyperparameters = False,
-                 **kwargs)
+        super(GaussianProcessVisualizer, self).__init__(gp_training_filename = filename,
+                                                        gp_training_file_type = file_type,
+                                                        update_hyperparameters = False,
+                                                        **kwargs)
         
         self.log = logging.getLogger(__name__)
         

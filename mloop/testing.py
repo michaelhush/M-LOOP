@@ -1,6 +1,8 @@
 '''
 Module of classes used to test M-LOOP.
 '''
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
 import numpy as np
 import threading
@@ -24,16 +26,6 @@ class TestLandscape():
         self.num_params = num_params
         self.set_default_landscape()
     
-    def add_mp_safe_log(self,log_queue):
-        '''
-        Add a multiprocess safe log based using a queue (which is presumed to be listened to by a QueueListener).
-        '''
-        self.log = logging.getLogger(__name__)
-        que_handler = logging.handlers.QueueHandler(log_queue)
-        self.log.addHandler(que_handler)
-        self.log.propagate = False
-    
-        
     def set_default_landscape(self):
         '''
         Set landscape functions to their defaults
@@ -176,7 +168,7 @@ class FakeExperiment(threading.Thread):
                  poll_wait = 1,
                  **kwargs):
         
-        super().__init__()
+        super(FakeExperiment,self).__init__()
         
         if test_landscape is None:
             self.test_landscape = TestLandscape()

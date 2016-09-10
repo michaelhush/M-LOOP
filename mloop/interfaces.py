@@ -1,10 +1,11 @@
 '''
 Module of the interfaces used to connect the controller to the experiment. 
 '''
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
 import time
 import os
-import queue
 import threading
 import multiprocessing as mp
 import mloop.utilities as mlu
@@ -39,7 +40,7 @@ class InterfaceInterrupt(Exception):
     Exception that is raised when the interface is ended with the end event, or some other interruption.  
     '''
     def __init__(self):
-        super().__init__()
+        super(InterfaceInterrupt,self).__init__()
     
 
 class Interface(threading.Thread):
@@ -64,7 +65,7 @@ class Interface(threading.Thread):
                  interface_wait = 1, 
                  **kwargs):
         
-        super().__init__()
+        super(Interface,self).__init__()
         self.log = logging.getLogger(__name__)
         self.log.debug('Creating interface.')
         
@@ -89,7 +90,7 @@ class Interface(threading.Thread):
             while not self.end_event.is_set():
                 try:
                     params_dict = self.params_out_queue.get(True, self.interface_wait)
-                except queue.Empty:
+                except mlu.empty_exception:
                     continue
                 else:
                     cost_dict = self._get_next_cost_dict(params_dict)
@@ -131,7 +132,7 @@ class FileInterface(Interface):
                  interface_file_type=mlu.default_interface_file_type,
                  **kwargs):
         
-        super().__init__(**kwargs)
+        super(FileInterface,self).__init__(**kwargs)
         
         self.out_file_count = 0
         self.in_file_count = 0
@@ -193,16 +194,12 @@ class TestInterface(Interface):
                  test_landscape=None,
                  **kwargs):
         
-        super().__init__(**kwargs)
+        super(TestInterface,self).__init__(**kwargs)
         if test_landscape is None:
             self.test_landscape = mlt.TestLandscape()
         else:
             self.test_landscape = test_landscape
         self.test_count = 0
-    
-    def add_mp_safe_log(self,log_queue):
-        super().add_mp_safe_log(log_queue)
-        self.test_landscape.add_mp_safe_log(log_queue)
     
     def _get_next_cost_dict(self, params_dict):
         '''

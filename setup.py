@@ -1,6 +1,8 @@
 '''
 Setup script for M-LOOP using setuptools. See the documentation of setuptools for further details. 
 '''
+from __future__ import absolute_import, division, print_function
+
 import mloop as ml
 
 from setuptools import setup, find_packages

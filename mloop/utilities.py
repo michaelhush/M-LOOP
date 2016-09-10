@@ -1,6 +1,8 @@
 '''
 Module of common utility methods and attributes used by all the modules.
 '''
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
 import scipy.io as si
 import pickle
@@ -10,6 +12,17 @@ import sys
 import os
 import numpy as np
 import mloop
+
+python_version = sys.version_info[0]
+
+#For libraries with different names in pythons 2 and 3
+if python_version < 3:
+    import Queue #@UnresolvedImport @UnusedImport
+    empty_exception = Queue.Empty
+else:
+    import queue
+    empty_exception = queue.Empty
+
 
 default_interface_in_filename = 'exp_output'
 default_interface_out_filename = 'exp_input'
@@ -102,9 +115,9 @@ def txt_file_to_dict(filename):
             if temp != '':
                 tdict_string += temp+','    
     #Setting up words for parsing a dict, ignore eclipse warnings
-    array = np.array
-    inf = float('inf')
-    nan = float('nan')
+    array = np.array    #@UnusedVariable
+    inf = float('inf')  #@UnusedVariable
+    nan = float('nan')  #@UnusedVariable
     tdict = eval('dict('+tdict_string+')')
     return tdict
     
@@ -157,4 +170,23 @@ def check_file_type_supported(file_type):
         bool : True if file_type is supported, False otherwise. 
     '''
     return file_type == 'mat' or 'txt' or 'pkl'
+
+class NullQueueListener():
+    '''
+    Shell class with start and stop functions that do nothing. Queue listener is not implemented in python 2. Current fix is to simply use the multiprocessing class to pipe straight to the cmd line if running on python 2. This is class is just a placeholder.
+    '''
+    def start(self):
+        '''
+        Does nothing
+        '''
+        pass
+    
+    def stop(self):
+        '''
+        Does nothing
+        '''
+        pass
+
+
+
     
