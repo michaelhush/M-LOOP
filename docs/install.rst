@@ -6,7 +6,7 @@ M-LOOP is available on PyPI and can be installed with your favorite package mana
 
 The installation process involves three steps.
 
-1. Get a Python 3 distribution with the standard scientific packages. We recommend installing :ref:`sec-anaconda`.
+1. Get a Python distribution with the standard scientific packages. We recommend installing :ref:`sec-anaconda`.
 2. Install the development version of :ref:`sec-M-LOOP`.
 3. :ref:`Test<sec-Testing>` your M-LOOP install.
 
@@ -14,15 +14,13 @@ The installation process involves three steps.
 
 Anaconda
 --------
-We recommend installing Anaconda to get a python 3 environment with all the required scientific packages. The Anaconda distribution is available here:
+We recommend installing Anaconda to get a python environment with all the required scientific packages. The Anaconda distribution is available here:
 
 https://www.continuum.io/downloads
 
 Follow the installation instructions they provide.
 
-M-LOOP requires a python 3.\* environment. If you want to retain compatibility with python 2.\* Anaconda supports installing multiple python environments on the same machine, see:
-
-http://conda.pydata.org/docs/py2or3.html#create-python-2-or-3-environments. 
+M-LOOP is targeted at python 3.\* but also supports 2.7. Please use python 3.\* if you do not have a reason to use 2.7, see :ref:`sec-py3vpy2` for details.
 
 .. _sec-m-loop:
 
@@ -62,3 +60,11 @@ If you would also like a local copy of the documentation enter the docs folder a
    
 Which will generate the documentation in docs/_build/html.
 
+.. _sec-py3vpy2:
+
+Python 3 vs 2
+-------------
+
+M-LOOP is developed in python 3.\* and it gets the best performance in this environment. This is primarily because other packages that M-LOOP uses, like numpy, run fastest in python 3. The tests typically take about 20% longer to complete in python 2 than 3.
+
+If you have a specific reason to stay in a python 2.7 environment, you may use other packages which are not python 3 compatible, then you can still use M-LOOP without upgrading to 3.\*. However, if you do not have a specific reason to stay with python 2, it is highly recommended you use the latest python 3.\* package.

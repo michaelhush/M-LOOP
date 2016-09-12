@@ -378,10 +378,7 @@ class Controller():
         #current solution is to join with a timeout and kill if that fails
         self.learner.join()
         self.log.debug('Learner joined.')
-        self.interface.join(self.interface.interface_wait*3)
-        if self.interface.is_alive():
-            self.log.debug('Interface did not join in time had to terminate.')
-            self.interface.terminate()
+        self.interface.join()
         self.log.debug('Interface joined.')
         self.save_archive()
         self.log_queue_listener.stop()
