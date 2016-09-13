@@ -14,7 +14,3 @@ import os
 
 __version__= "2.0.2"
 __all__ = ['controllers','interfaces','launchers','learners','testing','utilities','visualizations']
-
-#Add a null handler in case the user does not run config_logger() before running the optimization
-import logging
-logging.getLogger(__name__).addHandler(logging.NullHandler())

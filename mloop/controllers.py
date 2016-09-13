@@ -90,7 +90,6 @@ class Controller():
         learner_params_queue (queue): The parameters queue for the learner
         learner_costs_queue (queue): The costs queue for the learner
         end_learner (event): Event used to trigger the end of the learner
-        log_queue (queue): Queue used to safely pipe log data from the learner
         num_in_costs (int): Counter for the number of costs received.
         num_out_params (int): Counter for the number of parameters received. 
         out_params (list): List of all parameters sent out by controller.
@@ -113,6 +112,10 @@ class Controller():
                  archive_extra_dict = None,
                  start_datetime = None,
                  **kwargs):
+        
+        #Make logger
+        self.remaining_kwargs = mlu._config_logger(**kwargs)
+        self.log = logging.getLogger(__name__)
         
         #Variable that are included in archive
         self.num_in_costs = 0
@@ -146,18 +149,6 @@ class Controller():
         self.learner_costs_queue = None
         self.end_learner = None
         self.learner = None
-        
-        #Create a logger that is multiprocessing safe. If needed
-        self.log = logging.getLogger(__name__)
-        self.log_queue = mp.Queue()
-        #only create a QueueListener if using python 3
-        if mlu.python_version < 3:
-            self.log_queue_listener = mlu.NullQueueListener()
-        else:
-            self.log_queue_listener = logging.handlers.QueueListener(self.log_queue,
-                                                                     *logging.getLogger('mloop').handlers, 
-                                                                     respect_handler_level=True)
-        
         
         #Variables set by user
         
@@ -214,8 +205,6 @@ class Controller():
         
         if archive_extra_dict is not None:
             self.archive_dict.update(archive_extra_dict)
-        
-        self.remaining_kwargs = kwargs
         
         self.log.debug('Controller init completed.')
     
@@ -361,7 +350,6 @@ class Controller():
         '''
         Start the learner and interface threads/processes.
         '''
-        self.log_queue_listener.start()
         self.learner.start()
         self.interface.start()
     
@@ -380,9 +368,7 @@ class Controller():
         self.log.debug('Learner joined.')
         self.interface.join()
         self.log.debug('Interface joined.')
-        self.save_archive()
-        self.log_queue_listener.stop()
-        self.log.debug('Log listener stopped')     
+        self.save_archive()    
     
     def print_results(self):
         '''
@@ -581,7 +567,6 @@ class GaussianProcessController(Controller):
                                                   trust_region=trust_region,
                                                   learner_archive_filename=learner_archive_filename,
                                                   learner_archive_file_type=learner_archive_file_type,
-                                                  log_queue = self.log_queue,
                                                   **self.remaining_kwargs)
         
         self.gp_learner_params_queue = self.gp_learner.params_out_queue

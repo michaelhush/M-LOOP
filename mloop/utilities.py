@@ -62,17 +62,19 @@ def _config_logger(log_filename = default_log_filename,
         os.makedirs(log_foldername)
     
     log = logging.getLogger('mloop')
-    log.setLevel(min(file_log_level,console_log_level))
-    if log_filename is not None:
-        fh = logging.FileHandler(log_foldername + log_filename + datetime_to_string(datetime.datetime.now()) + '.log')
-        fh.setLevel(file_log_level)
-        fh.setFormatter(logging.Formatter('%(asctime)s %(name)-20s %(levelname)-8s %(message)s'))
-        log.addHandler(fh)
-    ch = logging.StreamHandler(stream = sys.stdout)
-    ch.setLevel(console_log_level)
-    ch.setFormatter(logging.Formatter('%(levelname)-8s %(message)s'))
-    log.addHandler(ch)
-    log.debug('MLOOP Logger configured.')
+    
+    if len(log.handlers) == 0:
+        log.setLevel(min(file_log_level,console_log_level))
+        if log_filename is not None:
+            fh = logging.FileHandler(log_foldername + log_filename + datetime_to_string(datetime.datetime.now()) + '.log')
+            fh.setLevel(file_log_level)
+            fh.setFormatter(logging.Formatter('%(asctime)s %(name)-20s %(levelname)-8s %(message)s'))
+            log.addHandler(fh)
+        ch = logging.StreamHandler(stream = sys.stdout)
+        ch.setLevel(console_log_level)
+        ch.setFormatter(logging.Formatter('%(levelname)-8s %(message)s'))
+        log.addHandler(ch)
+        log.debug('MLOOP Logger configured.')
     
     return kwargs
 

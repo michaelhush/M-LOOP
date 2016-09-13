@@ -66,6 +66,8 @@ class Interface(threading.Thread):
                  **kwargs):
         
         super(Interface,self).__init__()
+        
+        self.remaining_kwargs = mlu._config_logger(**kwargs)
         self.log = logging.getLogger(__name__)
         self.log.debug('Creating interface.')
         
@@ -77,8 +79,6 @@ class Interface(threading.Thread):
         if self.interface_wait<=0:
             self.log.error('Interface wait time must be a positive number.')
             raise ValueError
-        
-        self.remaining_kwargs = kwargs
     
     def run(self):
         '''
