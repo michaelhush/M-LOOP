@@ -19,7 +19,7 @@ import mloop.localsklearn.gaussian_process.kernels as skk
 import mloop.localsklearn.preprocessing as skp
 import multiprocessing as mp
 
-
+learner_thread_count = 0
 default_learner_archive_filename = 'learner_archive' 
 default_learner_archive_file_type = 'txt'
 
@@ -46,11 +46,9 @@ class Learner():
         max_boundary (Optional [array]): Array with maximum values allowed for each parameter. Note if certain values have no maximum value you can set them to +inf for example [0, float('inf'),3,-12] is a valid max_boundary. If None sets all the boundaries to '1'. Default None.
         learner_archive_filename (Optional [string]): Name for python archive of the learners current state. If None, no archive is saved. Default None. But this is typically overloaded by the child class.
         learner_archive_file_type (Optional [string]):  File type for archive. Can be either 'txt' a human readable text file, 'pkl' a python dill file, 'mat' a matlab file or None if there is no archive. Default 'mat'.
-        log_queue (Optional [queue]): Queue for sending log messages to main logger. If None, default behavoir is to send warnings and above to console level. Default None.
         log_level (Optional [int]): Level for the learners logger. If None, set to warning. Default None.
         start_datetime (Optional [datetime]): Start date time, if None, is automatically generated.
-        log_queue (Optional [queue]): queue to pipe log information through if the class is run as a process (rather than a log)
-    
+        
     Attributes:
         params_out_queue (queue): Queue for parameters created by learner.
         costs_in_queue (queue): Queue for costs to be used by learner.
@@ -64,13 +62,13 @@ class Learner():
                  learner_archive_filename=default_learner_archive_filename,
                  learner_archive_file_type=default_learner_archive_file_type,
                  start_datetime=None,
-                 log_queue=None,
                  **kwargs):
 
         super(Learner,self).__init__()
         
-        self.log = logging.getLogger(__name__)
-        self.log_queue = log_queue
+        global learner_thread_count
+        learner_thread_count += 1        
+        self.log = logging.getLogger(__name__ + '.' + str(learner_thread_count))
         
         self.learner_wait=float(1)
         
@@ -130,19 +128,6 @@ class Learner():
                              'start_datetime':mlu.datetime_to_string(self.start_datetime)}
         
         self.log.debug('Learner init completed.')   
-    
-    def add_mp_safe_log(self):
-        '''
-        Add a multiprocess safe log based using a queue (which is presumed to be listened to by a QueueListener).
-        '''
-        #QueueListener and handler only available in python 3. Just send to stderr if python 2.
-        if mlu.python_version < 3:
-            self.log = mp.log_to_stderr(logging.WARNING)
-        else:
-            self.log = logging.getLogger(__name__)
-            que_handler = logging.handlers.QueueHandler(self.log_queue)
-            self.log.addHandler(que_handler)
-            self.log.propagate = False
         
     def check_num_params(self,param):
         '''
@@ -311,6 +296,7 @@ class RandomLearner(Learner, threading.Thread):
         '''
         Puts the next parameters on the queue which are randomly picked from a uniform distribution between the minimum and maximum boundaries when a cost is added to the cost queue.
         '''
+        
         self.log.debug('Starting Random Learner')
         if self.first_params is None:
             next_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
@@ -642,15 +628,18 @@ class GaussianProcessLearner(Learner, mp.Process):
             
             #Basic optimization settings
             num_params = int(self.training_dict['num_params'])
-            min_boundary = np.array(self.training_dict['min_boundary'], dtype=float)
-            max_boundary = np.array(self.training_dict['max_boundary'], dtype=float)
+            min_boundary = np.squeeze(np.array(self.training_dict['min_boundary'], dtype=float))
+            max_boundary = np.squeeze(np.array(self.training_dict['max_boundary'], dtype=float))
             
             #Configuration of the learner
             self.cost_has_noise = bool(self.training_dict['cost_has_noise'])
-            self.length_scale = np.array(self.training_dict['length_scale'])
+            self.length_scale = np.squeeze(np.array(self.training_dict['length_scale']))
             self.length_scale_history = list(self.training_dict['length_scale_history'])
             self.noise_level = float(self.training_dict['noise_level'])
-            self.noise_level_history = list(self.training_dict['noise_level_history'])
+            if isinstance(self.training_dict['noise_level_history'], np.ndarray):
+                self.noise_level_history = list(np.squeeze(self.training_dict['noise_level_history']))
+            else:
+                self.noise_level_history = list( self.training_dict['noise_level_history'])
             
             #Counters
             self.costs_count = int(self.training_dict['costs_count'])
@@ -659,19 +648,24 @@ class GaussianProcessLearner(Learner, mp.Process):
             
             #Data from previous experiment
             self.all_params = np.array(self.training_dict['all_params'], dtype=float)
-            self.all_costs = np.array(self.training_dict['all_costs'], dtype=float)
-            self.all_uncers = np.array(self.training_dict['all_uncers'], dtype=float)
-            self.bad_run_indexs = list(self.training_dict['bad_run_indexs'])
+            self.all_costs = np.squeeze(np.array(self.training_dict['all_costs'], dtype=float))
+            self.all_uncers = np.squeeze(np.array(self.training_dict['all_uncers'], dtype=float))
+            
+            if isinstance(self.training_dict['bad_run_indexs'], np.ndarray):
+                self.bad_run_indexs = list(np.squeeze(self.training_dict['bad_run_indexs']))
+            else:
+                self.bad_run_indexs = list(self.training_dict['bad_run_indexs'])
+            
             
             #Derived properties
             self.best_cost = float(self.training_dict['best_cost'])
-            self.best_params = np.array(self.training_dict['best_params'], dtype=float)
+            self.best_params = np.squeeze(np.array(self.training_dict['best_params'], dtype=float))
             self.best_index = int(self.training_dict['best_index'])
             self.worst_cost = float(self.training_dict['worst_cost'])
             self.worst_index = int(self.training_dict['worst_index'])
             self.cost_range = float(self.training_dict['cost_range'])
             try:
-                self.predicted_best_parameters = np.array(self.training_dict['predicted_best_parameters'])
+                self.predicted_best_parameters = np.squeeze(np.array(self.training_dict['predicted_best_parameters']))
                 self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
                 self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
                 self.has_global_minima = True
@@ -679,8 +673,16 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.has_global_minima = False
             try:
                 self.local_minima_parameters = list(self.training_dict['local_minima_parameters'])
-                self.local_minima_costs = list(self.training_dict['local_minima_costs'])
-                self.local_minima_uncers = list(self.training_dict['local_minima_uncers'])
+                
+                if isinstance(self.training_dict['local_minima_costs'], np.ndarray):
+                    self.local_minima_costs = list(np.squeeze(self.training_dict['local_minima_costs']))
+                else:
+                    self.local_minima_costs = list(self.training_dict['local_minima_costs'])
+                if isinstance(self.training_dict['local_minima_uncers'], np.ndarray):
+                    self.local_minima_uncers = list(np.squeeze(self.training_dict['local_minima_uncers']))
+                else:
+                    self.local_minima_uncers = list(self.training_dict['local_minima_uncers'])
+                
                 self.has_local_minima = True
             except KeyError:
                 self.has_local_minima = False
@@ -721,7 +723,6 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.length_scale = np.ones((self.num_params,))
             else:
                 self.length_scale = np.array(length_scale, dtype=float)
-            self.update_hyperparameters = bool(update_hyperparameters)
             self.noise_level = float(noise_level)
             self.cost_has_noise = bool(cost_has_noise)
             
@@ -820,7 +821,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                                   'predict_global_minima_at_end':self.predict_global_minima_at_end,
                                   'predict_local_minima_at_end':self.predict_local_minima_at_end})
         
-        #Remove logger so it can be safely picked for multiprocessing on Windows
+        #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
             
         
@@ -993,20 +994,26 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.scaled_uncers = self.all_uncers * self.cost_scaler.scale_
         self.gaussian_process.alpha_ = self.scaled_uncers
         self.gaussian_process.fit(self.all_params,self.scaled_costs)
-        self.fit_count += 1
-        self.gaussian_process.kernel = self.gaussian_process.kernel_
-    
-        last_hyperparameters = self.gaussian_process.kernel.get_params()
         
-        if self.cost_has_noise:
-            self.length_scale = last_hyperparameters['k1__length_scale']
-            self.length_scale_history.append(self.length_scale)
-            self.noise_level = last_hyperparameters['k2__noise_level']
-            self.noise_level_history.append(self.noise_level)
-        else:
-            self.length_scale = last_hyperparameters['length_scale']
-            self.length_scale_history.append(self.length_scale)
+        if self.update_hyperparameters:
+            
+            self.fit_count += 1
+            self.gaussian_process.kernel = self.gaussian_process.kernel_
         
+            last_hyperparameters = self.gaussian_process.kernel.get_params()
+            
+            if self.cost_has_noise:
+                self.length_scale = last_hyperparameters['k1__length_scale']
+                if isinstance(self.length_scale, float):
+                     self.length_scale = np.array([self.length_scale])
+                self.length_scale_history.append(self.length_scale)
+                self.noise_level = last_hyperparameters['k2__noise_level']
+                self.noise_level_history.append(self.noise_level)
+            else:
+                self.length_scale = last_hyperparameters['length_scale']
+                self.length_scale_history.append(self.length_scale)
+        
+            
     def update_bias_function(self):
         '''
         Set the constants for the cost bias function.
@@ -1048,7 +1055,9 @@ class GaussianProcessLearner(Learner, mp.Process):
         '''
         Starts running the Gaussian process learner. When the new parameters event is triggered, reads the cost information provided and updates the Gaussian process with the information. Then searches the Gaussian process for new optimal parameters to test based on the biased cost. Parameters to test next are put on the output parameters queue.
         '''
-        self.add_mp_safe_log()
+        #logging to the main log file from a process (as apposed to a thread) in cpython is currently buggy on windows and/or python 2.7
+        #current solution is to only log to the console for warning and above from a process
+        self.log = mp.log_to_stderr(logging.WARNING)
         
         try:
             while not self.end_event.is_set():
