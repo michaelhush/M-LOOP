@@ -8,7 +8,7 @@ target_cost = 0.1                #cost to beat
 #Gaussian process options
 controller_type = 'gaussian_process'
 num_params = 2                         #number of parameters
-min_boundary = [-10.,-10.]                #minimum boundary
+min_boundary = [-10.,-10.]             #minimum boundary
 max_boundary = [10.,10.]               #maximum boundary
 length_scale = [1.0]                   #initial lengths scales for GP
 cost_has_noise = True                  #whether cost function has noise
@@ -17,10 +17,11 @@ update_hyperparameters = True          #whether noise level and lengths scales a
 trust_region = [5,5]                   #maximum move distance from best params
 default_bad_cost = 10                  #default cost for bad run
 default_bad_uncertainty = 1            #default uncertainty for bad run
-learner_archive_filename = 'a_word'            #filename of gp archive
-learner_archive_file_type = 'mat'              #file type of archive
+learner_archive_filename = 'a_word'    #filename of gp archive
+learner_archive_file_type = 'mat'      #file type of archive
 predict_global_minima_at_end  = True   #find predicted global minima at end 
 predict_local_minima_at_end = True     #find all local minima of landscape at end
+no_delay = True                       #whether to wait for the GP to make predictions or not. Default True (do not wait)  
 
 #Training source options
 training_type = 'random'               #training type can be random or nelder_mead

@@ -10,13 +10,14 @@ import mloop.launchers as mll
 import mloop.utilities as mlu
 import logging
 import numpy as np
+import multiprocessing
 
 class TestExamples(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
         os.chdir(mlu.mloop_path + '/../tests')
-        cls.override_dict = {'file_log_level':logging.DEBUG,'console_log_level':logging.WARNING,'visualizations':False}
+        cls.override_dict = {'file_log_level':logging.DEBUG,'console_log_level':logging.DEBUG,'visualizations':False}
         cls.fake_experiment = mlt.FakeExperiment()
         cls.fake_experiment.start()
     
@@ -56,7 +57,7 @@ class TestExamples(unittest.TestCase):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/nelder_mead_simple_config.txt',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
-        
+    
     def test_nelder_mead_complete_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/nelder_mead_complete_config.txt',
                                           **self.override_dict)
@@ -66,7 +67,7 @@ class TestExamples(unittest.TestCase):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/gaussian_process_simple_config.txt',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
-        
+     
     def test_gaussian_process_complete_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/gaussian_process_complete_config.txt',
                                           **self.override_dict)
@@ -80,6 +81,8 @@ class TestExamples(unittest.TestCase):
     def asserts_for_cost_and_params(self,controller):
         self.assertTrue(controller.best_cost<=controller.target_cost)
         self.assertTrue(np.sum(np.square(controller.best_params))<=controller.target_cost)
-        
+    
+    
 if __name__ == "__main__":
+    mp.freeze_support()
     unittest.main()

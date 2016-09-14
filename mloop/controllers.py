@@ -678,10 +678,13 @@ class GaussianProcessController(Controller):
         '''
         self.log.debug('GP learner end set.')
         self.end_gp_learner.set()
-        self.gp_learner.join(self.gp_learner.learner_wait*3)
+        self.gp_learner.join()
+        #self.gp_learner.join(self.gp_learner.learner_wait*3)
+        '''
         if self.gp_learner.is_alive():
-            self.log.debug('GP Learner did not join in time had to terminate.')
+            self.log.warning('GP Learner did not join in time had to terminate.')
             self.gp_learner.terminate()
+        '''
         self.log.debug('GP learner joined')   
         last_dict = None
         while not self.gp_learner_params_queue.empty():

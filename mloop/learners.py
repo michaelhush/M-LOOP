@@ -296,7 +296,6 @@ class RandomLearner(Learner, threading.Thread):
         '''
         Puts the next parameters on the queue which are randomly picked from a uniform distribution between the minimum and maximum boundaries when a cost is added to the cost queue.
         '''
-        
         self.log.debug('Starting Random Learner')
         if self.first_params is None:
             next_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
