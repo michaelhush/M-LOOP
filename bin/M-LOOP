@@ -34,7 +34,7 @@ def main(argv):
     _ = mll.launch_from_file(config_filename)
 
 if __name__=="__main__":
-	mp.freeze_support()
+    mp.freeze_support()
     main(sys.argv[1:])
 
 
