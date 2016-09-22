@@ -10,24 +10,23 @@ import mloop.launchers as mll
 import mloop.utilities as mlu
 import logging
 import numpy as np
-import multiprocessing
+import multiprocessing as mp
 
 class TestExamples(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
         os.chdir(mlu.mloop_path + '/../tests')
-        cls.override_dict = {'file_log_level':logging.DEBUG,'console_log_level':logging.DEBUG,'visualizations':False}
-        cls.fake_experiment = mlt.FakeExperiment()
-        cls.fake_experiment.start()
-    
+        cls.override_dict = {'file_log_level':logging.WARNING,'console_log_level':logging.DEBUG,'visualizations':False}
+        
     @classmethod
     def tearDownClass(cls):
-        cls.fake_experiment.end_event.set()
-        cls.fake_experiment.join()
+        pass
     
     def test_controller_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/controller_config.txt', 
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/controller_config.txt',
+                                          interface_type = 'test',
+                                          no_delay = False, 
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
     
@@ -35,6 +34,8 @@ class TestExamples(unittest.TestCase):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/extras_config.txt', 
                                           num_params=1,
                                           target_cost = 0.1,
+                                          interface_type = 'test',
+                                          no_delay = False, 
                                           **self.override_dict) 
         self.asserts_for_cost_and_params(controller)
     
@@ -42,39 +43,72 @@ class TestExamples(unittest.TestCase):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/logging_config.txt',
                                           num_params=1,
                                           target_cost = 0.1,
+                                          interface_type = 'test',
+                                          no_delay = False, 
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
         
     def test_random_simple_config(self):
         _ = mll.launch_from_file(mlu.mloop_path+'/../examples/random_simple_config.txt', 
+                                 interface_type = 'test',
                                  **self.override_dict)
         
     def test_random_complete_config(self):
         _ = mll.launch_from_file(mlu.mloop_path+'/../examples/random_complete_config.txt', 
+                                 interface_type = 'test',
                                  **self.override_dict)
         
     def test_nelder_mead_simple_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/nelder_mead_simple_config.txt',
+                                          interface_type = 'test',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
     
     def test_nelder_mead_complete_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/nelder_mead_complete_config.txt',
+                                          interface_type = 'test',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
     
     def test_gaussian_process_simple_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/gaussian_process_simple_config.txt',
+                                          interface_type = 'test',
+                                          no_delay = False, 
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
      
     def test_gaussian_process_complete_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/gaussian_process_complete_config.txt',
+                                          interface_type = 'test',
+                                          no_delay = False, 
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
     
     def test_tutorial_config(self):
+        fake_experiment = mlt.FakeExperiment()
+        fake_experiment.start()
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/tutorial_config.txt',
+                                          **self.override_dict)
+        self.asserts_for_cost_and_params(controller)
+        fake_experiment.end_event.set()
+        fake_experiment.join()
+        
+    def test_file_interface_config(self):
+        fake_experiment = mlt.FakeExperiment()
+        fake_experiment.start()
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/file_interface_config.txt',
+                                          num_params=1,
+                                          target_cost = 0.1,
+                                          **self.override_dict)
+        self.asserts_for_cost_and_params(controller)
+        fake_experiment.end_event.set()
+        fake_experiment.join()
+        
+    def test_command_line_interface_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/command_line_interface_config.txt',
+                                          num_params=1,
+                                          target_cost = 0.1,
+                                          no_delay = False,
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
     
