@@ -1004,7 +1004,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             if self.cost_has_noise:
                 self.length_scale = last_hyperparameters['k1__length_scale']
                 if isinstance(self.length_scale, float):
-                    self.length_scale = np.array([self.length_scale])
+                     self.length_scale = np.array([self.length_scale])
                 self.length_scale_history.append(self.length_scale)
                 self.noise_level = last_hyperparameters['k2__noise_level']
                 self.noise_level_history.append(self.noise_level)

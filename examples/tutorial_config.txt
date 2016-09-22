@@ -1,9 +1,6 @@
 #Tutorial Config
 #---------------
 
-#Interface settings
-interface_type = 'file'
-
 #Parameter settings
 num_params = 2                #number of parameters
 min_boundary = [-1,-1]        #minimum boundary
