@@ -5,7 +5,10 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import time
+import subprocess as sp
+import numpy as np
 import os
+import sys
 import threading
 import multiprocessing as mp
 import mloop.utilities as mlu
@@ -18,7 +21,7 @@ def create_interface(interface_type='file',
     Start a new interface with the options provided.
     
     Args:
-        interface_type (Optional [str]): Defines the type of interface, currently the only option is 'file'. Default 'file'.
+        interface_type (Optional [str]): Defines the type of interface, can be 'file', 'command_line' or 'test'. Default 'file'.
         **interface_config_dict : Options to be passed to interface.
         
     Returns:
@@ -27,13 +30,21 @@ def create_interface(interface_type='file',
     log = logging.getLogger(__name__)
     
     if interface_type=='file':
-        file_interface = FileInterface(**interface_config_dict)
+        interface = FileInterface(**interface_config_dict)
         log.info('Using the file interface with the experiment.')
+    elif interface_type == 'command_line':
+        interface = CommandLineInterface(**interface_config_dict)
+        log.info('Using the command line interface with the experiment.')
+    elif interface_type == 'test':
+        interface = TestInterface(**interface_config_dict)
+        log.info('Using the test interface with the experiment.')
     else:
         log.error('Unknown interface type:' + repr(interface_type))
         raise ValueError
     
-    return file_interface
+    
+    
+    return interface
 
 class InterfaceInterrupt(Exception):
     '''
@@ -57,10 +68,9 @@ class Interface(threading.Thread):
         params_out_queue (queue): Queue for parameters to next be run by experiment.
         costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
         end_event (event): Event which triggers the end of the interface. 
-    
-    
+            
     '''
-
+    
     def __init__(self,
                  interface_wait = 1, 
                  **kwargs):
@@ -216,7 +226,7 @@ class TestInterface(Interface):
         cost_dict = self.test_landscape.get_cost_dict(params)
         return cost_dict
 
-"""        
+      
 class CommandLineInterface(Interface):
     '''
     Interface for running programs from the command line.
@@ -240,16 +250,66 @@ class CommandLineInterface(Interface):
     
     def __init__(self,
                  command = './run_exp',
-                 params_args_type = 'direct'):
+                 params_args_type = 'direct',
+                 **kwargs):
         
+        super(CommandLineInterface,self).__init__(**kwargs)
+        
+        #User defined variables
         self.command = str(command)
-        
-        if params_args_type == 'direct' or 'named':
+        if params_args_type == 'direct' or params_args_type ==  'named':
             self.params_args_type = str(params_args_type)
         else:
-            pass
-"""
-
+            self.log.error('params_args_type not recognized: ' + repr(params_args_type))
+        
+        #Counters
+        self.command_count = 0
+        
+    def _get_next_cost_dict(self,params_dict):
+        '''
+        Implementation of running a command with parameters on the command line and reading the result.
+        '''
+        self.command_count += 1
+        self.log.debug('Running command count' + repr(self.command_count))
+        self.last_params_dict = params_dict
+        
+        params = params_dict['params'] 
+        
+        curr_command = self.command
+        
+        if self.params_args_type == 'direct':
+            for p in params:
+                curr_command += ' ' + str(p)
+        elif self.params_args_type == 'named':
+            for ind,p in enumerate(params):
+                curr_command += ' ' + '--param' + str(ind +1) + ' ' + str(p)
+        else:
+            self.log.error('THIS SHOULD NOT HAPPEN. params_args_type not recognized')
+        
+        #execute command and look at output
+        cli_return = sp.check_output(curr_command.split()).decode(sys.stdout.encoding)
+        print(cli_return)
+        
+        tdict_string = ''
+        take_flag = False
+        for line in cli_return.splitlines():
+            temp = (line.partition('#')[0]).strip('\n').strip()
+            if temp  == 'M-LOOP_start' or temp == 'MLOOP_start':
+                take_flag = True
+            elif temp == 'M-LOOP_end' or temp == 'MLOOP_end':
+                take_flag = False
+            elif take_flag:
+                tdict_string += temp + ','
+        
+        print(tdict_string)
+        
+        #Setting up words for parsing a dict, ignore eclipse warnings
+        array = np.array    #@UnusedVariable
+        inf = float('inf')  #@UnusedVariable
+        nan = float('nan')  #@UnusedVariable
+        tdict = eval('dict('+tdict_string+')')
+        
+        return tdict
 
 
 

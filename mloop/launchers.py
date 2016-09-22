@@ -30,8 +30,6 @@ def launch_from_file(config_filename,
     
     file_kwargs.update(kwargs)
     #Main run sequence
-    #Create controller and extract unused keywords
-    file_kwargs = mlu._config_logger(**file_kwargs) 
     #Create interface and extract unused keywords
     interface = mli.create_interface(**file_kwargs)
     file_kwargs = interface.remaining_kwargs
