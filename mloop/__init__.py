@@ -13,4 +13,4 @@ __metaclass__ = type
 import os
 
 __version__= "2.0.3"
-__all__ = ['controllers','interfaces','launchers','learners','testing','utilities','visualizations']
+__all__ = ['controllers','interfaces','launchers','learners','testing','utilities','visualizations','cmd']

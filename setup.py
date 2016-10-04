@@ -13,7 +13,11 @@ def main():
         name = 'M-LOOP',
         version = ml.__version__,
         packages = find_packages(),
-        scripts = ['./bin/M-LOOP'],
+        entry_points={
+            'console_scripts': [
+                'M-LOOP = mloop.cmd:run_mloop'
+            ],
+        },
         
         setup_requires=['pytest-runner'],
         install_requires = ['docutils>=0.3','numpy>=1.11','scipy>=0.17','matplotlib>=1.5','pytest>=2.9'],

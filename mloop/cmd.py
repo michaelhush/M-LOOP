@@ -1,18 +1,8 @@
-#! /usr/bin/env python
-
 '''
-M-LOOP Launcher
-
-Starts an instance of M-LOOP configured using a configuration file. 
-
-Takes the following command line options
-
--c filename for configuration file
-
--h display help
-
-the default name for the configuration is "ExpConfig.txt"
+Module of command line tools that can be used to execute mloop.
 '''
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
 import sys
 import argparse
@@ -20,7 +10,20 @@ import mloop as ml
 import mloop.launchers as mll
 import multiprocessing as mp
 
-def main(argv):
+def run_mloop():
+    '''
+    M-LOOP Launcher
+    
+    Starts an instance of M-LOOP configured using a configuration file. 
+    
+    Takes the following command line options
+    
+    -c filename for configuration file
+    
+    -h display help
+    
+    the default name for the configuration is "ExpConfig.txt"
+    '''
     
     parser = argparse.ArgumentParser(description='M-LOOP Launcher \n Version:' + ml.__version__+'\n \n Starts a new instance of M-LOOP based a on configuration file.', 
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -33,9 +36,4 @@ def main(argv):
     
     _ = mll.launch_from_file(config_filename)
 
-if __name__=="__main__":
-    mp.freeze_support()
-    main(sys.argv[1:])
-
-
-
+        
