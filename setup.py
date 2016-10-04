@@ -20,7 +20,8 @@ def main():
         },
         
         setup_requires=['pytest-runner'],
-        install_requires = ['docutils>=0.3',
+        install_requires = ['pip>=7.0'
+                            'docutils>=0.3',
                             'numpy>=1.11',
                             'scipy>=0.17',
                             'matplotlib>=1.5',
