@@ -1,10 +1,10 @@
 language: python
 python:
-  - "2.7"
+  - "2.7.12"
   - "3.5"
-install:
+install: 
   - pip install --upgrade pip
-  - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then pip install --upgrade python
+ # - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pip install --upgrade python
   - python --version
   - pip --version
   - pip install -r requirements.txt
