@@ -20,7 +20,12 @@ def main():
         },
         
         setup_requires=['pytest-runner'],
-        install_requires = ['docutils>=0.3','numpy>=1.11','scipy>=0.17','matplotlib>=1.5','pytest>=2.9'],
+        install_requires = ['docutils>=0.3',
+                            'numpy>=1.11',
+                            'scipy>=0.17',
+                            'matplotlib>=1.5',
+                            'pytest>=2.9',
+                            'scikit-learn>=0.18'],
         tests_require=['pytest','setuptools>=26'],
         
         package_data = {

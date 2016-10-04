@@ -8,8 +8,7 @@ import datetime
 import mloop.utilities as mlu
 import mloop.learners as mll
 import mloop.interfaces as mli
-import multiprocessing as mp
-import logging.handlers
+import logging
 import os
 
 controller_dict = {'random':1,'nelder_mead':2,'gaussian_process':3}

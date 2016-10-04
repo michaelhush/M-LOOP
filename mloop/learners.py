@@ -10,13 +10,13 @@ import threading
 import numpy as np
 import numpy.random as nr
 import scipy.optimize as so
-import logging.handlers
+import logging
 import datetime
 import os
 import mloop.utilities as mlu
-import mloop.localsklearn.gaussian_process as skg
-import mloop.localsklearn.gaussian_process.kernels as skk
-import mloop.localsklearn.preprocessing as skp
+import sklearn.gaussian_process as skg
+import sklearn.gaussian_process.kernels as skk
+import sklearn.preprocessing as skp
 import multiprocessing as mp
 
 learner_thread_count = 0
