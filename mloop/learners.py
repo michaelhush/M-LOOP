@@ -259,6 +259,7 @@ class RandomLearner(Learner, threading.Thread):
     Keyword Args:
         min_boundary (Optional [array]): If set to None, overrides default learner values and sets it to a set of value 0. Default None.
         max_boundary (Optional [array]): If set to None overides default learner values and sets it to an array of value 1. Default None.
+        first_params (Optional [array]): The first parameters to test. If None will just randomly sample the initial condition.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction.   
     '''
     
@@ -1181,8 +1182,7 @@ class GaussianProcessLearner(Learner, mp.Process):
 
     
 class DifferentialEvolutionLearner(Learner, threading.Thread):
-
-    """
+    '''
     Adaption of the differential evolution algorithm in scipy. 
     
     Args:
@@ -1191,29 +1191,43 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         end_event (event): Event to trigger end of learner.
         
     Keyword Args:
+        first_params (Optional [array]): The first parameters to test. If None will just randomly sample the initial condition. Default None.
+        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
         evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best1', 'rand1' and 'rand2'. The default is 'rand2'.
         population_size (Optional [int]): multiplier proportional to the number of parameters in a generation. The generation population is set to population_size * parameter_num. Default 15.
         mutation_scale (Optional [tuple]): The mutation scale when picking new points. Otherwise known as differential weight. When provided as a tuple (min,max) a mutation constant is picked randomly in the interval. Default (0.5,1.0).
-        crossover_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
+        cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
         restart_tolerance (Optional [float]): when the current population have a spread less than the initial tolerance, namely stdev(curr_pop) < restart_tolerance stdev(init_pop), it is likely the population is now in a minima, and so the search is started again.
-        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
         
     Attributes:
         has_trust_region (bool): Whether the learner has a trust region. 
         
-    """
+    '''
 
     # Dispatch of mutation strategy method (binomial or exponential).
     
     def __init__(self, 
-                 strategy='rand2', 
+                 first_params = None,
+                 trust_region = None,
+                 evolution_strategy='rand2', 
                  population_size=15,
+                 mutation_scale=(0.5, 1), 
+                 cross_over_probability=0.7, 
                  restart_tolerance=0.01, 
-                 mutation=(0.5, 1), 
-                 recombination=0.7, 
                  **kwargs):
         
         super(NelderMeadLearner,self).__init__(**kwargs)
+        
+        if first_params is None:
+            self.first_params = None
+        else:
+            self.first_params = np.array(first_params, dtype=float)
+            if not self.check_num_params(self.first_params):
+                self.log.error('first_params has the wrong number of parameters:' + repr(self.first_params))
+                raise ValueError
+            if not self.check_in_boundary(self.first_params):
+                self.log.error('first_params is not in the boundary:' + repr(self.first_params))
+                raise ValueError
         
         if strategy == 'best1':
             self.mutation_func = self._best1
@@ -1224,7 +1238,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         elif strategy == 'rand2':
             self.mutation_func = self._rand2
         else:
-            self.log.error("Please select a valid mutation strategy")
+            self.log.error('Please select a valid mutation strategy')
             raise ValueError
         
         self.strategy = strategy
@@ -1232,41 +1246,18 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         # Mutation constant should be in [0, 2). If specified as a sequence
         # then dithering is performed.
-        self.scale = mutation
-        if (not np.all(np.isfinite(mutation)) or
-                np.any(np.array(mutation) >= 2) or
-                np.any(np.array(mutation) < 0)):
-            raise ValueError('The mutation constant must be a float in '
-                             'U[0, 2), or specified as a tuple(min, max)'
-                             ' where min < max and min, max are in U[0, 2).')
-
-        self.dither = None
-        if hasattr(mutation, '__iter__') and len(mutation) > 1:
-            self.dither = [mutation[0], mutation[1]]
-            self.dither.sort()
-
-        self.cross_over_probability = recombination
-
-        self.func = func
-        self.args = args
-
-        # convert tuple of lower and upper bounds to limits
-        # [(low_0, high_0), ..., (low_n, high_n]
-        #     -> [[low_0, ..., low_n], [high_0, ..., high_n]]
-        self.limits = np.array(bounds, dtype='float').T
-        if (np.size(self.limits, 0) != 2 or not
-                np.all(np.isfinite(self.limits))):
-            raise ValueError('bounds should be a sequence containing '
-                             'real valued (min, max) pairs for each value'
-                             ' in x')
-
-        if maxiter is None:  # the default used to be None
-            maxiter = 1000
-        self.maxiter = maxiter
-        if maxfun is None:  # the default used to be None
-            maxfun = np.inf
-        self.maxfun = maxfun
-
+        if len(mutation_scale) == 2 and (np.any(np.array(mutation_scale) <= 2) or np.any(np.array(mutation_scale) > 0)):
+            self.mutation_scale = mutation_scale
+        else:
+            self.log.error('Mutation scale must be a tuple with (min,max) between 0 and 2. mutation_scale:' + repr(mutation_scale))
+            raise ValueError
+        
+        if cross_over_probability <= 1 and cross_over_probability >= 0:
+            self.cross_over_probability = cross_over_probability
+        else:
+            self.log.error('Cross over probability must be between 0 and 1. cross_over_probability:' + repr(cross_over_probability))
+        
+        
         # population is scaled to between [0, 1].
         # We have to scale between parameter <-> population
         # save these arguments for _scale_parameter and
@@ -1276,8 +1267,6 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         self.parameter_count = np.size(self.limits, 1)
 
-        self.random_number_generator = _make_random_gen(seed)
-
         # default population initialization is a latin hypercube design, but
         # there are other population initializations possible.
         self.num_population_members = popsize * self.parameter_count
@@ -1286,59 +1275,15 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                                  self.parameter_count)
 
         self._nfev = 0
-        if init == 'latinhypercube':
-            self.init_population_lhs()
-        elif init == 'random':
-            self.init_population_random()
-        else:
-            raise ValueError("The population initialization method must be one"
-                             "of 'latinhypercube' or 'random'")
+        
+        self.sample_random_population()
 
         self.disp = disp
 
-    def init_population_lhs(self):
-        """
-        Initializes the population with Latin Hypercube Sampling.
-        Latin Hypercube Sampling ensures that each parameter is uniformly
-        sampled over its range.
-        """
-        rng = self.random_number_generator
-
-        # Each parameter range needs to be sampled uniformly. The scaled
-        # parameter range ([0, 1)) needs to be split into
-        # `self.num_population_members` segments, each of which has the following
-        # size:
-        segsize = 1.0 / self.num_population_members
-
-        # Within each segment we sample from a uniform random distribution.
-        # We need to do this sampling for each parameter.
-        samples = (segsize * rng.random_sample(self.population_shape)
-
-        # Offset each segment to cover the entire parameter range [0, 1)
-                   + np.linspace(0., 1., self.num_population_members,
-                                 endpoint=False)[:, np.newaxis])
-
-        # Create an array for population of candidate solutions.
-        self.population = np.zeros_like(samples)
-
-        # Initialize population of candidate solutions by permutation of the
-        # random samples.
-        for j in range(self.parameter_count):
-            order = rng.permutation(range(self.num_population_members))
-            self.population[:, j] = samples[order, j]
-
-        # reset population energies
-        self.population_energies = (np.ones(self.num_population_members) *
-                                    np.inf)
-
-        # reset number of function evaluations counter
-        self._nfev = 0
-
-    def init_population_random(self):
-        """
-        Initialises the population at random.  This type of initialization
-        can possess clustering, Latin Hypercube sampling is generally better.
-        """
+    def sample_random_population(self):
+        '''
+        Sample a new random set of variables
+        '''
         rng = self.random_number_generator
         self.population = rng.random_sample(self.population_shape)
 
@@ -1374,16 +1319,6 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         """
         Runs the DifferentialEvolutionSolver.
 
-        Returns
-        -------
-        res : OptimizeResult
-            The optimization result represented as a ``OptimizeResult`` object.
-            Important attributes are: ``x`` the solution array, ``success`` a
-            Boolean flag indicating if the optimizer exited successfully and
-            ``message`` which describes the cause of the termination. See
-            `OptimizeResult` for a description of other attributes.  If `polish`
-            was employed, and a lower minimum was obtained by the polishing,
-            then OptimizeResult also contains the ``jac`` attribute.
         """
         nit, warning_flag = 0, False
         status_message = _status_message['success']
@@ -1395,7 +1330,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         # initial energies to be calculated (the following loop isn't run).
         if np.all(np.isinf(self.population_energies)):
             self._calculate_population_energies()
-
+        
         # do the optimisation.
         for nit in range(1, self.maxiter + 1):
             # evolve the population by a generation
@@ -1658,24 +1593,4 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         self.random_number_generator.shuffle(idxs)
         idxs = idxs[:number_samples]
         return idxs
-
-
-def _make_random_gen(seed):
-    """Turn seed into a np.random.RandomState instance
-
-    If seed is None, return the RandomState singleton used by np.random.
-    If seed is an int, return a new RandomState instance seeded with seed.
-    If seed is already a RandomState instance, return it.
-    Otherwise raise ValueError.
-    """
-    if seed is None or seed is np.random:
-        return np.random.mtrand._rand
-    if isinstance(seed, (numbers.Integral, np.integer)):
-        return np.random.RandomState(seed)
-    if isinstance(seed, np.random.RandomState):
-        return seed
-    raise ValueError('%r cannot be used to seed a numpy.random.RandomState'
-                     ' instance' % seed)
-
-
 
