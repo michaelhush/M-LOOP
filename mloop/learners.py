@@ -8,6 +8,7 @@ __metaclass__ = type
 
 import threading
 import numpy as np
+import random
 import numpy.random as nr
 import scipy.optimize as so
 import logging
@@ -317,7 +318,6 @@ class RandomLearner(Learner, threading.Thread):
                 
         self._shut_down()
         self.log.debug('Ended Random Learner')
-    
     
 class NelderMeadLearner(Learner, threading.Thread):
     '''
@@ -1193,7 +1193,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
     Keyword Args:
         first_params (Optional [array]): The first parameters to test. If None will just randomly sample the initial condition. Default None.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
-        evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best1', 'rand1' and 'rand2'. The default is 'rand2'.
+        evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best1', 'rand1' and 'rand2'. The default is 'best2'.
         population_size (Optional [int]): multiplier proportional to the number of parameters in a generation. The generation population is set to population_size * parameter_num. Default 15.
         mutation_scale (Optional [tuple]): The mutation scale when picking new points. Otherwise known as differential weight. When provided as a tuple (min,max) a mutation constant is picked randomly in the interval. Default (0.5,1.0).
         cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
@@ -1229,6 +1229,8 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                 self.log.error('first_params is not in the boundary:' + repr(self.first_params))
                 raise ValueError
         
+        self._set_trust_region(trust_region)
+        
         if strategy == 'best1':
             self.mutation_func = self._best1
         elif strategy == 'best2':
@@ -1244,8 +1246,6 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         self.strategy = strategy
         self.restart_tolerance = restart_tolerance
 
-        # Mutation constant should be in [0, 2). If specified as a sequence
-        # then dithering is performed.
         if len(mutation_scale) == 2 and (np.any(np.array(mutation_scale) <= 2) or np.any(np.array(mutation_scale) > 0)):
             self.mutation_scale = mutation_scale
         else:
@@ -1257,340 +1257,193 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         else:
             self.log.error('Cross over probability must be between 0 and 1. cross_over_probability:' + repr(cross_over_probability))
         
+        if population_size >= 5:
+            self.population_size = population_size
+        else:
+            self.log.error('Population size must be greater or equal to 5:' + repr(population_size))
         
-        # population is scaled to between [0, 1].
-        # We have to scale between parameter <-> population
-        # save these arguments for _scale_parameter and
-        # _unscale_parameter. This is an optimization
-        self.__scale_arg1 = 0.5 * (self.limits[0] + self.limits[1])
-        self.__scale_arg2 = np.fabs(self.limits[0] - self.limits[1])
-
-        self.parameter_count = np.size(self.limits, 1)
-
-        # default population initialization is a latin hypercube design, but
-        # there are other population initializations possible.
-        self.num_population_members = popsize * self.parameter_count
-
-        self.population_shape = (self.num_population_members,
-                                 self.parameter_count)
-
-        self._nfev = 0
+        self.num_population_members = self.population_size * self.num_params
         
-        self.sample_random_population()
-
-        self.disp = disp
-
-    def sample_random_population(self):
+        self.first_sample = True
+        
+        self.params_generations = []
+        self.costs_generations = []
+        
+        self.min_index = 0
+        self.init_std = 0
+        self.curr_std = 0
+    
+    def run(self):
+        '''
+        Runs the Differential Evolution Learner.
+        '''
+        try:
+        
+            generate_population(self)
+        
+            while not self.end_event.is_set():
+                
+                self.next_generation()
+                
+                if self.curr_std < self.restart_tolerance * self.init_std:
+                    self.generate_population()
+            
+        except LearnerInterupt:
+            return
+        
+    def generate_population(self):
         '''
         Sample a new random set of variables
         '''
-        rng = self.random_number_generator
-        self.population = rng.random_sample(self.population_shape)
-
-        # reset population energies
-        self.population_energies = (np.ones(self.num_population_members) *
-                                    np.inf)
-
-        # reset number of function evaluations counter
-        self._nfev = 0
-
-    @property
-    def x(self):
-        """
-        The best solution from the solver
-
-        Returns
-        -------
-        x : ndarray
-            The best solution from the solver.
-        """
-        return self._scale_parameters(self.population[0])
-
-    @property
-    def convergence(self):
-        """
-        The standard deviation of the population energies divided by their
-        mean.
-        """
-        return (np.std(self.population_energies) /
-                np.abs(np.mean(self.population_energies) + _MACHEPS))
-
-    def solve(self):
-        """
-        Runs the DifferentialEvolutionSolver.
-
-        """
-        nit, warning_flag = 0, False
-        status_message = _status_message['success']
-
-        # The population may have just been initialized (all entries are
-        # np.inf). If it has you have to calculate the initial energies.
-        # Although this is also done in the evolve generator it's possible
-        # that someone can set maxiter=0, at which point we still want the
-        # initial energies to be calculated (the following loop isn't run).
-        if np.all(np.isinf(self.population_energies)):
-            self._calculate_population_energies()
         
-        # do the optimisation.
-        for nit in range(1, self.maxiter + 1):
-            # evolve the population by a generation
+        self.population = []
+        self.population_costs = []
+        self.min_index = 0
+        
+        if self.first_params is not None and self.first_sample:
+            curr_params = self.first_params
+        else:
+            curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+        
+        try:
+            curr_cost = self.put_params_and_get_cost(curr_params)
+        except LearnerInterrupt:
+            self.log.info('DELearner ended during first sample of population.')
+            raise
+        
+        self.population.append(curr_params)
+        self.population_costs.append(curr_cost)
+        
+        for index in range(1, self.num_population_members):
+            
+            if self.has_trust_region:
+                temp_min = np.maximum(self.min_boundary,self.population[self.min_index] - self.trust_region)
+                temp_max = np.minimum(self.max_boundary,self.population[self.min_index] + self.trust_region)
+                curr_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
+            else:
+                curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+            
             try:
-                next(self)
-            except StopIteration:
-                warning_flag = True
-                status_message = _status_message['maxfev']
-                break
-
-            if self.disp:
-                print("differential_evolution step %d: f(x)= %g"
-                      % (nit,
-                         self.population_energies[0]))
-
-            # stop when the fractional s.d. of the population is less than tol
-            # of the mean energy
-            convergence = self.convergence
-
-            if (self.callback and
-                    self.callback(self._scale_parameters(self.population[0]),
-                                  convergence=self.tol / convergence) is True):
-
-                warning_flag = True
-                status_message = ('callback function requested stop early '
-                                  'by returning True')
-                break
-
-            if convergence < self.tol or warning_flag:
-                break
-
-        else:
-            status_message = _status_message['maxiter']
-            warning_flag = True
-
-        DE_result = OptimizeResult(
-            x=self.x,
-            fun=self.population_energies[0],
-            nfev=self._nfev,
-            nit=nit,
-            message=status_message,
-            success=(warning_flag is not True))
-
-        if self.polish:
-            result = minimize(self.func,
-                              np.copy(DE_result.x),
-                              method='L-BFGS-B',
-                              bounds=self.limits.T,
-                              args=self.args)
-
-            self._nfev += result.nfev
-            DE_result.nfev = self._nfev
-
-            if result.fun < DE_result.fun:
-                DE_result.fun = result.fun
-                DE_result.x = result.x
-                DE_result.jac = result.jac
-                # to keep internal state consistent
-                self.population_energies[0] = result.fun
-                self.population[0] = self._unscale_parameters(result.x)
-
-        return DE_result
-
-    def _calculate_population_energies(self):
-        """
-        Calculate the energies of all the population members at the same time.
-        Puts the best member in first place. Useful if the population has just
-        been initialised.
-        """
-        for index, candidate in enumerate(self.population):
-            if self._nfev > self.maxfun:
-                break
-
-            parameters = self._scale_parameters(candidate)
-            self.population_energies[index] = self.func(parameters,
-                                                        *self.args)
-            self._nfev += 1
-
-        minval = np.argmin(self.population_energies)
-
-        # put the lowest energy into the best solution position.
-        lowest_energy = self.population_energies[minval]
-        self.population_energies[minval] = self.population_energies[0]
-        self.population_energies[0] = lowest_energy
-
-        self.population[[0, minval], :] = self.population[[minval, 0], :]
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        """
+                curr_cost = self.put_params_and_get_cost(curr_params)
+            except LearnerInterrupt:
+                self.log.info('DELearner ended during initial sample of population.')
+                raise
+            
+            self.population.append(curr_params)
+            self.population_costs.append(curr_cost)
+            
+            if curr_cost < self.population_costs[self.min_index]:
+                self.min_index = index
+        
+        self.population = np.array(self.population)
+        self.population_costs = np.array(self.population_costs)
+        
+        self.init_std = self.std(self.population_costs)
+        self.curr_std = self.init_std
+        
+        self.params_generations.append(np.copy(self.population))
+        self.costs_generations.append(np.copy(self.population_costs))
+    
+    def next_generation(self):
+        '''
         Evolve the population by a single generation
+        '''
+        
+        self.curr_scale = nr.uniform(self.mutation_scale[0], self.mutation_scale[1])
+        
+        for index in range(self.num_population_members):
+            
+            curr_params = self.mutate(index)
 
-        Returns
-        -------
-        x : ndarray
-            The best solution from the solver.
-        fun : float
-            Value of objective function obtained from the best solution.
-        """
-        # the population may have just been initialized (all entries are
-        # np.inf). If it has you have to calculate the initial energies
-        if np.all(np.isinf(self.population_energies)):
-            self._calculate_population_energies()
+            try:
+                curr_cost = self.put_params_and_get_cost(curr_params)
+            except LearnerInterrupt:
+                self.log.info('DELearner ended during initial sample of population.')
+                raise
+            
+            if curr_cost < self.population_costs[index]:
+                self.population[index] = curr_params
+                self.population_costs[index] = curr_cost
+                
+                if curr_cost < self.population_costs[self.min_index]:
+                    self.min_index = index
+        
+        self.curr_std = self.std(self.population_costs)
+        
+        self.params_generations.append(np.copy(self.population))
+        self.costs_generations.append(np.copy(self.population_costs))
 
-        if self.dither is not None:
-            self.scale = (self.random_number_generator.rand()
-                          * (self.dither[1] - self.dither[0]) + self.dither[0])
-
-        for candidate in range(self.num_population_members):
-            if self._nfev > self.maxfun:
-                raise StopIteration
-
-            # create a trial solution
-            trial = self._mutate(candidate)
-
-            # ensuring that it's in the range [0, 1)
-            self._ensure_constraint(trial)
-
-            # scale from [0, 1) to the actual parameter value
-            parameters = self._scale_parameters(trial)
-
-            # determine the energy of the objective function
-            energy = self.func(parameters, *self.args)
-            self._nfev += 1
-
-            # if the energy of the trial candidate is lower than the
-            # original population member then replace it
-            if energy < self.population_energies[candidate]:
-                self.population[candidate] = trial
-                self.population_energies[candidate] = energy
-
-                # if the trial candidate also has a lower energy than the
-                # best solution then replace that as well
-                if energy < self.population_energies[0]:
-                    self.population_energies[0] = energy
-                    self.population[0] = trial
-
-        return self.x, self.population_energies[0]
-
-    def next(self):
-        """
-        Evolve the population by a single generation
-
-        Returns
-        -------
-        x : ndarray
-            The best solution from the solver.
-        fun : float
-            Value of objective function obtained from the best solution.
-        """
-        # next() is required for compatibility with Python2.7.
-        return self.__next__()
-
-    def _scale_parameters(self, trial):
-        """
-        scale from a number between 0 and 1 to parameters.
-        """
-        return self.__scale_arg1 + (trial - 0.5) * self.__scale_arg2
-
-    def _unscale_parameters(self, parameters):
-        """
-        scale from parameters to a number between 0 and 1.
-        """
-        return (parameters - self.__scale_arg1) / self.__scale_arg2 + 0.5
-
-    def _ensure_constraint(self, trial):
-        """
-        make sure the parameters lie between the limits
-        """
-        for index, param in enumerate(trial):
-            if param > 1 or param < 0:
-                trial[index] = self.random_number_generator.rand()
-
-    def _mutate(self, candidate):
-        """
-        create a trial vector based on a mutation strategy
-        """
-        trial = np.copy(self.population[candidate])
-
-        rng = self.random_number_generator
-
-        fill_point = rng.randint(0, self.parameter_count)
-
-        if (self.strategy == 'randtobest1exp' or
-                self.strategy == 'randtobest1bin'):
-            bprime = self.mutation_func(candidate,
-                                        self._select_samples(candidate, 5))
+    def mutate(self, index):
+        '''
+        Mutate the parameters at index.
+        
+        Args:
+            index (int): Index of the point to be mutated.
+        '''
+        
+        fill_point = nr.randint(0, self.parameter_count)
+        candidate_params = self.mutation_func(index)
+        crossovers = nr.rand(self.parameter_count) < self.cross_over_probability
+        crossovers[fill_point] = True
+        mutated_params = np.where(crossovers, candidate_params, self.population[index])
+        print(mutated_params)
+        
+        if self.has_trust_region:
+            temp_min = np.maximum(self.min_boundary,self.population[self.min_index] - self.trust_region)
+            temp_max = np.minimum(self.max_boundary,self.population[self.min_index] + self.trust_region)
+            rand_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
         else:
-            bprime = self.mutation_func(self._select_samples(candidate, 5))
+            rand_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+        print(rand_params)
+        
+        projected_params = np.where(np.logical_or(mutated_params < self.min_boundary, mutated_params > self.max_boundary),rand_params,mutated_params)
+        print(projected_params)
+        
+        return projected_params
 
-        if self.strategy in self._binomial:
-            crossovers = rng.rand(self.parameter_count)
-            crossovers = crossovers < self.cross_over_probability
-            # the last one is always from the bprime vector for binomial
-            # If you fill in modulo with a loop you have to set the last one to
-            # true. If you don't use a loop then you can have any random entry
-            # be True.
-            crossovers[fill_point] = True
-            trial = np.where(crossovers, bprime, trial)
-            return trial
+    def _best1(self, index):
+        '''
+        Use best parameters and two others to generate mutation.
+        
+        Args:
+            index (int): Index of member to mutate. 
+        '''
+        r0, r1 = random.sample(range(self.num_population_members).remove(index),2)
+        samples[:2]
+        return (self.population[self.min_index] + self.curr_scale *(self.population[r0] - self.population[r1]))
 
-        elif self.strategy in self._exponential:
-            i = 0
-            while (i < self.parameter_count and
-                   rng.rand() < self.cross_over_probability):
+    def _rand1(self, index):
+        '''
+        Use three random parameters to generate mutation.
+        
+        Args:
+            index (int): Index of member to mutate. 
+        '''
+        r0, r1, r2 = random.sample(range(self.num_population_members).remove(index),3)
+        return (self.population[r0] + self.curr_scale * (self.population[r1] - self.population[r2]))
 
-                trial[fill_point] = bprime[fill_point]
-                fill_point = (fill_point + 1) % self.parameter_count
-                i += 1
+    def _best2(self, index):
+        '''
+        Use best parameters and four others to generate mutation.
+        
+        Args:
+            index (int): Index of member to mutate. 
+        '''
+        r0, r1, r2, r3 = random.sample(range(self.num_population_members).remove(index),4)
+        return self.population[self.min_index] + self.curr_scale * (self.population[r0] + self.population[r1] - self.population[r2] - self.population[r3])
 
-            return trial
+    def _rand2(self, index):
+        '''
+        Use five random parameters to generate mutation.
+        
+        Args:
+            index (int): Index of member to mutate. 
+        '''
+        r0, r1, r2, r3, r4 = random.sample(range(self.num_population_members).remove(index),5)
+        return self.population[r0] + self.curr_scale * (self.population[r1] + self.population[r2] - self.population[r3] - self.population[r4])
 
-    def _best1(self, samples):
-        """
-        best1bin, best1exp
-        """
-        r0, r1 = samples[:2]
-        return (self.population[0] + self.scale *
-                (self.population[r0] - self.population[r1]))
 
-    def _rand1(self, samples):
-        """
-        rand1bin, rand1exp
-        """
-        r0, r1, r2 = samples[:3]
-        return (self.population[r0] + self.scale *
-                (self.population[r1] - self.population[r2]))
 
-    def _best2(self, samples):
-        """
-        best2bin, best2exp
-        """
-        r0, r1, r2, r3 = samples[:4]
-        bprime = (self.population[0] + self.scale *
-                  (self.population[r0] + self.population[r1] -
-                   self.population[r2] - self.population[r3]))
 
-        return bprime
 
-    def _rand2(self, samples):
-        """
-        rand2bin, rand2exp
-        """
-        r0, r1, r2, r3, r4 = samples
-        bprime = (self.population[r0] + self.scale *
-                  (self.population[r1] + self.population[r2] -
-                   self.population[r3] - self.population[r4]))
-
-        return bprime
-
-    def _select_samples(self, candidate, number_samples):
-        """
-        obtain random integers from range(self.num_population_members),
-        without replacement.  You can't have the original candidate either.
-        """
-        idxs = list(range(self.num_population_members))
-        idxs.remove(candidate)
-        self.random_number_generator.shuffle(idxs)
-        idxs = idxs[:number_samples]
-        return idxs
 
