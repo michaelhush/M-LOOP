@@ -8,6 +8,7 @@ __metaclass__ = type
 
 import threading
 import numpy as np
+import math
 import random
 import numpy.random as nr
 import scipy.optimize as so
@@ -549,13 +550,304 @@ class NelderMeadLearner(Learner, threading.Thread):
         self._shut_down()
         self.log.info('Ended Nelder-Mead')
 
-def update_archive(self):
+    def update_archive(self):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'archive_type':'nelder_mead_learner',
-                                  'simplex_parameters':self.simplex_params,
+        self.archive_dict.update({'simplex_parameters':self.simplex_params,
                                   'simplex_costs':self.simplex_costs})
+
+class DifferentialEvolutionLearner(Learner, threading.Thread):
+    '''
+    Adaption of the differential evolution algorithm in scipy. 
+    
+    Args:
+        params_out_queue (queue): Queue for parameters sent to controller.
+        costs_in_queue (queue): Queue for costs for gaussian process. This must be tuple
+        end_event (event): Event to trigger end of learner.
+        
+    Keyword Args:
+        first_params (Optional [array]): The first parameters to test. If None will just randomly sample the initial condition. Default None.
+        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
+        evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best1', 'rand1' and 'rand2'. The default is 'best2'.
+        population_size (Optional [int]): multiplier proportional to the number of parameters in a generation. The generation population is set to population_size * parameter_num. Default 15.
+        mutation_scale (Optional [tuple]): The mutation scale when picking new points. Otherwise known as differential weight. When provided as a tuple (min,max) a mutation constant is picked randomly in the interval. Default (0.5,1.0).
+        cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
+        restart_tolerance (Optional [float]): when the current population have a spread less than the initial tolerance, namely stdev(curr_pop) < restart_tolerance stdev(init_pop), it is likely the population is now in a minima, and so the search is started again.
+        
+    Attributes:
+        has_trust_region (bool): Whether the learner has a trust region.
+        num_population_members (int): The number of parameters in a generation. 
+        params_generations (list): History of the parameters generations. A list of all the parameters in the population, for each generation created.
+        costs_generations (list): History of the costs generations. A list of all the costs in the population, for each generation created.
+        init_std (float): The initial standard deviation in costs of the population. Calucalted after sampling (or resampling) the initial population.
+        curr_std (float): The current standard devation in costs of the population. Calculated after sampling each generation.
+    '''
+
+    def __init__(self, 
+                 first_params = None,
+                 trust_region = None,
+                 evolution_strategy='best1', 
+                 population_size=15,
+                 mutation_scale=(0.5, 1), 
+                 cross_over_probability=0.7, 
+                 restart_tolerance=0.01, 
+                 **kwargs):
+        
+        super(DifferentialEvolutionLearner,self).__init__(**kwargs)
+        
+        if first_params is None:
+            self.first_params = float('nan')
+        else:
+            self.first_params = np.array(first_params, dtype=float)
+            if not self.check_num_params(self.first_params):
+                self.log.error('first_params has the wrong number of parameters:' + repr(self.first_params))
+                raise ValueError
+            if not self.check_in_boundary(self.first_params):
+                self.log.error('first_params is not in the boundary:' + repr(self.first_params))
+                raise ValueError
+        
+        self._set_trust_region(trust_region)
+        
+        if evolution_strategy == 'best1':
+            self.mutation_func = self._best1
+        elif evolution_strategy == 'best2':
+            self.mutation_func = self._best2
+        elif evolution_strategy == 'rand1':
+            self.mutation_func = self._rand1
+        elif evolution_strategy == 'rand2':
+            self.mutation_func = self._rand2
+        else:
+            self.log.error('Please select a valid mutation strategy')
+            raise ValueError
+        
+        self.evolution_strategy = evolution_strategy
+        self.restart_tolerance = restart_tolerance
+
+        if len(mutation_scale) == 2 and (np.any(np.array(mutation_scale) <= 2) or np.any(np.array(mutation_scale) > 0)):
+            self.mutation_scale = mutation_scale
+        else:
+            self.log.error('Mutation scale must be a tuple with (min,max) between 0 and 2. mutation_scale:' + repr(mutation_scale))
+            raise ValueError
+        
+        if cross_over_probability <= 1 and cross_over_probability >= 0:
+            self.cross_over_probability = cross_over_probability
+        else:
+            self.log.error('Cross over probability must be between 0 and 1. cross_over_probability:' + repr(cross_over_probability))
+        
+        if population_size >= 5:
+            self.population_size = population_size
+        else:
+            self.log.error('Population size must be greater or equal to 5:' + repr(population_size))
+        
+        self.num_population_members = self.population_size * self.num_params
+        
+        self.first_sample = True
+        
+        self.params_generations = []
+        self.costs_generations = []
+        self.generation_count = 0
+        
+        self.min_index = 0
+        self.init_std = 0
+        self.curr_std = 0
+        
+        self.archive_dict.update({'archive_type':'differential_evolution',
+                                  'evolution_strategy':self.evolution_strategy,
+                                  'mutation_scale':self.mutation_scale,
+                                  'cross_over_probability':self.cross_over_probability,
+                                  'population_size':self.population_size,
+                                  'num_population_members':self.num_population_members,
+                                  'restart_tolerance':self.restart_tolerance,
+                                  'first_params':self.first_params,
+                                  'has_trust_region':self.has_trust_region,
+                                  'trust_region':self.trust_region})
+        
+        
+    def run(self):
+        '''
+        Runs the Differential Evolution Learner.
+        '''
+        try:
+        
+            self.generate_population()
+        
+            while not self.end_event.is_set():
+                
+                self.next_generation()
+                
+                if self.curr_std < self.restart_tolerance * self.init_std:
+                    self.generate_population()
+            
+        except LearnerInterrupt:
+            return
+    
+    def save_generation(self):
+        '''
+        Save history of generations.
+        '''
+        self.params_generations.append(np.copy(self.population))
+        self.costs_generations.append(np.copy(self.population_costs))
+        self.generation_count += 1
+    
+    def generate_population(self):
+        '''
+        Sample a new random set of variables
+        '''
+        
+        self.population = []
+        self.population_costs = []
+        self.min_index = 0
+        
+        if (not math.isnan(self.first_params)) and self.first_sample:
+            curr_params = self.first_params
+            self.first_sample = False
+        else:
+            curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+        
+        curr_cost = self.put_params_and_get_cost(curr_params)
+        
+        self.population.append(curr_params)
+        self.population_costs.append(curr_cost)
+        
+        for index in range(1, self.num_population_members):
+            
+            if self.has_trust_region:
+                temp_min = np.maximum(self.min_boundary,self.population[self.min_index] - self.trust_region)
+                temp_max = np.minimum(self.max_boundary,self.population[self.min_index] + self.trust_region)
+                curr_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
+            else:
+                curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+
+            curr_cost = self.put_params_and_get_cost(curr_params)
+            
+            self.population.append(curr_params)
+            self.population_costs.append(curr_cost)
+            
+            if curr_cost < self.population_costs[self.min_index]:
+                self.min_index = index
+        
+        self.population = np.array(self.population)
+        self.population_costs = np.array(self.population_costs)
+        
+        self.init_std = np.std(self.population_costs)
+        self.curr_std = self.init_std
+        
+        self.save_generation()
+        
+    def next_generation(self):
+        '''
+        Evolve the population by a single generation
+        '''
+        
+        self.curr_scale = nr.uniform(self.mutation_scale[0], self.mutation_scale[1])
+        
+        for index in range(self.num_population_members):
+            
+            curr_params = self.mutate(index)
+
+            curr_cost = self.put_params_and_get_cost(curr_params)
+            
+            if curr_cost < self.population_costs[index]:
+                self.population[index] = curr_params
+                self.population_costs[index] = curr_cost
+                
+                if curr_cost < self.population_costs[self.min_index]:
+                    self.min_index = index
+        
+        self.curr_std = np.std(self.population_costs)
+        
+        self.save_generation()
+
+    def mutate(self, index):
+        '''
+        Mutate the parameters at index.
+        
+        Args:
+            index (int): Index of the point to be mutated.
+        '''
+        
+        fill_point = nr.randint(0, self.num_params)
+        candidate_params = self.mutation_func(index)
+        crossovers = nr.rand(self.num_params) < self.cross_over_probability
+        crossovers[fill_point] = True
+        mutated_params = np.where(crossovers, candidate_params, self.population[index])
+        
+        if self.has_trust_region:
+            temp_min = np.maximum(self.min_boundary,self.population[self.min_index] - self.trust_region)
+            temp_max = np.minimum(self.max_boundary,self.population[self.min_index] + self.trust_region)
+            rand_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
+        else:
+            rand_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+        
+        projected_params = np.where(np.logical_or(mutated_params < self.min_boundary, mutated_params > self.max_boundary), rand_params, mutated_params)
+        
+        return projected_params
+
+    def _best1(self, index):
+        '''
+        Use best parameters and two others to generate mutation.
+        
+        Args:
+            index (int): Index of member to mutate. 
+        '''
+        r0, r1 = self.random_index_sample(index, 2)
+        return (self.population[self.min_index] + self.curr_scale *(self.population[r0] - self.population[r1]))
+
+    def _rand1(self, index):
+        '''
+        Use three random parameters to generate mutation.
+        
+        Args:
+            index (int): Index of member to mutate. 
+        '''
+        r0, r1, r2 = self.random_index_sample(index, 3)
+        return (self.population[r0] + self.curr_scale * (self.population[r1] - self.population[r2]))
+
+    def _best2(self, index):
+        '''
+        Use best parameters and four others to generate mutation.
+        
+        Args:
+            index (int): Index of member to mutate. 
+        '''
+        r0, r1, r2, r3 = self.random_index_sample(index, 4)
+        return self.population[self.min_index] + self.curr_scale * (self.population[r0] + self.population[r1] - self.population[r2] - self.population[r3])
+
+    def _rand2(self, index):
+        '''
+        Use five random parameters to generate mutation.
+        
+        Args:
+            index (int): Index of member to mutate. 
+        '''
+        r0, r1, r2, r3, r4 = self.random_index_sample(index, 5)
+        return self.population[r0] + self.curr_scale * (self.population[r1] + self.population[r2] - self.population[r3] - self.population[r4])
+
+    def random_index_sample(self, index, num_picks):
+        '''
+        Randomly select a num_picks of indexes, without index.
+        
+        Args:
+            index(int): The index that is not included
+            num_picks(int): The number of picks.
+        '''
+        rand_indexes = list(range(self.num_population_members))
+        rand_indexes.remove(index)
+        return random.sample(rand_indexes, num_picks)
+        
+    def update_archive(self):
+        '''
+        Update the archive.
+        '''
+        self.archive_dict.update({'params_generations':self.params_generations,
+                                  'costs_generations':self.costs_generations,
+                                  'population':self.population,
+                                  'population_costs':self.population_costs,
+                                  'init_std':self.init_std,
+                                  'curr_std':self.curr_std,
+                                  'generation_count':self.generation_count})
+
 
 
 class GaussianProcessLearner(Learner, mp.Process):
@@ -1181,266 +1473,6 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.log.info('Search completed')
 
     
-class DifferentialEvolutionLearner(Learner, threading.Thread):
-    '''
-    Adaption of the differential evolution algorithm in scipy. 
-    
-    Args:
-        params_out_queue (queue): Queue for parameters sent to controller.
-        costs_in_queue (queue): Queue for costs for gaussian process. This must be tuple
-        end_event (event): Event to trigger end of learner.
-        
-    Keyword Args:
-        first_params (Optional [array]): The first parameters to test. If None will just randomly sample the initial condition. Default None.
-        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
-        evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best1', 'rand1' and 'rand2'. The default is 'best2'.
-        population_size (Optional [int]): multiplier proportional to the number of parameters in a generation. The generation population is set to population_size * parameter_num. Default 15.
-        mutation_scale (Optional [tuple]): The mutation scale when picking new points. Otherwise known as differential weight. When provided as a tuple (min,max) a mutation constant is picked randomly in the interval. Default (0.5,1.0).
-        cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
-        restart_tolerance (Optional [float]): when the current population have a spread less than the initial tolerance, namely stdev(curr_pop) < restart_tolerance stdev(init_pop), it is likely the population is now in a minima, and so the search is started again.
-        
-    Attributes:
-        has_trust_region (bool): Whether the learner has a trust region. 
-        
-    '''
-
-    # Dispatch of mutation strategy method (binomial or exponential).
-    
-    def __init__(self, 
-                 first_params = None,
-                 trust_region = None,
-                 evolution_strategy='rand2', 
-                 population_size=15,
-                 mutation_scale=(0.5, 1), 
-                 cross_over_probability=0.7, 
-                 restart_tolerance=0.01, 
-                 **kwargs):
-        
-        super(NelderMeadLearner,self).__init__(**kwargs)
-        
-        if first_params is None:
-            self.first_params = None
-        else:
-            self.first_params = np.array(first_params, dtype=float)
-            if not self.check_num_params(self.first_params):
-                self.log.error('first_params has the wrong number of parameters:' + repr(self.first_params))
-                raise ValueError
-            if not self.check_in_boundary(self.first_params):
-                self.log.error('first_params is not in the boundary:' + repr(self.first_params))
-                raise ValueError
-        
-        self._set_trust_region(trust_region)
-        
-        if strategy == 'best1':
-            self.mutation_func = self._best1
-        elif strategy == 'best2':
-            self.mutation_func = self._best2
-        elif strategy == 'rand1':
-            self.mutation_func = self._rand1
-        elif strategy == 'rand2':
-            self.mutation_func = self._rand2
-        else:
-            self.log.error('Please select a valid mutation strategy')
-            raise ValueError
-        
-        self.strategy = strategy
-        self.restart_tolerance = restart_tolerance
-
-        if len(mutation_scale) == 2 and (np.any(np.array(mutation_scale) <= 2) or np.any(np.array(mutation_scale) > 0)):
-            self.mutation_scale = mutation_scale
-        else:
-            self.log.error('Mutation scale must be a tuple with (min,max) between 0 and 2. mutation_scale:' + repr(mutation_scale))
-            raise ValueError
-        
-        if cross_over_probability <= 1 and cross_over_probability >= 0:
-            self.cross_over_probability = cross_over_probability
-        else:
-            self.log.error('Cross over probability must be between 0 and 1. cross_over_probability:' + repr(cross_over_probability))
-        
-        if population_size >= 5:
-            self.population_size = population_size
-        else:
-            self.log.error('Population size must be greater or equal to 5:' + repr(population_size))
-        
-        self.num_population_members = self.population_size * self.num_params
-        
-        self.first_sample = True
-        
-        self.params_generations = []
-        self.costs_generations = []
-        
-        self.min_index = 0
-        self.init_std = 0
-        self.curr_std = 0
-    
-    def run(self):
-        '''
-        Runs the Differential Evolution Learner.
-        '''
-        try:
-        
-            generate_population(self)
-        
-            while not self.end_event.is_set():
-                
-                self.next_generation()
-                
-                if self.curr_std < self.restart_tolerance * self.init_std:
-                    self.generate_population()
-            
-        except LearnerInterupt:
-            return
-        
-    def generate_population(self):
-        '''
-        Sample a new random set of variables
-        '''
-        
-        self.population = []
-        self.population_costs = []
-        self.min_index = 0
-        
-        if self.first_params is not None and self.first_sample:
-            curr_params = self.first_params
-        else:
-            curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
-        
-        try:
-            curr_cost = self.put_params_and_get_cost(curr_params)
-        except LearnerInterrupt:
-            self.log.info('DELearner ended during first sample of population.')
-            raise
-        
-        self.population.append(curr_params)
-        self.population_costs.append(curr_cost)
-        
-        for index in range(1, self.num_population_members):
-            
-            if self.has_trust_region:
-                temp_min = np.maximum(self.min_boundary,self.population[self.min_index] - self.trust_region)
-                temp_max = np.minimum(self.max_boundary,self.population[self.min_index] + self.trust_region)
-                curr_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
-            else:
-                curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
-            
-            try:
-                curr_cost = self.put_params_and_get_cost(curr_params)
-            except LearnerInterrupt:
-                self.log.info('DELearner ended during initial sample of population.')
-                raise
-            
-            self.population.append(curr_params)
-            self.population_costs.append(curr_cost)
-            
-            if curr_cost < self.population_costs[self.min_index]:
-                self.min_index = index
-        
-        self.population = np.array(self.population)
-        self.population_costs = np.array(self.population_costs)
-        
-        self.init_std = self.std(self.population_costs)
-        self.curr_std = self.init_std
-        
-        self.params_generations.append(np.copy(self.population))
-        self.costs_generations.append(np.copy(self.population_costs))
-    
-    def next_generation(self):
-        '''
-        Evolve the population by a single generation
-        '''
-        
-        self.curr_scale = nr.uniform(self.mutation_scale[0], self.mutation_scale[1])
-        
-        for index in range(self.num_population_members):
-            
-            curr_params = self.mutate(index)
-
-            try:
-                curr_cost = self.put_params_and_get_cost(curr_params)
-            except LearnerInterrupt:
-                self.log.info('DELearner ended during initial sample of population.')
-                raise
-            
-            if curr_cost < self.population_costs[index]:
-                self.population[index] = curr_params
-                self.population_costs[index] = curr_cost
-                
-                if curr_cost < self.population_costs[self.min_index]:
-                    self.min_index = index
-        
-        self.curr_std = self.std(self.population_costs)
-        
-        self.params_generations.append(np.copy(self.population))
-        self.costs_generations.append(np.copy(self.population_costs))
-
-    def mutate(self, index):
-        '''
-        Mutate the parameters at index.
-        
-        Args:
-            index (int): Index of the point to be mutated.
-        '''
-        
-        fill_point = nr.randint(0, self.parameter_count)
-        candidate_params = self.mutation_func(index)
-        crossovers = nr.rand(self.parameter_count) < self.cross_over_probability
-        crossovers[fill_point] = True
-        mutated_params = np.where(crossovers, candidate_params, self.population[index])
-        print(mutated_params)
-        
-        if self.has_trust_region:
-            temp_min = np.maximum(self.min_boundary,self.population[self.min_index] - self.trust_region)
-            temp_max = np.minimum(self.max_boundary,self.population[self.min_index] + self.trust_region)
-            rand_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
-        else:
-            rand_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
-        print(rand_params)
-        
-        projected_params = np.where(np.logical_or(mutated_params < self.min_boundary, mutated_params > self.max_boundary),rand_params,mutated_params)
-        print(projected_params)
-        
-        return projected_params
-
-    def _best1(self, index):
-        '''
-        Use best parameters and two others to generate mutation.
-        
-        Args:
-            index (int): Index of member to mutate. 
-        '''
-        r0, r1 = random.sample(range(self.num_population_members).remove(index),2)
-        samples[:2]
-        return (self.population[self.min_index] + self.curr_scale *(self.population[r0] - self.population[r1]))
-
-    def _rand1(self, index):
-        '''
-        Use three random parameters to generate mutation.
-        
-        Args:
-            index (int): Index of member to mutate. 
-        '''
-        r0, r1, r2 = random.sample(range(self.num_population_members).remove(index),3)
-        return (self.population[r0] + self.curr_scale * (self.population[r1] - self.population[r2]))
-
-    def _best2(self, index):
-        '''
-        Use best parameters and four others to generate mutation.
-        
-        Args:
-            index (int): Index of member to mutate. 
-        '''
-        r0, r1, r2, r3 = random.sample(range(self.num_population_members).remove(index),4)
-        return self.population[self.min_index] + self.curr_scale * (self.population[r0] + self.population[r1] - self.population[r2] - self.population[r3])
-
-    def _rand2(self, index):
-        '''
-        Use five random parameters to generate mutation.
-        
-        Args:
-            index (int): Index of member to mutate. 
-        '''
-        r0, r1, r2, r3, r4 = random.sample(range(self.num_population_members).remove(index),5)
-        return self.population[r0] + self.curr_scale * (self.population[r1] + self.population[r2] - self.population[r3] - self.population[r4])
 
 
 

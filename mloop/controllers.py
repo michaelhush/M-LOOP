@@ -11,8 +11,8 @@ import mloop.interfaces as mli
 import logging
 import os
 
-controller_dict = {'random':1,'nelder_mead':2,'gaussian_process':3}
-number_of_controllers = 3
+controller_dict = {'random':1,'nelder_mead':2,'gaussian_process':3,'differential_evolution':4}
+number_of_controllers = 4
 default_controller_archive_filename = 'controller_archive'
 default_controller_archive_file_type = 'txt'
 
@@ -47,6 +47,8 @@ def create_controller(interface,
     controller_type = str(controller_type)
     if controller_type=='gaussian_process':
         controller = GaussianProcessController(interface, **controller_config_dict)
+    elif controller_type=='differential_evolution':
+        controller = DifferentialEvolutionController(interface, **controller_config_dict)
     elif controller_type=='nelder_mead':
         controller = NelderMeadController(interface, **controller_config_dict)
     elif controller_type=='random':
@@ -489,6 +491,37 @@ class NelderMeadController(Controller):
         self.learner_costs_queue.put(cost)
         return self.learner_params_queue.get()
 
+class DifferentialEvolutionController(Controller):
+    '''
+    Controller for the differential evolution learner. 
+    
+    Args:
+        params_out_queue (queue): Queue for parameters to next be run by experiment.
+        costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
+        **kwargs (Optional [dict]): Dictionary of options to be passed to Controller parent class and differential evolution learner.
+    '''
+    def __init__(self, interface,
+                **kwargs):
+        super(DifferentialEvolutionController,self).__init__(interface, **kwargs)    
+        
+        self.learner = mll.DifferentialEvolutionLearner(start_datetime = self.start_datetime,
+                                                        **self.remaining_kwargs)
+        
+        self._update_controller_with_learner_attributes()
+        self.out_type.append('differential_evolution')
+    
+    def _next_params(self):
+        '''
+        Gets next parameters from differential evolution learner.
+        '''
+        if self.curr_bad:
+            cost = float('inf')
+        else:
+            cost = self.curr_cost       
+        self.learner_costs_queue.put(cost)
+        return self.learner_params_queue.get()
+
+
 
 
 class GaussianProcessController(Controller):
@@ -506,7 +539,7 @@ class GaussianProcessController(Controller):
     '''
     
     def __init__(self, interface, 
-                 training_type='random',
+                 training_type='differential_evolution',
                  num_training_runs=None,
                  no_delay=True,
                  num_params=None,
@@ -553,6 +586,18 @@ class GaussianProcessController(Controller):
                                                  learner_archive_filename='training_learner_archive',
                                                  learner_archive_file_type=learner_archive_file_type,
                                                  **self.remaining_kwargs)
+        
+        elif self.training_type == 'differential_evolution':
+            self.learner = mll.DifferentialEvolutionLearner(start_datetime=self.start_datetime,
+                                                            num_params=num_params,
+                                                            min_boundary=min_boundary,
+                                                            max_boundary=max_boundary,
+                                                            trust_region=trust_region,
+                                                            evolution_strategy='rand2',
+                                                            learner_archive_filename='training_learner_archive',
+                                                            learner_archive_file_type=learner_archive_file_type,
+                                                            **self.remaining_kwargs)    
+        
         else:
             self.log.error('Unknown training type provided to Gaussian process controller:' + repr(training_type))
         
@@ -601,12 +646,12 @@ class GaussianProcessController(Controller):
         '''
         Gets next parameters from training learner.
         '''
-        if self.training_type == 'nelder_mead':
+        if self.training_type == 'differential_evolution' or self.training_type == 'nelder_mead':
             #Copied from NelderMeadController
-            if self.curr_bad:
+            if self.last_training_bad:
                 cost = float('inf')
             else:
-                cost = self.curr_cost       
+                cost = self.last_training_cost       
             self.learner_costs_queue.put(cost)
             temp = self.learner_params_queue.get()
             
