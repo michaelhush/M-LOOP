@@ -1,9 +1,22 @@
 .. _sec-tutorial:
 
-Tutorial
-========
+Tutorials
+=========
 
-Here we provide a tutorial on how to use M-LOOP to optimize a generic experiment. M-LOOP is flexible and can be customized with a variety of :ref:`options <sec-examples>` and :ref:`sec-interfaces`, it can be run from the command line or used as a :ref:`python API <sec-api>`. Here we introduce the basic settings to get M-LOOP up and running as quick as possible. 
+Here we provide some tutorials on how to use M-LOOP. M-LOOP is flexible and can be customized with a variety of :ref:`options <sec-examples>` and :ref:`sec-interfaces`. Here we provide some basic tutorials to get you up and started as quick as possible.
+
+There are two different approaches to using M-LOOP:
+
+1. You can execute M-LOOP from a command line (or shell) and configure it using a text file. 
+2. You can use M-LOOP as a :ref:`python API <sec-api>`.
+
+If you have a standard experiment, that is operated by LabVIEW, Simulink or some other method, then your should use option 1 and follow the :ref:` first tutorial <sec-standard-experiment>`. If your experiment is operated using python, you should consider using option 2 as it will give you more flexibility. In which case, look at the :ref:`second tutorial <sec-python-experiment>`.
+
+
+.. _sec-standard-experiment:
+
+Standard experiment
+===================
 
 Overview
 --------
@@ -63,7 +76,7 @@ You can add comments to your file using #, everything past # will be ignored. Ex
    target_cost = 0.01                        #optimization halts when a cost below this target is found 
 
    #Learner specific options
-   first_params = [0.5,0.5]       #first parameters to try
+   first_params = [0.5,0.5]   #first parameters to try
    trust_region = 0.4         #maximum % move distance from best params
 
    #File format options
@@ -143,8 +156,8 @@ By default M-LOOP will display a set of plots that allow the user to visualize t
    
 Set it to false to turn the visualizations off. For more details see :ref:`sec-visualizations`.
 
-File Interface
---------------
+Interface
+---------
 
 There are many options of how to connect M-LOOP to your experiment. We consider the most generic method, writing and reading files to disk. For other options see :ref:`sec-interfaces`. If you design a bespoke interface for your experiment please consider :ref:`sec-contributing` to the project by sharing your method with other users.
 
@@ -200,6 +213,9 @@ M-LOOP will produce an archive for the controller and machine learner. The contr
 
 M-LOOP, by default, will produce a set of visualizations. These plots show the optimizations process over time and also predictions made by the learner of the cost landscape. For more details on these visualizations and their interpretation see :ref:`sec-visualizations`.
 
+.. _sec-python-experiment:
 
+Python controlled experiment 
+============================
 
 

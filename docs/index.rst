@@ -22,7 +22,7 @@ http://www.nature.com/articles/srep25890
 Quick Start
 -----------
 
-To get the M-LOOP running as soon as possible follow the :ref:`sec-installation` instructions and :ref:`sec-tutorial`. 
+To get M-LOOP running follow the :ref:`sec-installation` instructions and :ref:`sec-tutorial`. 
 
 Contents
 --------

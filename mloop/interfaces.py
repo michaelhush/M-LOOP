@@ -21,7 +21,7 @@ def create_interface(interface_type='file',
     Start a new interface with the options provided.
     
     Args:
-        interface_type (Optional [str]): Defines the type of interface, can be 'file', 'command_line' or 'test'. Default 'file'.
+        interface_type (Optional [str]): Defines the type of interface, can be 'file', 'shell' or 'test'. Default 'file'.
         **interface_config_dict : Options to be passed to interface.
         
     Returns:
@@ -32,8 +32,8 @@ def create_interface(interface_type='file',
     if interface_type=='file':
         interface = FileInterface(**interface_config_dict)
         log.info('Using the file interface with the experiment.')
-    elif interface_type == 'command_line':
-        interface = CommandLineInterface(**interface_config_dict)
+    elif interface_type == 'shell':
+        interface = ShellInterface(**interface_config_dict)
         log.info('Using the command line interface with the experiment.')
     elif interface_type == 'test':
         interface = TestInterface(**interface_config_dict)
@@ -227,9 +227,9 @@ class TestInterface(Interface):
         return cost_dict
 
       
-class CommandLineInterface(Interface):
+class ShellInterface(Interface):
     '''
-    Interface for running programs from the command line.
+    Interface for running programs from the shell.
     
     Args:
         params_out_queue (queue): Queue for parameters to next be run by experiment.
@@ -253,7 +253,7 @@ class CommandLineInterface(Interface):
                  params_args_type = 'direct',
                  **kwargs):
         
-        super(CommandLineInterface,self).__init__(**kwargs)
+        super(ShelleInterface,self).__init__(**kwargs)
         
         #User defined variables
         self.command = str(command)

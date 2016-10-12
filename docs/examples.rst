@@ -38,7 +38,7 @@ Each of the controllers and their specific options are described below. There is
 .. include:: ../examples/controller_config.txt
    :literal:
    
-Gaussian Process
+Gaussian process
 ~~~~~~~~~~~~~~~~
 
 The Gaussian-process controller is the default controller and is the currently the most sophisticated machine learner algorithm. It uses a `Link Gaussian process <http://scikit-learn.org/dev/modules/gaussian_process.html>`_ to develop a model for how the parameters relate to the measured cost, effectively creating a model for how the experiment operates. This model is then used when picking new points to test. 
@@ -52,6 +52,22 @@ There are two example files for the Gaussian-process controller: *gaussian_proce
 
 .. include:: ../examples/gaussian_process_complete_config.txt
    :literal:
+
+Differential evolution
+~~~~~~~~~~~~~~~~~~~~~~
+
+The differential evolution (DE) controller uses a `Link DE alogithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
+
+There are two example files for the differential evolution controller: *differential_evolution_simple_config.txt* which contains the basic options.
+
+.. include:: ../examples/differential_evolution_simple_config.txt
+   :literal:
+   
+*differential_evolution_complete_config.txt* which contains a comprehensive list of options.
+
+.. include:: ../examples/differential_evolution_complete_config.txt
+   :literal:
+   
    
 Nelder Mead
 ~~~~~~~~~~~
