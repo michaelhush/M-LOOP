@@ -4,7 +4,6 @@ python:
   - "3.5"
 install: 
   - pip install --upgrade pip
- # - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pip install --upgrade python
   - python --version
   - pip --version
   - pip install -r requirements.txt
