@@ -583,7 +583,7 @@ class GaussianProcessController(Controller):
                                                  num_params=num_params,
                                                  min_boundary=min_boundary,
                                                  max_boundary=max_boundary,
-                                                 learner_archive_filename='training_learner_archive',
+                                                 learner_archive_filename=None,
                                                  learner_archive_file_type=learner_archive_file_type,
                                                  **self.remaining_kwargs)
         
@@ -594,7 +594,7 @@ class GaussianProcessController(Controller):
                                                             max_boundary=max_boundary,
                                                             trust_region=trust_region,
                                                             evolution_strategy='rand2',
-                                                            learner_archive_filename='training_learner_archive',
+                                                            learner_archive_filename=None,
                                                             learner_archive_file_type=learner_archive_file_type,
                                                             **self.remaining_kwargs)    
         

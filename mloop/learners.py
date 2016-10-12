@@ -8,7 +8,6 @@ __metaclass__ = type
 
 import threading
 import numpy as np
-import math
 import random
 import numpy.random as nr
 import scipy.optimize as so
@@ -699,7 +698,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         self.population_costs = []
         self.min_index = 0
         
-        if (not math.isnan(self.first_params)) and self.first_sample:
+        if np.all(np.isfinite(self.first_params)) and self.first_sample:
             curr_params = self.first_params
             self.first_sample = False
         else:
