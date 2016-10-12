@@ -11,12 +11,12 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from mloop.controllers import GaussianProcessController
 
 figure_counter = 0
 cmap = plt.get_cmap('hsv')
 run_label = 'Run number'
 cost_label = 'Cost'
+generation_label = 'Generation number'
 scale_param_label = 'Min (0) to max (1) parameters'
 param_label = 'Parameter'
 log_length_scale_label = 'Log of length scale'
@@ -38,12 +38,19 @@ def show_all_default_visualizations(controller, show_plots=True):
     log.debug('Creating controller visualizations.')
     create_contoller_visualizations(controller.total_archive_filename, 
                                     file_type=controller.controller_archive_file_type)
-    if isinstance(controller, GaussianProcessController):
+    
+    if isinstance(controller, mlc.DifferentialEvolutionController):
+        log.debug('Creating differential evolution visualizations.')
+        create_differential_evolution_learner_visualizations(controller.learner.total_archive_filename, 
+                                                             file_type=controller.learner.learner_archive_file_type)
+        
+    if isinstance(controller, mlc.GaussianProcessController):
         log.debug('Creating gaussian process visualizations.')
         plot_all_minima_vs_cost_flag = bool(controller.gp_learner.has_local_minima)
         create_gaussian_process_learner_visualizations(controller.gp_learner.total_archive_filename, 
                                                        file_type=controller.gp_learner.learner_archive_file_type,
                                                        plot_all_minima_vs_cost=plot_all_minima_vs_cost_flag)
+        
     log.info('Showing visualizations, close all to end MLOOP.')
     if show_plots:
         plt.show()
@@ -225,6 +232,111 @@ class ControllerVisualizer():
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
         plt.legend(artists,[str(x) for x in range(1,self.num_params+1)], loc=legend_loc)
 
+def create_differential_evolution_learner_visualizations(filename,
+                                                         file_type='pkl',
+                                                         plot_params_vs_generations=True,
+                                                         plot_costs_vs_generations=True):
+    '''
+    Runs the plots from a differential evolution learner file.
+    
+    Args:
+        filename (Optional [string]): Filename for the differential evolution archive. Must provide datetime or filename. Default None.
+        
+    Keyword Args:
+        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
+        plot_params_generations (Optional [bool]): If True plot parameters vs generations, else do not. Default True. 
+        plot_costs_generations (Optional [bool]): If True plot costs vs generations, else do not. Default True. 
+    '''
+    visualization = DifferentialEvolutionVisualizer(filename, file_type=file_type)
+    if plot_params_vs_generations:
+        visualization.plot_params_vs_generations()
+    if plot_costs_vs_generations:
+        visualization.plot_costs_vs_generations()
+
+class DifferentialEvolutionVisualizer():
+    '''
+    DifferentialEvolutionVisualizer creates figures from a differential evolution archive. 
+    
+    Args:
+        filename (String): Filename of the DifferentialEvolutionVisualizer archive.
+    
+    Keyword Args:
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
+    
+    '''
+    def __init__(self, filename, 
+                 file_type ='pkl', 
+                 **kwargs):
+        
+        self.log = logging.getLogger(__name__)
+        
+        self.filename = str(filename)
+        self.file_type = str(file_type)
+        if not mlu.check_file_type_supported(self.file_type):
+            self.log.error('GP training file type not supported' + repr(self.file_type))
+        learner_dict = mlu.get_dict_from_file(self.filename, self.file_type)
+        
+        if 'archive_type' in learner_dict and not (learner_dict['archive_type'] == 'differential_evolution'):
+            self.log.error('The archive appears to be the wrong type.' + repr(learner_dict['archive_type']))
+            raise ValueError
+        self.archive_type = learner_dict['archive_type']
+        
+        self.num_generations = int(learner_dict['generation_count'])
+        self.num_population_members = int(learner_dict['num_population_members'])
+        self.num_params = int(learner_dict['num_params'])
+        self.min_boundary = np.squeeze(np.array(learner_dict['min_boundary']))
+        self.max_boundary = np.squeeze(np.array(learner_dict['max_boundary']))
+        self.params_generations = np.array(learner_dict['params_generations'])
+        self.costs_generations = np.array(learner_dict['costs_generations'])
+          
+        self.finite_flag = True
+        self.param_scaler = lambda p: (p-self.min_boundary)/(self.max_boundary - self.min_boundary)
+        self.scaled_params_generations = np.array([[self.param_scaler(self.params_generations[inda,indb,:]) for indb in range(self.num_population_members)] for inda in range(self.num_generations)])
+        
+        self.gen_numbers = np.arange(1,self.num_generations+1)
+        self.param_colors = _color_list_from_num_of_params(self.num_params)
+        self.gen_plot = np.array([np.full(self.num_population_members, ind, dtype=int) for ind in self.gen_numbers]).flatten()
+        
+    def plot_costs_vs_generations(self):
+        '''
+        Create a plot of the costs versus run number.
+        '''
+        if self.costs_generations.size == 0:
+            self.log.warning('Unable to plot DE: costs vs generations as the initial generation did not complete.')
+            return
+        
+        global figure_counter, cost_label, generation_label
+        figure_counter += 1
+        plt.figure(figure_counter)
+        plt.plot(self.gen_plot,self.costs_generations.flatten(),marker='o',linestyle='',color='k')
+        plt.xlabel(generation_label)
+        plt.ylabel(cost_label)
+        plt.title('Differential evolution: Cost vs generation number.')
+        
+    def plot_params_vs_generations(self):
+        '''
+        Create a plot of the parameters versus run number.
+        '''
+        if self.params_generations.size == 0:
+            self.log.warning('Unable to plot DE: params vs generations as the initial generation did not complete.')
+            return
+        
+        global figure_counter, generation_label, scale_param_label, legend_loc
+        figure_counter += 1
+        plt.figure(figure_counter)
+        
+        for ind in range(self.num_params):
+            plt.plot(self.gen_plot,self.params_generations[:,:,ind].flatten(),marker='o',linestyle='',color=self.param_colors[ind])
+            plt.ylim((0,1))
+        plt.xlabel(generation_label)
+        plt.ylabel(scale_param_label)
+        
+        plt.title('Differential evolution: Params vs generation number.')
+        artists=[]
+        for ind in range(self.num_params):
+            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
+        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+        
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type='pkl',
                                                    plot_cross_sections=True,
@@ -234,7 +346,7 @@ def create_gaussian_process_learner_visualizations(filename,
     Runs the plots from a gaussian process learner file.
     
     Args:
-        filename (Optional [string]): Filename for the controller archive. Must provide datetime or filename. Default None.
+        filename (Optional [string]): Filename for the gaussian process archive. Must provide datetime or filename. Default None.
         
     Keyword Args:
         file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.

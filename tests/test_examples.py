@@ -33,6 +33,8 @@ class TestExamples(unittest.TestCase):
     def test_extras_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/extras_config.txt', 
                                           num_params=1,
+                                          min_boundary = [-1.0],
+                                          max_boundary = [1.0],
                                           target_cost = 0.1,
                                           interface_type = 'test',
                                           no_delay = False, 
@@ -42,6 +44,8 @@ class TestExamples(unittest.TestCase):
     def test_logging_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/logging_config.txt',
                                           num_params=1,
+                                          min_boundary = [-1.0],
+                                          max_boundary = [1.0],
                                           target_cost = 0.1,
                                           interface_type = 'test',
                                           no_delay = False, 
@@ -66,6 +70,18 @@ class TestExamples(unittest.TestCase):
     
     def test_nelder_mead_complete_config(self):
         controller = mll.launch_from_file(mlu.mloop_path+'/../examples/nelder_mead_complete_config.txt',
+                                          interface_type = 'test',
+                                          **self.override_dict)
+        self.asserts_for_cost_and_params(controller)
+    
+    def test_differential_evolution_simple_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/differential_evolution_simple_config.txt',
+                                          interface_type = 'test',
+                                          **self.override_dict)
+        self.asserts_for_cost_and_params(controller)
+    
+    def test_differential_evolution_complete_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/differential_evolution_complete_config.txt',
                                           interface_type = 'test',
                                           **self.override_dict)
         self.asserts_for_cost_and_params(controller)
