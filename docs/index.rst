@@ -1,6 +1,6 @@
-######
+======
 M-LOOP
-######
+======
 
 The Machine-Learner Online Optimization Package is designed to automatically and rapidly optimize the parameters of a scientific experiment or computer controller system. 
 
@@ -13,25 +13,24 @@ Using M-LOOP is simple, once the parameters of your experiment is computer contr
 
 M-LOOP not only finds an optimal set of parameters for the experiment it also provides a model of how the parameters are related to the costs which can be used to improve the experiment. 
 
-If you use M-LOOP please cite our publication where we first used the package to optimise the production of a Bose-Einstein Condensate:
+If you use M-LOOP please cite our publication where we first used the package to optimize the production of a Bose-Einstein Condensate:
 
 Fast Machine-Learning Online Optimization of Ultra-Cold-Atom Experiments. *Scientific Reports* **6**, 25890 (2016). DOI: `Link 10.1038/srep25890 <http://dx.doi.org/10.1038/srep25890>`_
 
 http://www.nature.com/articles/srep25890
 
 Quick Start
------------
+===========
 
-To get the M-LOOP running as soon as possible follow the :ref:`sec-installation` instructions and :ref:`sec-tutorial`. 
+To get M-LOOP running follow the :ref:`sec-installation` instructions and :ref:`sec-tutorial`. 
 
 Contents
---------
+========
 
 .. toctree::
-   :maxdepth: 2
    
    install
-   tutorial
+   tutorials
    interfaces
    data
    visualizations
@@ -40,7 +39,7 @@ Contents
    api/index
    
 Indices
--------
+=======
 
 * :ref:`genindex`
 * :ref:`modindex`

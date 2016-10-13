@@ -21,7 +21,7 @@ def create_interface(interface_type='file',
     Start a new interface with the options provided.
     
     Args:
-        interface_type (Optional [str]): Defines the type of interface, can be 'file', 'command_line' or 'test'. Default 'file'.
+        interface_type (Optional [str]): Defines the type of interface, can be 'file', 'shell' or 'test'. Default 'file'.
         **interface_config_dict : Options to be passed to interface.
         
     Returns:
@@ -32,8 +32,8 @@ def create_interface(interface_type='file',
     if interface_type=='file':
         interface = FileInterface(**interface_config_dict)
         log.info('Using the file interface with the experiment.')
-    elif interface_type == 'command_line':
-        interface = CommandLineInterface(**interface_config_dict)
+    elif interface_type == 'shell':
+        interface = ShellInterface(**interface_config_dict)
         log.info('Using the command line interface with the experiment.')
     elif interface_type == 'test':
         interface = TestInterface(**interface_config_dict)
@@ -103,14 +103,14 @@ class Interface(threading.Thread):
                 except mlu.empty_exception:
                     continue
                 else:
-                    cost_dict = self._get_next_cost_dict(params_dict)
+                    cost_dict = self.get_next_cost_dict(params_dict)
                     self.costs_in_queue.put(cost_dict)
         except InterfaceInterrupt:
             pass
         self.log.debug('Interface ended')
         #self.log = None
         
-    def _get_next_cost_dict(self,params_dict):
+    def get_next_cost_dict(self,params_dict):
         '''
         Abstract method. This is the only method that needs to be implemented to make a working interface. Given the parameters the interface must then produce a new cost. This may occur by running an experiment or program. If you wish to abruptly end this interface for whatever rease please raise the exception InterfaceInterrupt, which will then be safely caught.
         
@@ -157,7 +157,7 @@ class FileInterface(Interface):
         self.in_filename = str(interface_in_filename)
         self.total_in_filename = self.in_filename + '.' + self.in_file_type
 
-    def _get_next_cost_dict(self,params_dict):
+    def get_next_cost_dict(self,params_dict):
         '''
         Implementation of file read in and out. Put parameters into a file and wait for a cost file to be returned.
         '''
@@ -211,7 +211,7 @@ class TestInterface(Interface):
             self.test_landscape = test_landscape
         self.test_count = 0
     
-    def _get_next_cost_dict(self, params_dict):
+    def get_next_cost_dict(self, params_dict):
         '''
         Test implementation. Gets the next cost from the test_landscape.
         '''
@@ -227,9 +227,9 @@ class TestInterface(Interface):
         return cost_dict
 
       
-class CommandLineInterface(Interface):
+class ShellInterface(Interface):
     '''
-    Interface for running programs from the command line.
+    Interface for running programs from the shell.
     
     Args:
         params_out_queue (queue): Queue for parameters to next be run by experiment.
@@ -253,7 +253,7 @@ class CommandLineInterface(Interface):
                  params_args_type = 'direct',
                  **kwargs):
         
-        super(CommandLineInterface,self).__init__(**kwargs)
+        super(ShellInterface,self).__init__(**kwargs)
         
         #User defined variables
         self.command = str(command)
@@ -265,7 +265,7 @@ class CommandLineInterface(Interface):
         #Counters
         self.command_count = 0
         
-    def _get_next_cost_dict(self,params_dict):
+    def get_next_cost_dict(self,params_dict):
         '''
         Implementation of running a command with parameters on the command line and reading the result.
         '''

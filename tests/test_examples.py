@@ -120,8 +120,8 @@ class TestExamples(unittest.TestCase):
         fake_experiment.end_event.set()
         fake_experiment.join()
         
-    def test_command_line_interface_config(self):
-        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/command_line_interface_config.txt',
+    def test_shell_interface_config(self):
+        controller = mll.launch_from_file(mlu.mloop_path+'/../examples/shell_interface_config.txt',
                                           num_params=1,
                                           target_cost = 0.1,
                                           no_delay = False,

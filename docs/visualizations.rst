@@ -1,5 +1,6 @@
 .. _sec-visualizations:
 
+==============
 Visualizations
 ==============
 
@@ -27,7 +28,7 @@ The number of visualizations will depend on what controller you use. By default 
 The plots which start with *Controller:* are generated from the controller archive, while plots that start with *Learner:* are generated from the learner archive. 
    
 Reproducing visualizations
---------------------------
+==========================
 
 If you have a controller and learner archive and would like to examine the visualizations again, it is best to do so using the :ref:`sec-api`. For example the following code will plot the visualizations again from the files *controller_archive_2016-08-23_13-59.mat* and *learner_archive_2016-08-18_12-18.pkl*::
 

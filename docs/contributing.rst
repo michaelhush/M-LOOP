@@ -1,19 +1,20 @@
 .. _sec-contributing:
 
+============
 Contributing
 ============
 
 If you use M-LOOP please consider contributing to the project. There are many quick and easy ways to help out.
 
 - If you use M-LOOP be sure to cite the paper where it first used: `'Fast machine-learning online optimization of ultra-cold-atom experiments', Sci Rep 6, 25890 (2016) <http://www.nature.com/srep/>`_. 
-- Star and watch the `M-LOOP github <https://github.com/michaelhush/M-LOOP/watchers>`_.
-- Make a suggestion on what features you would like added, or report an issue, on the `github <https://github.com/michaelhush/M-LOOP/watchers>`_ or by `email <mailto:MichaelRHush@gmail.com>`_. 
-- Contribute your own code to the `M-LOOP github <https://github.com/michaelhush/M-LOOP/watchers>`_, this could be the interface you designed, more options or a completely new solver.
+- Star and watch the `M-LOOP GitHub <https://github.com/michaelhush/M-LOOP/watchers>`_.
+- Make a suggestion on what features you would like added, or report an issue, on the `GitHub <https://github.com/michaelhush/M-LOOP/watchers>`_ or by `email <mailto:MichaelRHush@gmail.com>`_. 
+- Contribute your own code to the `M-LOOP GitHub <https://github.com/michaelhush/M-LOOP/watchers>`_, this could be the interface you designed, more options or a completely new solver.
 
 Finally spread the word! Let others know the success you have had with M-LOOP and recommend they try it too.
 
 Contributors
-------------
+============
 
 M-LOOP is written and maintained by `Michael R Hush <http://www.michaelhush.com>`_ <MichaelRHush@gmail.com>
 
