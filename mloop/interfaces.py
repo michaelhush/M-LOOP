@@ -103,14 +103,14 @@ class Interface(threading.Thread):
                 except mlu.empty_exception:
                     continue
                 else:
-                    cost_dict = self._get_next_cost_dict(params_dict)
+                    cost_dict = self.get_next_cost_dict(params_dict)
                     self.costs_in_queue.put(cost_dict)
         except InterfaceInterrupt:
             pass
         self.log.debug('Interface ended')
         #self.log = None
         
-    def _get_next_cost_dict(self,params_dict):
+    def get_next_cost_dict(self,params_dict):
         '''
         Abstract method. This is the only method that needs to be implemented to make a working interface. Given the parameters the interface must then produce a new cost. This may occur by running an experiment or program. If you wish to abruptly end this interface for whatever rease please raise the exception InterfaceInterrupt, which will then be safely caught.
         
@@ -157,7 +157,7 @@ class FileInterface(Interface):
         self.in_filename = str(interface_in_filename)
         self.total_in_filename = self.in_filename + '.' + self.in_file_type
 
-    def _get_next_cost_dict(self,params_dict):
+    def get_next_cost_dict(self,params_dict):
         '''
         Implementation of file read in and out. Put parameters into a file and wait for a cost file to be returned.
         '''
@@ -211,7 +211,7 @@ class TestInterface(Interface):
             self.test_landscape = test_landscape
         self.test_count = 0
     
-    def _get_next_cost_dict(self, params_dict):
+    def get_next_cost_dict(self, params_dict):
         '''
         Test implementation. Gets the next cost from the test_landscape.
         '''
@@ -265,7 +265,7 @@ class ShellInterface(Interface):
         #Counters
         self.command_count = 0
         
-    def _get_next_cost_dict(self,params_dict):
+    def get_next_cost_dict(self,params_dict):
         '''
         Implementation of running a command with parameters on the command line and reading the result.
         '''

@@ -1,5 +1,6 @@
 .. _sec-examples:
 
+========
 Examples
 ========
 
@@ -10,24 +11,33 @@ The options available are also comprehensively documented in the :ref:`sec-api` 
 Each of the example files is used when running tests of M-LOOP. So please copy and modify them elsewhere if you use them as a starting point for your configuration file. 
 
 Interfaces
-----------
+==========
 
-There is currently one interface supported: 'file'. You can specify which interface you want with the option::
+There is currently two interfaces supported: 'file' and 'shell'. You can specify which interface you want with the option::
 
    interface_type = [name]
 
 The default will be 'file'. The specific options for each of the interfaces are described below.
 
 File Interface
-~~~~~~~~~~~~~~
+--------------
 
-You can change the names of the files used for the file interface and their type. The file interface options are described in *file_interface_config.txt*.
+The file interface exchanges information with the experiment by writing files to disk. You can change the names of the files used for the file interface and their type. The file interface options are described in *file_interface_config.txt*.
 
 .. include:: ../examples/file_interface_config.txt
    :literal:
 
+Shell Interface
+---------------
+
+The shell interface is for experiments that can be run through a command executed in a shell. Information is then piped between M-LOOP and the experiment through the shell. You can change the command to run the experiment and the way the parameters are formatted. The shell interface options are described in *shell_interface_config.txt*
+
+.. include:: ../examples/shell_interface_config.txt
+   :literal:
+
+   
 Controllers
------------
+===========
 
 There are currently three controller types supported: 'gaussian_process', 'random' and 'nelder_mead'. The default is 'gaussian_process'. You can set which interface you want to use with the option::
 
@@ -39,7 +49,7 @@ Each of the controllers and their specific options are described below. There is
    :literal:
    
 Gaussian process
-~~~~~~~~~~~~~~~~
+----------------
 
 The Gaussian-process controller is the default controller and is the currently the most sophisticated machine learner algorithm. It uses a `Link Gaussian process <http://scikit-learn.org/dev/modules/gaussian_process.html>`_ to develop a model for how the parameters relate to the measured cost, effectively creating a model for how the experiment operates. This model is then used when picking new points to test. 
 
@@ -54,7 +64,7 @@ There are two example files for the Gaussian-process controller: *gaussian_proce
    :literal:
 
 Differential evolution
-~~~~~~~~~~~~~~~~~~~~~~
+----------------------
 
 The differential evolution (DE) controller uses a `Link DE alogithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
 
@@ -70,7 +80,7 @@ There are two example files for the differential evolution controller: *differen
    
    
 Nelder Mead
-~~~~~~~~~~~
+-----------
 
 The Nelder Mead controller implements the `Link Nelder-Mead method <https://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method>`_ for optimization. You can control the starting point and size of the initial simplex of the method with the configuration file.
 
@@ -85,7 +95,7 @@ There are two example files for the Nelder-Mead controller: *nelder_mead_simple_
    :literal:
    
 Random
-~~~~~~
+------
 
 The random optimization algorithm picks parameters randomly from a uniform distribution from within the parameter bounds or trust region. 
 
@@ -100,7 +110,7 @@ There are two example files for the random controller: *random_simple_config.txt
    :literal:
    
 Logging
--------
+=======
 
 You can control the filename of the logs and also the level which is reported to the file and the console. For more information see `Link logging levels <https://docs.python.org/3.6/library/logging.html#levels>`_. The logging options are described in *logging_config.txt*.
 
@@ -108,7 +118,7 @@ You can control the filename of the logs and also the level which is reported to
    :literal:
 
 Extras
-------
+======
 
 Extras refers to options related to post processing your data once the optimization is complete. Currently the only extra option is for visualizations. The extra options are described in *extras_config.txt*.
 

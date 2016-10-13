@@ -1,6 +1,6 @@
 #Command Line Interface Options
 #------------------------------
 
-interface_type = 'command_line'     #The type of interface
+interface_type = 'shell'     		#The type of interface
 command = 'python CLIscript.py'     #The command for the command line to run the experiment to get a cost from the parameters
 params_args_type = 'direct'         #The format of the parameters when providing them on the command line. 'direct' simply appends them, e.g. python CLIscript.py 7 2 1, 'named' names each parameter, e.g. python CLIscript.py --param1 7 --param2 2 --param3 1

@@ -1,5 +1,6 @@
 .. _sec-tutorial:
 
+=========
 Tutorials
 =========
 
@@ -12,14 +13,10 @@ There are two different approaches to using M-LOOP:
 
 If you have a standard experiment, that is operated by LabVIEW, Simulink or some other method, then your should use option 1 and follow the :ref:` first tutorial <sec-standard-experiment>`. If your experiment is operated using python, you should consider using option 2 as it will give you more flexibility. In which case, look at the :ref:`second tutorial <sec-python-experiment>`.
 
-
 .. _sec-standard-experiment:
 
 Standard experiment
 ===================
-
-Overview
---------
 
 The basic operation of M-LOOP is sketched below.
 
@@ -53,6 +50,8 @@ Launching M-LOOP is performed by executing the command M-LOOP on the console. Yo
 
    M-LOOP -c [config_filename]
 
+.. _sec-configuration-file:
+   
 Configuration File
 ------------------
 
@@ -202,6 +201,8 @@ Picking the right cost function from experimental observables will also be impor
 
 Have a look at our `paper <http://www.nature.com/articles/srep25890>`_ on using M-LOOP to create a Bose-Einstein Condensate for an example of choosing a parametrization and cost function for an experiment.
 
+.. _sec-results:
+
 Results
 -------
 
@@ -217,5 +218,257 @@ M-LOOP, by default, will produce a set of visualizations. These plots show the o
 
 Python controlled experiment 
 ============================
+
+If you have an experiment that is already under python control you can use M-LOOP as an API. Below we go over the example python script *python_controlled_experiment.py* you should also read over the first tutorial to get a general idea of how M-LOOP works.
+
+When intergrating M-LOOP into your experiment remember that it will be controlling you experiment, not vice versa. Hence, at the top level of your python script you will execute M-LOOP which will then call on your experiment when needed. Your experiment will not be making calls of M-LOOP.
+
+An example script for a python controlled experiment is given in the examples folder called *python_controlled_experiment.py*, which is copied below::
+
+	#Imports for python 2 compatibility
+	from __future__ import absolute_import, division, print_function
+	__metaclass__ = type
+
+	#Imports for M-LOOP
+	import mloop.interfaces as mli
+	import mloop.controllers as mlc
+	import mloop.visualizations as mlv
+
+	#Other imports
+	import numpy as np
+	import time
+	
+	#Declare your custom class that inherets from the Interface class
+	class CustomInterface(mli.Interface):
+		
+		#Initialization of the interface, including this method is optional
+		def __init__(self):
+			#You must include the super command to call the parent class, Interface, constructor 
+			super(CustomInterface,self).__init__()
+			
+			#Attributes of the interface can be added here
+			#If you want to precalculate any variables etc. this is the place to do it
+			#In this example we will just define the location of the minimum
+			self.minimum_params = np.array([0,0.1,-0.1])
+			
+		#You must include the get_next_cost_dict method in your class
+		#this method is called whenever M-LOOP wants to run an experiment
+		def get_next_cost_dict(self,params_dict):
+			
+			#Get parameters from the provided dictionary
+			params = params_dict['params']
+			
+			#Here you can include the code to run your experiment given a particular set of parameters
+			#In this example we will just evaluate a sum of sinc functions
+			cost = -np.sum(np.sinc(params - self.minimum_params))
+			#There is no uncertainty in our result
+			uncer = 0
+			#The evaluation will always be a success
+			bad = False
+			#Add a small time delay to mimic a real experiment
+			time.sleep(1)
+			
+			#The cost, uncertainty and bad boolean must all be returned as a dictionary
+			#You can include other variables you want to record as well if you want
+			cost_dict = {'cost':cost, 'uncer':uncer, 'bad':bad}
+			return cost_dict
+		
+	def main():
+		#M-LOOP can be run with three commands
+		
+		#First create your interface
+		interface = CustomInterface()
+		#Next create the controller, provide it with your controller and any options you want to set
+		controller = mlc.create_controller(interface, 
+										   max_num_runs = 1000,
+										   target_cost = -2.99,
+										   num_params = 3, 
+										   min_boundary = [-2,-2,-2],
+										   max_boundary = [2,2,2])
+		#To run M-LOOP and find the optimal parameters just use the controller method optimize
+		controller.optimize()
+		
+		#The results of the optimization will be saved to files and can also be accessed as attributes of the controller.
+		print('Best parameters found:')
+		print(controller.best_params)
+		
+		#You can also run the default sets of visualizations for the controller with one command
+		mlv.show_all_default_visualizations(controller)
+		
+
+	#Ensures main is run when this code is run as a script
+	if __name__ == '__main__':
+		main()
+
+Each part of the code is explained in the following sections.
+		
+Imports
+-------
+
+The start of the script imports the libraries that are neccesary for M-LOOP to work::
+
+	#Imports for python 2 compatibility
+	from __future__ import absolute_import, division, print_function
+	__metaclass__ = type
+
+	#Imports for M-LOOP
+	import mloop.interfaces as mli
+	import mloop.controllers as mlc
+	import mloop.visualizations as mlv
+
+	#Other imports
+	import numpy as np
+	import time
+	
+The first group of imports are just for python 2 compatability. M-LOOP is targetted at python3, but has been designed to be bilingual. These imports ensure backward compatibility.
+
+The second group of imports the most important modules M-LOOP needs to run. The interfaces and controllers modules are essential, while the visulizations module is only needed if you want to view your data afterwards.
+
+Lastly you can add any other imports you may need.
+
+Custom Interface
+----------------
+
+M-LOOP takes an object oriented approach to controlling the experiment. This is different than the functional approach taken by other optimization packages, like scipy. When using M-LOOP you must make your own class that inherents from the Interface class in M-LOOP. This class must implement a method called get_next_cost_dict that takes a set of parameters, runs your experiment and then returns the appropriate cost and uncertainty. 
+
+An example of the simplest implementation of a custom interface is provided below ::
+
+	#Declare your custom class that inherets from the Interface class
+	class SimpleInterface(mli.Interface):
+		
+		#the method that runs the experiment given a set of parameters and returns a cost
+		def get_next_cost_dict(self,params_dict):
+			
+			#The parameters come in a dictionary and are provided in a numpy array
+			params = params_dict['params']
+			
+			#Here you can include the code to run your experiment given a particular set of parameters
+			#For this example we just evaluate a simple function
+			cost = np.sum(params**2)
+			uncer = 0
+			bad = False
+			
+			#The cost, uncertainty and bad boolean must all be returned as a dictionary
+			cost_dict = {'cost':cost, 'uncer':uncer, 'bad':bad}
+			return cost_dict
+
+The code above defines a new class that inherits from the Interface class in M-LOOP. Note this code is different to the example above, we will consider this next. It is slightly more complicated than just defining a method, however there is a lot more flexibility when taking this approach. You should put the code you use to run your experiment in the get_next_cost_dict method. This method is executed by the interface whenever M-LOOP wants a cost corresponding to a set of parameters.
+
+When you actually run M-LOOP you will need to make an instance of your interface. To make an instance of the class above you would use::
+	
+	interface = SimpleInterface()
+	
+This interface is then provided to the controller, which is discussed in the next section.
+
+Dictionaries are for both the input and output to give the user flexibility. For example, if you had a bad run, you do not have to return a cost and uncertainty, you can just return a dictionary with bad set to True::
+
+	cost_dict = {'bad':True}
+	return cost_dict
+
+By taking an object oriented approach, M-LOOP can provide a lot more flexibility when controlling your experiment. For example if you wish to start up your experiment or perform some initial numerical analysis you can add a customized constructor or __init__ method for the class. We consider this in the main example::
+
+	class CustomInterface(mli.Interface):
+    
+		#Initialization of the interface, including this method is optional
+		def __init__(self):
+			#You must include the super command to call the parent class, Interface, constructor 
+			super(CustomInterface,self).__init__()
+			
+			#Attributes of the interface can be added here
+			#If you want to precalculate any variables etc. this is the place to do it
+			#In this example we will just define the location of the minimum
+			self.minimum_params = np.array([0,0.1,-0.1])
+			
+		#You must include the get_next_cost_dict method in your class
+		#this method is called whenever M-LOOP wants to run an experiment
+		def get_next_cost_dict(self,params_dict):
+			
+			#Get parameters from the provided dictionary
+			params = params_dict['params']
+			
+			#Here you can include the code to run your experiment given a particular set of parameters
+			#In this example we will just evaluate a sum of sinc functions
+			cost = -np.sum(np.sinc(params - self.minimum_params))
+			#There is no uncertainty in our result
+			uncer = 0
+			#The evaluation will always be a success
+			bad = False
+			#Add a small time delay to mimic a real experiment
+			time.sleep(1)
+			
+			#The cost, uncertainty and bad boolean must all be returned as a dictionary
+			#You can include other variables you want to record as well if you want
+			cost_dict = {'cost':cost, 'uncer':uncer, 'bad':bad}
+			return cost_dict
+    
+In this code snipet we also implement a constructor. Here we just define a numpy array which definies the minimum_parameter values. We can call this variable whenever we need in the get_next_cost_dict method. You can also define your own custom methods in your interface or even inheret from other classes.  
+
+Once you have implemented your own Interface running M-LOOP can be done in three lines.
+
+Running M-LOOP
+--------------
+
+Once you have made your interface class running M-LOOP can be as simple as three lines. In the example script M-LOOP is run in the main method::
+
+	def main():
+		#M-LOOP can be run with three commands
+		
+		#First create your interface
+		interface = CustomInterface()
+		#Next create the controller, provide it with your controller and any options you want to set
+		controller = mlc.create_controller(interface, 
+										   max_num_runs = 1000,
+										   target_cost = -2.99,
+										   num_params = 3, 
+										   min_boundary = [-2,-2,-2],
+										   max_boundary = [2,2,2])
+		#To run M-LOOP and find the optimal parameters just use the controller method optimize
+		controller.optimize()
+		
+In the code snippet we first make an instance of our custom interface class called interface. We then create an instance of a controller. The controller will run the experiment and perform the optimization. You must provide the controller with the interface and any of the M-LOOP options you would normally provide in the configuration file. In this case we give five options that do the following.
+
+1. *max_num_runs = 1000* sets the maximum number of runs to be 1000.
+2. *target_cost = -2.99* sets a cost that M-LOOP will halt at once it has been reached.
+3. *num_params = 3* sets the number of parameters to be 3.
+4. *min_boundary = [-2,-2,-2]* defines the minimum values of each of the parameters.
+5. *max_boundary = [2,2,2]* defines the maximum values of each of the parameters. 
+
+There are many other options you can use. Have a look at :ref:`sec-configuration-file` for a detailed introduction into all the important configuration options. Remember you can include any option you would include in a configuration file as kewords for the controller. For more options you should look at all the config files in :ref:`sec-examples`, or for a comprehesive list look at the :ref:`sec-api`.
+
+Once you have created your interface and controller you can actually run M-LOOP by calling the optimize method of the controller. So in summary M-LOOP is executed in three lines::
+
+	interface = CustomInterface()
+	controller = mlc.create_controller(interface, max_num_runs = 1000, target_cost = -2.99, num_params = 3, min_boundary = [-2,-2,-2], max_boundary = [2,2,2])
+	controller.optimize()
+
+Results
+-------
+
+The results will be displayed on the console and also saved in a set of files. Have a read over :ref:`sec-results` for more details on the results displayed and saved. Also read :ref:`sec-data` for more details on data formats and how it is stored.
+
+Within the python environment you can also access the results as attributes of the controller after it has finished optimization. The example includes a simple demonstration of this::
+
+		#The results of the optimization will be saved to files and can also be accessed as attributes of the controller.
+		print('Best parameters found:')
+		print(controller.best_params)
+
+All of the results saved in the controller archive can be directly accessed as attributes of the controller object. For a comprehensive list of the attributes of the controller generated after an optimization run see the :ref:`sec-api`.
+
+Visualizations
+--------------
+
+For each controller there is normally a default set of visualizations available. The visualizations for the Gaussian Process, the default optimization algorithm, is described in :ref:`sec-visualizations`. Visualizations can be called through the visualization module. The example includes a simple demonstration of this::
+
+		#You can also run the default sets of visualizations for the controller with one command
+		mlv.show_all_default_visualizations(controller)
+
+This code snipet will display all the visualizations available for that controller. There are many other visualization methods and options available that let you control which plots are displayed and when, see the :ref:`sec-api` for details. 
+
+
+
+
+
+
+
 
 

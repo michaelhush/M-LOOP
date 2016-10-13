@@ -1,5 +1,6 @@
 .. _sec-contributing:
 
+============
 Contributing
 ============
 
@@ -13,7 +14,7 @@ If you use M-LOOP please consider contributing to the project. There are many qu
 Finally spread the word! Let others know the success you have had with M-LOOP and recommend they try it too.
 
 Contributors
-------------
+============
 
 M-LOOP is written and maintained by `Michael R Hush <http://www.michaelhush.com>`_ <MichaelRHush@gmail.com>
 

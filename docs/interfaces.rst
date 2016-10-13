@@ -1,5 +1,6 @@
 .. _sec-interfaces:
 
+==========
 Interfaces
 ==========
 
@@ -12,7 +13,7 @@ Currently M-LOOP supports three ways to interface your experiment
 Each of these options is described below. If you have any suggestions for interfaces please consider :ref:`sec-contributing` to the project.
 
 File interface
---------------
+==============
 
 The simplest method to connect your experiment to M-LOOP is with the file interface where data is exchanged by writing files to disk. To use this interface you can include the option::
 
@@ -49,7 +50,7 @@ and failed experiment can be as simple as::
 Once the *exp_output.txt* has been written to disk, M-LOOP will read it and delete it. 
 
 Shell interface
----------------
+===============
 
 The shell interface is used when experiments can be run from a command in a shell. M-LOOP will still need to be configured and executed in the same manner described for a file interface as describe in :ref:`tutorial <sec-standard-experiment>`. The only difference is how M-LOOP starts the experiment and reads data. To use this interface you must include the following options::
 
@@ -89,6 +90,6 @@ You can also output other information to the shell and split up the information 
 	M-LOOP_end
 	
 Python interfaces 
------------------
+=================
 
 If your experiment is controlled in python you can use M-LOOP as an API in your own custom python script. In this case you must create your own implementation of the abstract interface class to control the experiment. This is explained in deatail in the :ref:`tutorial for python controlled experiments <sec-python-experiment>`.
