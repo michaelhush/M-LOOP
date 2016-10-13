@@ -253,7 +253,7 @@ class ShellInterface(Interface):
                  params_args_type = 'direct',
                  **kwargs):
         
-        super(ShelleInterface,self).__init__(**kwargs)
+        super(ShellInterface,self).__init__(**kwargs)
         
         #User defined variables
         self.command = str(command)

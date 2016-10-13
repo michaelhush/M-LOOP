@@ -39,7 +39,7 @@ When writing the file *exp_output.txt* there are three keywords and values you c
 
 cost refers to the cost calculated from the experimental data. uncer, is optional, and refers to the uncertainty in the cost measurement made. Note, M-LOOP by default assumes there is some noise corrupting costs, which is fitted and compensated for. Hence, if there is some noise in your costs which you are unable to predict from a single measurement, do not worry, you do not have to estimate uncer, you can just leave it out. Lastly bad can be used to indicate an experiment failed and was not able to produce a cost. If the experiment worked set bad = false and if it failed set bad = true.
 
-Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to false. For example a succesful run can simply be::
+Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to false. For example a successful run can simply be::
 
    cost = 0.3
    
@@ -62,7 +62,7 @@ in the configuration file. The interface keyword simply indicates that you want 
 
 The command keyword should be provided with the command on the shell that runs the experiment. In the example above the executable would be *run_exp*. Note M-LOOP will try and execute the command in the folder that you run M-LOOP from, if this causes trouble you should just the absolute address of your executable. Your command can be more complicated than a single work, for example if you wanted to include some options like './run_exp --verbose -U' this would also be acceptable. 
 
-The params_args_type keyword controls how M-LOOP delivers the parameters to the executable. If you use the 'direct' option the parameters will just be fed directly to the experiemnt as arguments. For example if the command was ./run_exp and the parameters to test next were 1.3, -23 and 12, M-LOOP would execute the following command::
+The params_args_type keyword controls how M-LOOP delivers the parameters to the executable. If you use the 'direct' option the parameters will just be fed directly to the experiment as arguments. For example if the command was ./run_exp and the parameters to test next were 1.3, -23 and 12, M-LOOP would execute the following command::
 
 	./run_exp 1.3 -23 12
 
@@ -92,4 +92,4 @@ You can also output other information to the shell and split up the information 
 Python interfaces 
 =================
 
-If your experiment is controlled in python you can use M-LOOP as an API in your own custom python script. In this case you must create your own implementation of the abstract interface class to control the experiment. This is explained in deatail in the :ref:`tutorial for python controlled experiments <sec-python-experiment>`.
+If your experiment is controlled in python you can use M-LOOP as an API in your own custom python script. In this case you must create your own implementation of the abstract interface class to control the experiment. This is explained in detail in the :ref:`tutorial for python controlled experiments <sec-python-experiment>`.

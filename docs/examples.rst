@@ -13,7 +13,7 @@ Each of the example files is used when running tests of M-LOOP. So please copy a
 Interfaces
 ==========
 
-There is currently two interfaces supported: 'file' and 'shell'. You can specify which interface you want with the option::
+There are currently two interfaces supported: 'file' and 'shell'. You can specify which interface you want with the option::
 
    interface_type = [name]
 
@@ -66,7 +66,7 @@ There are two example files for the Gaussian-process controller: *gaussian_proce
 Differential evolution
 ----------------------
 
-The differential evolution (DE) controller uses a `Link DE alogithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
+The differential evolution (DE) controller uses a `Link DE algorithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
 
 There are two example files for the differential evolution controller: *differential_evolution_simple_config.txt* which contains the basic options.
 

@@ -13,7 +13,7 @@ Using M-LOOP is simple, once the parameters of your experiment is computer contr
 
 M-LOOP not only finds an optimal set of parameters for the experiment it also provides a model of how the parameters are related to the costs which can be used to improve the experiment. 
 
-If you use M-LOOP please cite our publication where we first used the package to optimise the production of a Bose-Einstein Condensate:
+If you use M-LOOP please cite our publication where we first used the package to optimize the production of a Bose-Einstein Condensate:
 
 Fast Machine-Learning Online Optimization of Ultra-Cold-Atom Experiments. *Scientific Reports* **6**, 25890 (2016). DOI: `Link 10.1038/srep25890 <http://dx.doi.org/10.1038/srep25890>`_
 
