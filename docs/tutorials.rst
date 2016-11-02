@@ -11,7 +11,7 @@ There are two different approaches to using M-LOOP:
 1. You can execute M-LOOP from a command line (or shell) and configure it using a text file. 
 2. You can use M-LOOP as a :ref:`python API <sec-api>`.
 
-If you have a standard experiment, that is operated by LabVIEW, Simulink or some other method, then your should use option 1 and follow the :ref:` first tutorial <sec-standard-experiment>`. If your experiment is operated using python, you should consider using option 2 as it will give you more flexibility and control, in which case, look at the :ref:`second tutorial <sec-python-experiment>`.
+If you have a standard experiment, that is operated by LabVIEW, Simulink or some other method, then you should use option 1 and follow the :ref:`first tutorial <sec-standard-experiment>`. If your experiment is operated using python, you should consider using option 2 as it will give you more flexibility and control, in which case, look at the :ref:`second tutorial <sec-python-experiment>`.
 
 .. _sec-standard-experiment:
 
@@ -178,7 +178,7 @@ When writing the file *exp_output.txt* there are three keywords and values you c
 
 cost refers to the cost calculated from the experimental data. uncer, is optional, and refers to the uncertainty in the cost measurement made. Note, M-LOOP by default assumes there is some noise corrupting costs, which is fitted and compensated for. Hence, if there is some noise in your costs which you are unable to predict from a single measurement, do not worry, you do not have to estimate uncer, you can just leave it out. Lastly bad can be used to indicate an experiment failed and was not able to produce a cost. If the experiment worked set bad = false and if it failed set bad = true.
 
-Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to false. For example a successful run can simply be::
+Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to true. For example a successful run can simply be::
 
    cost = 0.3
    
@@ -219,7 +219,7 @@ M-LOOP, by default, will produce a set of visualizations. These plots show the o
 Python controlled experiment 
 ============================
 
-If you have an experiment that is already under python control you can use M-LOOP as an API. Below we go over the example python script *python_controlled_experiment.py* you should also read over the :ref:` first tutorial <sec-standard-experiment>` to get a general idea of how M-LOOP works.
+If you have an experiment that is already under python control you can use M-LOOP as an API. Below we go over the example python script *python_controlled_experiment.py* you should also read over the :ref:`first tutorial <sec-standard-experiment>` to get a general idea of how M-LOOP works.
 
 When integrating M-LOOP into your laboratory remember that it will be controlling you experiment, not vice versa. Hence, at the top level of your python script you will execute M-LOOP which will then call on your experiment when needed. Your experiment will not be making calls of M-LOOP.
 
