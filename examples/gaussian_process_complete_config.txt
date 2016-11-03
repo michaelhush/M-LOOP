@@ -2,7 +2,7 @@
 #---------------------------------
 
 #General options
-max_num_runs = 100               #number of planned runs
+max_num_runs = 500               #number of planned runs
 target_cost = 0.1                #cost to beat
 
 #Gaussian process options

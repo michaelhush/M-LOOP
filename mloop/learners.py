@@ -1073,9 +1073,9 @@ class GaussianProcessLearner(Learner, mp.Process):
             if self.default_bad_uncertainty < 0:
                 self.log.error('Default bad uncertainty must be positive.')
                 raise ValueError
-        if (self.default_bad_cost is None) and (self.default_bad_cost is None):
+        if (self.default_bad_cost is None) and (self.default_bad_uncertainty is None):
             self.bad_defaults_set = False
-        elif (self.default_bad_cost is not None) and (self.default_bad_cost is not None):
+        elif (self.default_bad_cost is not None) and (self.default_bad_uncertainty is not None):
             self.bad_defaults_set = True
         else:
             self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
@@ -1156,13 +1156,14 @@ class GaussianProcessLearner(Learner, mp.Process):
         new_costs = []
         new_uncers = []
         new_bads = []
-        new_costs_count = 0
         update_bads_flag = False
         
         while not self.costs_in_queue.empty():
             (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
+            self.costs_count +=1
+            
             if bad:
-                new_bads.append(self.data_count)
+                new_bads.append(self.costs_count-1)
                 if self.bad_defaults_set:
                     cost = self.default_bad_cost
                     uncer = self.default_bad_uncertainty
@@ -1181,18 +1182,15 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
                 uncer = max(float(uncer), self.minimum_uncertainty)
             
-            new_costs_count += 1
-            self.costs_count +=1
-            
             cost_change_flag = False
             if cost > self.worst_cost:
                 self.worst_cost = cost
-                self.worst_index = self.costs_count
+                self.worst_index = self.costs_count-1
                 cost_change_flag = True
             if cost < self.best_cost:
                 self.best_cost = cost
                 self.best_params = param
-                self.best_index =  self.costs_count
+                self.best_index =  self.costs_count-1
                 cost_change_flag = True
             if cost_change_flag:
                 self.cost_range = self.worst_cost - self.best_cost
@@ -1202,7 +1200,8 @@ class GaussianProcessLearner(Learner, mp.Process):
             new_params.append(param)
             new_costs.append(cost)
             new_uncers.append(uncer)
-        
+            
+            
         if self.all_params.size==0:
             self.all_params = np.array(new_params, dtype=float)
             self.all_costs = np.array(new_costs, dtype=float)
@@ -1212,13 +1211,15 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.all_costs = np.concatenate((self.all_costs, np.array(new_costs, dtype=float)))
             self.all_uncers = np.concatenate((self.all_uncers, np.array(new_uncers, dtype=float)))
         
+        self.bad_run_indexs.append(new_bads)
+        
         if self.all_params.shape != (self.costs_count,self.num_params):
             self.log('Saved GP params are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_params))
         if self.all_costs.shape != (self.costs_count,):
             self.log('Saved GP costs are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_costs))
         if self.all_uncers.shape != (self.costs_count,):
             self.log('Saved GP uncertainties are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_uncers))
-            
+        
         if update_bads_flag:
             self.update_bads()
         
@@ -1366,6 +1367,9 @@ class GaussianProcessLearner(Learner, mp.Process):
                         raise LearnerInterrupt()
         except LearnerInterrupt:
             pass
+        if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
+            self.get_params_and_costs()
+            self.fit_gaussian_process()
         end_dict = {}
         if self.predict_global_minima_at_end:
             self.find_global_minima()
