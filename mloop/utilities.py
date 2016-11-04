@@ -173,6 +173,30 @@ def check_file_type_supported(file_type):
     '''
     return file_type == 'mat' or 'txt' or 'pkl'
 
+def safe_cast_to_list(in_array):
+    '''
+    Attempts to safely cast a numpy array to a list, if not a numpy array just casts to list on the object.
+    
+    Args:
+        in_array (array or equivalent): The array (or otherwise) to be converted to a list.
+    
+    Returns:
+        list : List of elements from in_array
+    
+    '''
+    
+    if isinstance(in_array, np.ndarray):
+        t_array = np.squeeze(in_array)
+        if t_array.shape == ():
+            out_list = [t_array[()]]
+        else:
+            out_list = list(t_array)
+    else:
+        out_list = list(in_array)
+    
+    return out_list
+    
+    
 class NullQueueListener():
     '''
     Shell class with start and stop functions that do nothing. Queue listener is not implemented in python 2. Current fix is to simply use the multiprocessing class to pipe straight to the cmd line if running on python 2. This is class is just a placeholder.

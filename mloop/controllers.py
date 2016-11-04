@@ -282,7 +282,7 @@ class Controller():
         except ValueError:
             self.log.error('One of the values you provided in the cost dict could not be converted into the right type.')
             raise
-        if self.curr_bad and 'cost' in dict:
+        if self.curr_bad and ('cost' in in_dict):
             self.log.warning('The cost provided with the bad run will be saved, but not used by the learners.')
         
         self.in_costs.append(self.curr_cost)
@@ -334,6 +334,8 @@ class Controller():
             self._start_up()
             self._optimization_routine()
             log.info('Controller finished. Closing down M-LOOP. Please wait a moment...')
+        except ControllerInterrupt:
+            self.log.warning('Controller ended by interruption.')
         except (KeyboardInterrupt,SystemExit):
             log.warning('!!! Do not give the interrupt signal again !!! \n M-LOOP stopped with keyboard interupt or system exit. Please wait at least 1 minute for the threads to safely shut down. \n ')
             log.warning('Closing down controller.')
@@ -392,22 +394,19 @@ class Controller():
         Runs controller main loop. Gives parameters to experiment and saves costs returned. 
         '''
         self.log.debug('Start controller loop.')
-        try:
+        self.log.info('Run:' + str(self.num_in_costs +1))
+        next_params = self._first_params()
+        self._put_params_and_out_dict(next_params)
+        self.save_archive()
+        self._get_cost_and_in_dict()
+        while self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1))
-            next_params = self._first_params()
+            next_params = self._next_params()
             self._put_params_and_out_dict(next_params)
             self.save_archive()
             self._get_cost_and_in_dict()
-            while self.check_end_conditions():
-                self.log.info('Run:' + str(self.num_in_costs +1))
-                next_params = self._next_params()
-                self._put_params_and_out_dict(next_params)
-                self.save_archive()
-                self._get_cost_and_in_dict()
-            self.log.debug('End controller loop.')
-        except ControllerInterrupt:
-            self.log.warning('Controller ended by interruption.')
-    
+        self.log.debug('End controller loop.')
+
     def _first_params(self):
         '''
         Checks queue to get first  parameters. 
@@ -619,7 +618,7 @@ class GaussianProcessController(Controller):
         self.new_params_event = self.gp_learner.new_params_event
         self.remaining_kwargs = self.gp_learner.remaining_kwargs
         self.generation_num = self.gp_learner.generation_num
-        
+    
     def _put_params_and_out_dict(self, params):
         '''
         Override _put_params_and_out_dict function, used when the training learner creates parameters. Makes the defualt param_type the training type and sets last_training_run_flag.
@@ -677,26 +676,34 @@ class GaussianProcessController(Controller):
         Overrides _optimization_routine. Uses the parent routine for the training runs. Implements a customized _optimization_rountine when running the Gaussian Process learner. 
         '''
         #Run the training runs using the standard optimization routine. Adjust the number of max_runs
-        save_max_num_runs = self.max_num_runs
-        self.max_num_runs = self.num_training_runs - 1
         self.log.debug('Starting training optimization.')
-        super(GaussianProcessController,self)._optimization_routine()
-        
-        #Start last training run
         self.log.info('Run:' + str(self.num_in_costs +1))
-        next_params = self._next_params()
+        next_params = self._first_params()
         self._put_params_and_out_dict(next_params)
-        
-        #Begin GP optimization routine
-        self.max_num_runs = save_max_num_runs
-        
-        self.log.debug('Starting GP optimization.')
-        self.new_params_event.set()
         self.save_archive()
         self._get_cost_and_in_dict()
+        while (self.num_in_costs < self.num_training_runs) and self.check_end_conditions():
+            self.log.info('Run:' + str(self.num_in_costs +1))
+            next_params = self._next_params()
+            self._put_params_and_out_dict(next_params)
+            self.save_archive()
+            self._get_cost_and_in_dict()
+            
+        if self.check_end_conditions():
+            #Start last training run
+            self.log.info('Run:' + str(self.num_in_costs +1))
+            next_params = self._next_params()
+            self._put_params_and_out_dict(next_params)
+            
+            self.log.debug('Starting GP optimization.')
+            self.new_params_event.set()
+            self.save_archive()
+            self._get_cost_and_in_dict()
+            self.log.debug('End training runs.')
         
-        gp_consec = 0
-        gp_count = 0
+            gp_consec = 0
+            gp_count = 0    
+        
         while self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1))
             if gp_consec==self.generation_num or (self.no_delay and self.gp_learner_params_queue.empty()):
@@ -723,12 +730,7 @@ class GaussianProcessController(Controller):
         self.log.debug('GP learner end set.')
         self.end_gp_learner.set()
         self.gp_learner.join()
-        #self.gp_learner.join(self.gp_learner.learner_wait*3)
-        '''
-        if self.gp_learner.is_alive():
-            self.log.warning('GP Learner did not join in time had to terminate.')
-            self.gp_learner.terminate()
-        '''
+        
         self.log.debug('GP learner joined')   
         last_dict = None
         while not self.gp_learner_params_queue.empty():
@@ -750,7 +752,7 @@ class GaussianProcessController(Controller):
             self.archive_dict.update(last_dict)
         else:
             if self.gp_learner.predict_global_minima_at_end or self.gp_learner.predict_local_minima_at_end:
-                self.log.warning('GP Learner may not have closed properly unable to get best and/or all minima.')
+                self.log.info('GP Learner did not provide best and/or all minima.')
         super(GaussianProcessController,self)._shut_down()
         
     def print_results(self):
