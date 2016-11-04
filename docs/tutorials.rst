@@ -68,15 +68,19 @@ You can add comments to your file using #, everything past # will be ignored. Ex
    num_params = 2                #number of parameters
    min_boundary = [-1,-1]        #minimum boundary
    max_boundary = [1,1]          #maximum boundary
+   first_params = [0.5,0.5]      #first parameters to try
+   trust_region = 0.4         	#maximum % move distance from best params
 
    #Halting conditions
    max_num_runs = 1000                       #maximum number of runs
    max_num_runs_without_better_params = 50   #maximum number of runs without finding better parameters
    target_cost = 0.01                        #optimization halts when a cost below this target is found 
+   
+   #Learner options
+   cost_has_noise = True      #whether the cost are corrupted by noise or not
 
-   #Learner specific options
-   first_params = [0.5,0.5]   #first parameters to try
-   trust_region = 0.4         #maximum % move distance from best params
+   #Timing options
+   no_delay = True            #wait for learner to make generate new parameters or use training algorithms
 
    #File format options
    interface_file_type = 'txt'            #file types of *exp_input.mat* and *exp_output.mat*
@@ -86,7 +90,7 @@ You can add comments to your file using #, everything past # will be ignored. Ex
    #Visualizations
    visualizations = True
 
-We will now explain the options in each of their groups. In almost all cases you will only need to the parameters settings and halting conditions, but we have also describe a few of the most commonly used extra options. 
+We will now explain the options in each of their groups. In almost all cases you will only need to the parameters settings and halting conditions, but we have also described a few of the most commonly used extra options. 
 
 Parameter settings
 ~~~~~~~~~~~~~~~~~~
@@ -99,6 +103,10 @@ The number of parameters and their limits is defined with three keywords::
 
 num_params defines the number of parameters, min_boundary defines the minimum value each of the parameters can take and max_boundary defines the maximum value each parameter can take. Here there are two value which each must be between -1 and 1.
 
+first_parameters defines the first parameters the learner will try. You only need to set this if you have a safe set of parameters you want the experiment to start with. Just delete this keyword if any set of parameters in the boundaries will work.
+
+trust_region defines the maximum change allowed in the parameters from the best parameters found so far. In the current example the region size is 2 by 2, with a trust region of 40% thus the maximum allowed change for the second run will be [0 +/- 0.8, 0 +/- 0.8]. This is only needed if your experiment produces bad results when the parameters are changes significantly between runs. Simply delete this keyword if your experiment works with any set of parameters within the boundaries.
+
 Halting conditions
 ~~~~~~~~~~~~~~~~~~
 
@@ -107,6 +115,8 @@ The halting conditions define when the simulation will stop. We present three op
    max_num_runs = 100                        
    max_num_runs_without_better_params = 10   
    target_cost = 0.1
+   first_params = [0.5,0.5]      
+   trust_region = 0.4
 
 max_num_runs is the maximum number of runs that the optimization algorithm is allowed to run. max_num_runs_without_better_params is the maximum number of runs allowed before a lower cost and better parameters is found. Finally, when target_cost is set, if a run produces a cost that is less than this value the optimization process will stop.
 
@@ -119,19 +129,23 @@ If you do not want one of the halting conditions, simply delete it from your fil
    max_num_runs_without_better_params = 10 
 
 
-Learner specific options
-~~~~~~~~~~~~~~~~~~~~~~~~
+Learner Options
+~~~~~~~~~~~~~~~
 
-There are many learner specific options (and different learner algorithms) described in :ref:`sec-examples`. Here we consider just a couple of the most commonly used ones. M-LOOP has been designed to find an optimum quickly with no custom configuration as long as the experiment is able to provide a cost for every parameter it provides.
+There are many learner specific options (and different learner algorithms) described in :ref:`sec-examples`. Here we just present a common one::
 
-However if your experiment will fail to work if there are sudden and significant changes to your parameters you may need to set the following options::
+   cost_has_noise = True
+   
+If the cost you provide has noise in it, meaning your the cost you calculate would fluctuate if you did multiple experiments with the same parameters, then set this flag to True. If the costs your provide have no noise then set this flag to False. M-LOOP will automatically determine if the costs have noise in them or not, so if you are unsure, just delete this keyword and it will use the default value of True. 
 
-   first_parameters = [0.5,0.5]      
-   trust_region = 0.4            
+Timing options
+~~~~~~~~~~~~~~
 
-first_parameters defines the first parameters the learner will try. trust_region defines the maximum change allowed in the parameters from the best parameters found so far. In the current example the region size is 2 by 2, with a trust region of 40% thus the maximum allowed change for the second run will be [0 +/- 0.8, 0 +/- 0.8].
+M-LOOP learns how the experiment works by fitting the parameters and costs using a gaussian process. This learning process can take some time. If M-LOOP is asked for new parameters before it has time to generate a new prediction, it will use the training algorithm to provide a new set of parameters to test. This allows for an experiment to be run while the learner is still thinking. The training algorithm by default is differential evolution, this algorithm is also used to do the first initial set of experiments which are then used to train M-LOOP. If you would prefer M-LOOP waits for the learner to come up with its best prediction before running another experiment you can change this behavior with the option::
 
-If you experiment reliably produces costs for any parameter set you will not need these settings and you can just delete them.
+   no_delay = True
+   
+Set no_delay to true to ensure there is no pauses between experiments and set it to false if you to give M-LOOP to have the time to come up with its most informed choice. Sometimes doing fewer more intelligent experiments will lead to an optimal quicker than many quick unintelligent experiments. You can delete the keyword if you are unsure and it will default to True.  
 
 File format options
 ~~~~~~~~~~~~~~~~~~~

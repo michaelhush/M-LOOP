@@ -1,7 +1,7 @@
 .. _api-controllers:
 
 controllers
------------
+===========
 
 .. automodule:: mloop.controllers
     :members:

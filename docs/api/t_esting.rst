@@ -1,5 +1,5 @@
 testing
--------
+=======
 
 .. automodule:: mloop.testing
     :members:

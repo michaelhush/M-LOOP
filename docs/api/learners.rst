@@ -1,7 +1,7 @@
 .. _api-learners:
 
 learners
----------
+========
 
 .. automodule:: mloop.learners
     :members:

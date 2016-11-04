@@ -1,5 +1,5 @@
 interfaces
-----------
+==========
 
 .. automodule:: mloop.interfaces
     :members:

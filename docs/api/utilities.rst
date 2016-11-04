@@ -1,5 +1,5 @@
 utilities
----------
+=========
 
 .. automodule:: mloop.utilities
     :members:

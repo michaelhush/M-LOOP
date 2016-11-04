@@ -1,5 +1,5 @@
 visualizations
---------------
+==============
 
 .. automodule:: mloop.visualizations
     :members:
