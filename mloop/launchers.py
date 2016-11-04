@@ -27,7 +27,6 @@ def launch_from_file(config_filename,
     except (IOError, OSError):
         print('Unable to open M-LOOP configuration file:' + repr(config_filename))
         raise
-    
     file_kwargs.update(kwargs)
     #Main run sequence
     #Create interface and extract unused keywords

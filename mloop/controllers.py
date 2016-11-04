@@ -334,6 +334,8 @@ class Controller():
             self._start_up()
             self._optimization_routine()
             log.info('Controller finished. Closing down M-LOOP. Please wait a moment...')
+        except ControllerInterrupt:
+            self.log.warning('Controller ended by interruption.')
         except (KeyboardInterrupt,SystemExit):
             log.warning('!!! Do not give the interrupt signal again !!! \n M-LOOP stopped with keyboard interupt or system exit. Please wait at least 1 minute for the threads to safely shut down. \n ')
             log.warning('Closing down controller.')
@@ -392,22 +394,19 @@ class Controller():
         Runs controller main loop. Gives parameters to experiment and saves costs returned. 
         '''
         self.log.debug('Start controller loop.')
-        try:
+        self.log.info('Run:' + str(self.num_in_costs +1))
+        next_params = self._first_params()
+        self._put_params_and_out_dict(next_params)
+        self.save_archive()
+        self._get_cost_and_in_dict()
+        while self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1))
-            next_params = self._first_params()
+            next_params = self._next_params()
             self._put_params_and_out_dict(next_params)
             self.save_archive()
             self._get_cost_and_in_dict()
-            while self.check_end_conditions():
-                self.log.info('Run:' + str(self.num_in_costs +1))
-                next_params = self._next_params()
-                self._put_params_and_out_dict(next_params)
-                self.save_archive()
-                self._get_cost_and_in_dict()
-            self.log.debug('End controller loop.')
-        except ControllerInterrupt:
-            self.log.warning('Controller ended by interruption.')
-    
+        self.log.debug('End controller loop.')
+
     def _first_params(self):
         '''
         Checks queue to get first  parameters. 
@@ -619,7 +618,7 @@ class GaussianProcessController(Controller):
         self.new_params_event = self.gp_learner.new_params_event
         self.remaining_kwargs = self.gp_learner.remaining_kwargs
         self.generation_num = self.gp_learner.generation_num
-        
+    
     def _put_params_and_out_dict(self, params):
         '''
         Override _put_params_and_out_dict function, used when the training learner creates parameters. Makes the defualt param_type the training type and sets last_training_run_flag.
@@ -678,8 +677,18 @@ class GaussianProcessController(Controller):
         '''
         #Run the training runs using the standard optimization routine. Adjust the number of max_runs
         self.log.debug('Starting training optimization.')
-        super(GaussianProcessController,self)._optimization_routine()
-        
+        self.log.info('Run:' + str(self.num_in_costs +1))
+        next_params = self._first_params()
+        self._put_params_and_out_dict(next_params)
+        self.save_archive()
+        self._get_cost_and_in_dict()
+        while (self.num_in_costs < self.num_training_runs) and self.check_end_conditions():
+            self.log.info('Run:' + str(self.num_in_costs +1))
+            next_params = self._next_params()
+            self._put_params_and_out_dict(next_params)
+            self.save_archive()
+            self._get_cost_and_in_dict()
+            
         if self.check_end_conditions():
             #Start last training run
             self.log.info('Run:' + str(self.num_in_costs +1))
@@ -690,10 +699,11 @@ class GaussianProcessController(Controller):
             self.new_params_event.set()
             self.save_archive()
             self._get_cost_and_in_dict()
-            
+            self.log.debug('End training runs.')
+        
             gp_consec = 0
-            gp_count = 0
-            
+            gp_count = 0    
+        
         while self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1))
             if gp_consec==self.generation_num or (self.no_delay and self.gp_learner_params_queue.empty()):

@@ -927,10 +927,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.length_scale = np.squeeze(np.array(self.training_dict['length_scale']))
             self.length_scale_history = list(self.training_dict['length_scale_history'])
             self.noise_level = float(self.training_dict['noise_level'])
-            if isinstance(self.training_dict['noise_level_history'], np.ndarray):
-                self.noise_level_history = list(np.squeeze(self.training_dict['noise_level_history']))
-            else:
-                self.noise_level_history = list( self.training_dict['noise_level_history'])
+            self.noise_level_history = mlu.safe_cast_to_list(self.training_dict['noise_level_history'])
             
             #Counters
             self.costs_count = int(self.training_dict['costs_count'])
@@ -942,11 +939,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.all_costs = np.squeeze(np.array(self.training_dict['all_costs'], dtype=float))
             self.all_uncers = np.squeeze(np.array(self.training_dict['all_uncers'], dtype=float))
             
-            if isinstance(self.training_dict['bad_run_indexs'], np.ndarray):
-                self.bad_run_indexs = list(np.squeeze(self.training_dict['bad_run_indexs']))
-            else:
-                self.bad_run_indexs = list(self.training_dict['bad_run_indexs'])
-            
+            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
             
             #Derived properties
             self.best_cost = float(self.training_dict['best_cost'])
