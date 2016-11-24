@@ -46,9 +46,9 @@ def show_all_default_visualizations(controller, show_plots=True):
         
     if isinstance(controller, mlc.GaussianProcessController):
         log.debug('Creating gaussian process visualizations.')
-        plot_all_minima_vs_cost_flag = bool(controller.gp_learner.has_local_minima)
-        create_gaussian_process_learner_visualizations(controller.gp_learner.total_archive_filename, 
-                                                       file_type=controller.gp_learner.learner_archive_file_type,
+        plot_all_minima_vs_cost_flag = bool(controller.ml_learner.has_local_minima)
+        create_gaussian_process_learner_visualizations(controller.ml_learner.total_archive_filename, 
+                                                       file_type=controller.ml_learner.learner_archive_file_type,
                                                        plot_all_minima_vs_cost=plot_all_minima_vs_cost_flag)
         
     log.info('Showing visualizations, close all to end MLOOP.')
@@ -375,8 +375,8 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     
     def __init__(self, filename, file_type = 'pkl', **kwargs):
         
-        super(GaussianProcessVisualizer, self).__init__(gp_training_filename = filename,
-                                                        gp_training_file_type = file_type,
+        super(GaussianProcessVisualizer, self).__init__(ml_training_filename = filename,
+                                                        ml_training_file_type = file_type,
                                                         update_hyperparameters = False,
                                                         **kwargs)
         

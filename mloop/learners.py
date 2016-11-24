@@ -848,7 +848,6 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                                   'generation_count':self.generation_count})
 
 
-
 class GaussianProcessLearner(Learner, mp.Process):
     '''
     Gaussian process learner. Generats new parameters based on a gaussian process fitted to all previous data. 
@@ -1468,7 +1467,500 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.has_local_minima = True
         self.log.info('Search completed')
 
+
+class NeuralNetLearner(Learner, mp.Process):
+    '''
+    Shell of Neural Net Learner.
     
+    Args:
+        params_out_queue (queue): Queue for parameters sent to controller.
+        costs_in_queue (queue): Queue for costs for gaussian process. This must be tuple
+        end_event (event): Event to trigger end of learner.
+        
+    Keyword Args:
+        length_scale (Optional [array]): The initial guess for length scale(s) of the gaussian process. The array can either of size one or the number of parameters or None. If it is size one, it is assumed all the correlation lengths are the same. If it is the number of the parameters then all the parameters have their own independent length scale. If it is None, it is assumed all the length scales should be independent and they are all given an initial value of 1. Default None.
+        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
+        default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
+        default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
+        minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
+        predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
+        predict_local_minima_at_end (Optional [bool]): If True finds the all minima when the learner is ended. Does not if False. Default False.
+        
+    Attributes:
+        all_params (array): Array containing all parameters sent to learner.
+        all_costs (array): Array containing all costs sent to learner.
+        all_uncers (array): Array containing all uncertainties sent to learner.
+        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1. Needed for training the gaussian process. 
+        bad_run_indexs (list): list of indexes to all runs that were marked as bad.
+        best_cost (float): Minimum received cost, updated during execution.
+        best_params (array): Parameters of best run. (reference to element in params array).
+        best_index (int): index of the best cost and params. 
+        worst_cost (float): Maximum received cost, updated during execution.
+        worst_index (int): index to run with worst cost.
+        cost_range (float): Difference between worst_cost and best_cost
+        generation_num (int): Number of sets of parameters to generate each generation. Set to 5.
+        length_scale_history (list): List of length scales found after each fit.
+        noise_level_history (list): List of noise levels found after each fit. 
+        fit_count (int): Counter for the number of times the gaussian process has been fit.
+        cost_count (int): Counter for the number of costs, parameters and uncertainties added to learner.
+        params_count (int): Counter for the number of parameters asked to be evaluated by the learner.  
+        gaussian_process (GaussianProcessRegressor): Gaussian process that is fitted to data and used to make predictions
+        cost_scaler (StandardScaler): Scaler used to normalize the provided costs. 
+        has_trust_region (bool): Whether the learner has a trust region. 
+    ''' 
+    
+    def __init__(self, 
+                 update_hyperparameters = True,
+                 trust_region=None,
+                 default_bad_cost = None,
+                 default_bad_uncertainty = None,
+                 nn_training_filename =None,
+                 nn_training_file_type ='txt',
+                 predict_global_minima_at_end = True,
+                 predict_local_minima_at_end = False,
+                 **kwargs):
+        
+       
+            
+        super(NeuralNetLearner,self).__init__(**kwargs)
+        
+        #Storage variables, archived
+        self.all_params = np.array([], dtype=float)
+        self.all_costs = np.array([], dtype=float)
+        self.all_uncers = np.array([], dtype=float)
+        self.bad_run_indexs = []
+        self.best_cost = float('inf')
+        self.best_params = float('nan')
+        self.best_index = 0
+        self.worst_cost = float('-inf')
+        self.worst_index = 0
+        self.cost_range = float('inf')
+        self.length_scale_history = []
+        self.noise_level_history = []
+        
+        self.costs_count = 0
+        self.fit_count = 0
+        self.params_count = 0
+        
+        self.has_local_minima = False
+        self.has_global_minima = False
+            
+        #Multiprocessor controls
+        self.new_params_event = mp.Event()
+        
+        #Storage variables and counters
+        self.search_params = []
+        self.scaled_costs = None
+        self.cost_bias = None
+        self.uncer_bias = None
+        
+        #Constants, limits and tolerances
+        self.search_precision = 1.0e-6
+        self.parameter_searches = max(10,self.num_params)
+        self.hyperparameter_searches = max(10,self.num_params)
+        self.bad_uncer_frac = 0.1 #Fraction of cost range to set a bad run uncertainty 
+        
+        #Optional user set variables
+        self.update_hyperparameters = bool(update_hyperparameters)
+        self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
+        self.predict_local_minima_at_end = bool(predict_local_minima_at_end)
+        if default_bad_cost is not None:
+            self.default_bad_cost = float(default_bad_cost)
+        else:
+            self.default_bad_cost = None
+        if default_bad_uncertainty is not None:
+            self.default_bad_uncertainty = float(default_bad_uncertainty)
+        else:
+            self.default_bad_uncertainty = None
+        
+        self._set_trust_region(trust_region)
+        
+        #Search bounds
+        self.search_min = self.min_boundary
+        self.search_max = self.max_boundary
+        self.search_diff = self.search_max - self.search_min
+        self.search_region = list(zip(self.search_min, self.search_max))
+        
+        self.cost_scaler = skp.StandardScaler()
+        
+        
+        #--- FAKE NN CONSTRUCTOR START ---#
+        
+        self.length_scale = 1
+        self.cost_has_noise = True
+        self.noise_level = 1
+        
+        self.create_nerual_net()
+        
+        
+        
+        #--- FAKE NN CONSTRUCTOR END ---#
+        
+        self.archive_dict.update({'archive_type':'nerual_net_learner',
+                                  'bad_run_indexs':self.bad_run_indexs,
+                                  'generation_num':self.generation_num,
+                                  'search_precision':self.search_precision,
+                                  'parameter_searches':self.parameter_searches,
+                                  'hyperparameter_searches':self.hyperparameter_searches,
+                                  'bad_uncer_frac':self.bad_uncer_frac,
+                                  'trust_region':self.trust_region,
+                                  'has_trust_region':self.has_trust_region,
+                                  'predict_global_minima_at_end':self.predict_global_minima_at_end,
+                                  'predict_local_minima_at_end':self.predict_local_minima_at_end})
+        
+        #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
+        self.log = None
+        
+    
+    #--- FAKE NN METHODS START ---#
+    
+        
+    def create_neural_net(self):
+        '''
+        TO DO: Implement correctly
+        
+        Create the nerual net.
+        
+        '''
+        gp_kernel = skk.RBF(length_scale=self.length_scale) + skk.WhiteKernel(noise_level=self.noise_level)
+        
+        if self.update_hyperparameters:
+            self.gaussian_process = skg.GaussianProcessRegressor(kernel=gp_kernel,n_restarts_optimizer=self.hyperparameter_searches)
+        else:
+            self.gaussian_process = skg.GaussianProcessRegressor(kernel=gp_kernel,optimizer=None)
+    
+    def fit_neural_net(self):
+        '''
+        TO DO: Implement correctly
+        
+        Determine the appropriate number of layers for the NN given the data. 
+        
+        Fit the Neural Net with the appropriate topology to the data
+        
+        '''
+        self.log.debug('Fitting Gaussian process.')
+        if self.all_params.size==0 or self.all_costs.size==0 or self.all_uncers.size==0:
+            self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
+            raise ValueError
+        
+        self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
+        self.scaled_uncers = self.all_uncers * self.cost_scaler.scale_
+        self.gaussian_process.alpha_ = self.scaled_uncers
+        self.gaussian_process.fit(self.all_params,self.scaled_costs)
+        
+        if self.update_hyperparameters:
+            
+            self.fit_count += 1
+            self.gaussian_process.kernel = self.gaussian_process.kernel_
+            
+            last_hyperparameters = self.gaussian_process.kernel.get_params()
+            
+            if self.cost_has_noise:
+                self.length_scale = last_hyperparameters['k1__length_scale']
+                if isinstance(self.length_scale, float):
+                    self.length_scale = np.array([self.length_scale])
+                self.length_scale_history.append(self.length_scale)
+                self.noise_level = last_hyperparameters['k2__noise_level']
+                self.noise_level_history.append(self.noise_level)
+            else:
+                self.length_scale = last_hyperparameters['length_scale']
+                self.length_scale_history.append(self.length_scale)
+    
+    def predict_cost(self,params):
+        '''
+        Produces a prediction of cost from the gaussian process at params. 
+         
+        Returns:
+            float : Predicted cost at paramters
+        '''
+        return self.gaussian_process.predict(params[np.newaxis,:])
+    
+    #--- FAKE NN CONSTRUCTOR END ---#
+
+    
+    def wait_for_new_params_event(self):
+        '''
+        Waits for a new parameters event and starts a new parameter generation cycle. Also checks end event and will break if it is triggered. 
+        '''
+        while not self.end_event.is_set():
+            if self.new_params_event.wait(timeout=self.learner_wait):
+                self.new_params_event.clear()
+                break
+            else:
+                continue
+        else:
+            self.log.debug('GaussianProcessLearner end signal received. Ending')
+            raise LearnerInterrupt
+        
+        
+    def get_params_and_costs(self):
+        '''
+        Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region. 
+        '''
+        if self.costs_in_queue.empty():
+            self.log.error('Gaussian process asked for new parameters but no new costs were provided.')
+            raise ValueError
+        
+        new_params = []
+        new_costs = []
+        new_uncers = []
+        new_bads = []
+        update_bads_flag = False
+        
+        while not self.costs_in_queue.empty():
+            (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
+            self.costs_count +=1
+            
+            if bad:
+                new_bads.append(self.costs_count-1)
+                if self.bad_defaults_set:
+                    cost = self.default_bad_cost
+                    uncer = self.default_bad_uncertainty
+                else:
+                    cost = self.worst_cost
+                    uncer = self.cost_range*self.bad_uncer_frac
+                    
+            param = np.array(param, dtype=float)
+            if not self.check_num_params(param):
+                self.log.error('Incorrect number of parameters provided to Gaussian process learner:' + repr(param) + '. Number of parameters:' + str(self.num_params))
+                raise ValueError
+            if not self.check_in_boundary(param):
+                self.log.warning('Parameters provided to Gaussian process learner not in boundaries:' + repr(param))
+            cost = float(cost)
+            if uncer < 0:
+                self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
+                uncer = max(float(uncer), self.minimum_uncertainty)
+            
+            cost_change_flag = False
+            if cost > self.worst_cost:
+                self.worst_cost = cost
+                self.worst_index = self.costs_count-1
+                cost_change_flag = True
+            if cost < self.best_cost:
+                self.best_cost = cost
+                self.best_params = param
+                self.best_index =  self.costs_count-1
+                cost_change_flag = True
+            if cost_change_flag:
+                self.cost_range = self.worst_cost - self.best_cost
+                if not self.bad_defaults_set:
+                    update_bads_flag = True
+            
+            new_params.append(param)
+            new_costs.append(cost)
+            new_uncers.append(uncer)
+            
+            
+        if self.all_params.size==0:
+            self.all_params = np.array(new_params, dtype=float)
+            self.all_costs = np.array(new_costs, dtype=float)
+            self.all_uncers = np.array(new_uncers, dtype=float)
+        else:
+            self.all_params = np.concatenate((self.all_params, np.array(new_params, dtype=float)))
+            self.all_costs = np.concatenate((self.all_costs, np.array(new_costs, dtype=float)))
+            self.all_uncers = np.concatenate((self.all_uncers, np.array(new_uncers, dtype=float)))
+        
+        self.bad_run_indexs.append(new_bads)
+        
+        if self.all_params.shape != (self.costs_count,self.num_params):
+            self.log('Saved NN params are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_params))
+        if self.all_costs.shape != (self.costs_count,):
+            self.log('Saved NN costs are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_costs))
+        if self.all_uncers.shape != (self.costs_count,):
+            self.log('Saved NN uncertainties are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_uncers))
+        
+        if update_bads_flag:
+            self.update_bads()
+        
+        self.update_search_region()
+    
+    def update_bads(self):
+        '''
+        Best and/or worst costs have changed, update the values associated with bad runs accordingly.
+        '''
+        for index in self.bad_run_indexs:
+            self.all_costs[index] = self.worst_cost
+            self.all_uncers[index] = self.cost_range*self.bad_uncer_frac
+    
+    def update_search_region(self):
+        '''
+        If trust boundaries is not none, updates the search boundaries based on the defined trust region.
+        '''
+        if self.has_trust_region:
+            self.search_min = np.maximum(self.best_params - self.trust_region, self.min_boundary)
+            self.search_max = np.minimum(self.best_params + self.trust_region, self.max_boundary)
+            self.search_diff = self.search_max - self.search_min
+            self.search_region = list(zip(self.search_min, self.search_max))
+    
+    def update_search_params(self):
+        '''
+        Update the list of parameters to use for the next search.
+        '''
+        self.search_params = []
+        self.search_params.append(self.best_params)
+        for _ in range(self.parameter_searches):
+            self.search_params.append(self.search_min + nr.uniform(size=self.num_params) * self.search_diff)
+    
+    def update_archive(self):
+        '''
+        Update the archive.
+        '''
+        self.archive_dict.update({'all_params':self.all_params,
+                                  'all_costs':self.all_costs,
+                                  'all_uncers':self.all_uncers,
+                                  'best_cost':self.best_cost,
+                                  'best_params':self.best_params,
+                                  'best_index':self.best_index,
+                                  'worst_cost':self.worst_cost,
+                                  'worst_index':self.worst_index,
+                                  'cost_range':self.cost_range,
+                                  'fit_count':self.fit_count,
+                                  'costs_count':self.costs_count,
+                                  'params_count':self.params_count,
+                                  'update_hyperparameters':self.update_hyperparameters})    
+
+    def find_next_parameters(self):
+        '''
+        Returns next parameters to find. Increments counters and bias function appropriately.
+        
+        Return:
+            next_params (array): Returns next parameters from biased cost search.
+        '''
+        self.params_count += 1
+        self.update_bias_function()
+        self.update_search_params()
+        next_params = None
+        next_cost = float('inf')
+        for start_params in self.search_params:
+            result = so.minimize(self.predict_biased_cost, start_params, bounds = self.search_region, tol=self.search_precision)
+            if result.fun < next_cost:
+                next_params = result.x
+                next_cost = result.fun
+        return next_params
+    
+    def run(self):
+        '''
+        Starts running the Gaussian process learner. When the new parameters event is triggered, reads the cost information provided and updates the Gaussian process with the information. Then searches the Gaussian process for new optimal parameters to test based on the biased cost. Parameters to test next are put on the output parameters queue.
+        '''
+        #logging to the main log file from a process (as apposed to a thread) in cpython is currently buggy on windows and/or python 2.7
+        #current solution is to only log to the console for warning and above from a process
+        self.log = mp.log_to_stderr(logging.WARNING)
+        
+        try:
+            while not self.end_event.is_set():
+                #self.log.debug('Learner waiting for new params event')
+                self.save_archive()
+                self.wait_for_new_params_event()
+                #self.log.debug('Gaussian process learner reading costs')
+                self.get_params_and_costs()
+                self.fit_gaussian_process()
+                for _ in range(self.generation_num):
+                    self.log.debug('Gaussian process learner generating parameter:'+ str(self.params_count+1))
+                    next_params = self.find_next_parameters()
+                    self.params_out_queue.put(next_params)
+                    if self.end_event.is_set():
+                        raise LearnerInterrupt()
+        except LearnerInterrupt:
+            pass
+        if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
+            self.get_params_and_costs()
+            self.fit_gaussian_process()
+        end_dict = {}
+        if self.predict_global_minima_at_end:
+            self.find_global_minima()
+            end_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
+                             'predicted_best_cost':self.predicted_best_cost,
+                             'predicted_best_uncertainty':self.predicted_best_uncertainty})
+        if self.predict_local_minima_at_end:
+            self.find_local_minima()
+            end_dict.update({'local_minima_parameters':self.local_minima_parameters,
+                             'local_minima_costs':self.local_minima_costs,
+                             'local_minima_uncers':self.local_minima_uncers})
+        self.params_out_queue.put(end_dict)
+        self._shut_down()
+        self.log.debug('Ended Gaussian Process Learner')
+    
+    def find_global_minima(self):
+        '''
+        Performs a quick search for the predicted global minima from the learner. Does not return any values, but creates the following attributes.
+        
+        Attributes:
+            predicted_best_parameters (array): the parameters for the predicted global minima
+            predicted_best_cost (float): the cost at the predicted global minima
+            predicted_best_uncertainty (float): the uncertainty of the predicted global minima
+        '''
+        self.log.debug('Started search for predicted global minima.')
+        
+        self.predicted_best_parameters = None
+        self.predicted_best_scaled_cost = float('inf')
+        self.predicted_best_scaled_uncertainty = None
+        
+        search_params = []
+        search_params.append(self.best_params)
+        for _ in range(self.parameter_searches):
+            search_params.append(self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary)
+        
+        search_bounds = list(zip(self.min_boundary, self.max_boundary))
+        for start_params in search_params:
+            result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
+            curr_best_params = result.x
+            (curr_best_cost,curr_best_uncer) = self.gaussian_process.predict(curr_best_params[np.newaxis,:],return_std=True)
+            if curr_best_cost<self.predicted_best_scaled_cost:
+                self.predicted_best_parameters = curr_best_params
+                self.predicted_best_scaled_cost = curr_best_cost
+                self.predicted_best_scaled_uncertainty = curr_best_uncer
+        
+        self.predicted_best_cost = self.cost_scaler.inverse_transform(self.predicted_best_scaled_cost)
+        self.predicted_best_uncertainty = self.predicted_best_scaled_uncertainty / self.cost_scaler.scale_
+        
+        self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
+                                  'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
+                                  'predicted_best_scaled_uncertainty':self.predicted_best_scaled_uncertainty,
+                                  'predicted_best_cost':self.predicted_best_cost,
+                                  'predicted_best_uncertainty':self.predicted_best_uncertainty})
+        
+        self.has_global_minima = True
+        self.log.debug('Predicted global minima found.')   
+    
+    def find_local_minima(self):
+        '''
+        Performs a comprehensive search of the learner for all predicted local minima (and hence the global as well) in the landscape. Note, this can take a very long time. 
+        
+        Attributes:
+            local_minima_parameters (list): list of all the parameters for local minima.
+            local_minima_costs (list): list of all the costs at local minima.
+            local_minima_uncers (list): list of all the uncertainties at local minima.
+             
+        '''
+        self.log.info('Searching for all minima.')
+        
+        self.minima_tolerance = 10*self.search_precision
+        
+        self.number_of_local_minima = 0
+        self.local_minima_parameters = []
+        self.local_minima_costs = []
+        self.local_minima_uncers = []
+        
+        search_bounds = list(zip(self.min_boundary, self.max_boundary))
+        for start_params in self.all_params:
+            result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
+            curr_minima_params = result.x
+            (curr_minima_cost,curr_minima_uncer) = self.gaussian_process.predict(curr_minima_params[np.newaxis,:],return_std=True)
+            if all( not np.all( np.abs(params - curr_minima_params) < self.minima_tolerance ) for params in self.local_minima_parameters):    
+                #Non duplicate point so add to the list
+                self.number_of_local_minima += 1
+                self.local_minima_parameters.append(curr_minima_params)
+                self.local_minima_costs.append(curr_minima_cost)
+                self.local_minima_uncers.append(curr_minima_uncer)
+        
+        self.archive_dict.update({'number_of_local_minima':self.number_of_local_minima,
+                                  'local_minima_parameters':self.local_minima_parameters,
+                                  'local_minima_costs':self.local_minima_costs,
+                                  'local_minima_uncers':self.local_minima_uncers})
+        
+        self.has_local_minima = True
+        self.log.info('Search completed')
+
 
 
 

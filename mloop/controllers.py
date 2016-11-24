@@ -47,6 +47,8 @@ def create_controller(interface,
     controller_type = str(controller_type)
     if controller_type=='gaussian_process':
         controller = GaussianProcessController(interface, **controller_config_dict)
+    elif controller_type=='neural_net':
+        controller = NeuralNetController(interface, **controller_config_dict)
     elif controller_type=='differential_evolution':
         controller = DifferentialEvolutionController(interface, **controller_config_dict)
     elif controller_type=='nelder_mead':
@@ -521,11 +523,9 @@ class DifferentialEvolutionController(Controller):
         return self.learner_params_queue.get()
 
 
-
-
-class GaussianProcessController(Controller):
+class MachineLearnerController(Controller):
     '''
-    Controller for the Gaussian Process solver. Primarily suggests new points from the Gaussian Process learner. However, during the initial few runs it must rely on a different optimization algorithm to get some points to seed the learner. 
+    Abstract Controller class for the machine learning based solvers.  
     
     Args:
         interface (Interface): The interface to the experiment under optimization.
@@ -548,7 +548,8 @@ class GaussianProcessController(Controller):
                  learner_archive_filename = mll.default_learner_archive_filename,
                  learner_archive_file_type = mll.default_learner_archive_file_type,
                  **kwargs):
-        super(GaussianProcessController,self).__init__(interface, **kwargs)   
+        
+        super(MachineLearnerController,self).__init__(interface, **kwargs)   
         
         self.last_training_cost = None
         self.last_training_bad = None
@@ -603,27 +604,22 @@ class GaussianProcessController(Controller):
         self.archive_dict.update({'training_type':self.training_type})
         self._update_controller_with_learner_attributes()
         
-        self.gp_learner = mll.GaussianProcessLearner(start_datetime=self.start_datetime,
-                                                  num_params=num_params,
-                                                  min_boundary=min_boundary,
-                                                  max_boundary=max_boundary,
-                                                  trust_region=trust_region,
-                                                  learner_archive_filename=learner_archive_filename,
-                                                  learner_archive_file_type=learner_archive_file_type,
-                                                  **self.remaining_kwargs)
+    
+    def _update_controller_with_machine_learner_attributes(self):
         
-        self.gp_learner_params_queue = self.gp_learner.params_out_queue
-        self.gp_learner_costs_queue = self.gp_learner.costs_in_queue
-        self.end_gp_learner = self.gp_learner.end_event
-        self.new_params_event = self.gp_learner.new_params_event
-        self.remaining_kwargs = self.gp_learner.remaining_kwargs
-        self.generation_num = self.gp_learner.generation_num
+        self.ml_learner_params_queue = self.ml_learner.params_out_queue
+        self.ml_learner_costs_queue = self.ml_learner.costs_in_queue
+        self.end_ml_learner = self.ml_learner.end_event
+        self.new_params_event = self.ml_learner.new_params_event
+        self.remaining_kwargs = self.ml_learner.remaining_kwargs
+        self.generation_num = self.ml_learner.generation_num
+        
     
     def _put_params_and_out_dict(self, params):
         '''
         Override _put_params_and_out_dict function, used when the training learner creates parameters. Makes the defualt param_type the training type and sets last_training_run_flag.
         '''
-        super(GaussianProcessController,self)._put_params_and_out_dict(params, param_type=self.training_type)
+        super(MachineLearnerController,self)._put_params_and_out_dict(params, param_type=self.training_type)
         self.last_training_run_flag = True 
     
     def _get_cost_and_in_dict(self):
@@ -631,12 +627,12 @@ class GaussianProcessController(Controller):
         Call _get_cost_and_in_dict() of parent Controller class. But also sends cost to Gaussian process learner and saves the cost if the parameters came from a trainer. 
         
         '''
-        super(GaussianProcessController,self)._get_cost_and_in_dict()
+        super(MachineLearnerController,self)._get_cost_and_in_dict()
         if self.last_training_run_flag:
             self.last_training_cost = self.curr_cost
             self.last_training_bad = self.curr_bad
             self.last_training_run_flag = False
-        self.gp_learner_costs_queue.put((self.curr_params,
+        self.ml_learner_costs_queue.put((self.curr_params,
                                          self.curr_cost,
                                          self.curr_uncer,
                                          self.curr_bad))
@@ -667,9 +663,9 @@ class GaussianProcessController(Controller):
         '''
         Runs pararent method and also starts training_learner.
         '''
-        super(GaussianProcessController,self)._start_up()
+        super(MachineLearnerController,self)._start_up()
         self.log.debug('GP learner started.')
-        self.gp_learner.start()
+        self.ml_learner.start()
 
     def _optimization_routine(self):
         '''
@@ -701,22 +697,22 @@ class GaussianProcessController(Controller):
             self._get_cost_and_in_dict()
             self.log.debug('End training runs.')
         
-            gp_consec = 0
-            gp_count = 0    
+            ml_consec = 0
+            ml_count = 0    
         
         while self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1))
-            if gp_consec==self.generation_num or (self.no_delay and self.gp_learner_params_queue.empty()):
+            if ml_consec==self.generation_num or (self.no_delay and self.ml_learner_params_queue.empty()):
                 next_params = self._next_params()
                 self._put_params_and_out_dict(next_params)
-                gp_consec = 0
+                ml_consec = 0
             else:
-                next_params = self.gp_learner_params_queue.get()
-                super(GaussianProcessController,self)._put_params_and_out_dict(next_params, param_type='gaussian_process')
-                gp_consec += 1
-                gp_count += 1
+                next_params = self.ml_learner_params_queue.get()
+                super(MachineLearnerController,self)._put_params_and_out_dict(next_params, param_type='gaussian_process')
+                ml_consec += 1
+                ml_count += 1
             
-            if gp_count%self.generation_num == 2:
+            if ml_count%self.generation_num == 2:
                 self.new_params_event.set()
             
             self.save_archive()
@@ -728,13 +724,13 @@ class GaussianProcessController(Controller):
         Shutdown and clean up resources of the Gaussian process controller.
         '''
         self.log.debug('GP learner end set.')
-        self.end_gp_learner.set()
-        self.gp_learner.join()
+        self.end_ml_learner.set()
+        self.ml_learner.join()
         
         self.log.debug('GP learner joined')   
         last_dict = None
-        while not self.gp_learner_params_queue.empty():
-            last_dict = self.gp_learner_params_queue.get_nowait()
+        while not self.ml_learner_params_queue.empty():
+            last_dict = self.ml_learner_params_queue.get_nowait()
         if isinstance(last_dict, dict):
             try:
                 self.predicted_best_parameters = last_dict['predicted_best_parameters']
@@ -751,15 +747,15 @@ class GaussianProcessController(Controller):
                 pass
             self.archive_dict.update(last_dict)
         else:
-            if self.gp_learner.predict_global_minima_at_end or self.gp_learner.predict_local_minima_at_end:
-                self.log.info('GP Learner did not provide best and/or all minima.')
-        super(GaussianProcessController,self)._shut_down()
+            if self.ml_learner.predict_global_minima_at_end or self.ml_learner.predict_local_minima_at_end:
+                self.log.info('Machine Learner did not provide best and/or all minima.')
+        super(MachineLearnerController,self)._shut_down()
         
     def print_results(self):
         '''
         Adds some additional output to the results specific to controller. 
         '''
-        super(GaussianProcessController,self).print_results()
+        super(MachineLearnerController,self).print_results()
         try:
             self.log.info('Predicted best parameters:' + str(self.predicted_best_parameters))
             self.log.info('Predicted best cost:' + str(self.predicted_best_cost) + ' +/- ' + str(self.predicted_best_uncertainty))
@@ -771,7 +767,87 @@ class GaussianProcessController(Controller):
         except AttributeError:
             pass
 
-
+class GaussianProcessController(MachineLearnerController):
+    '''
+    Controller for the Gaussian Process solver. Primarily suggests new points from the Gaussian Process learner. However, during the initial few runs it must rely on a different optimization algorithm to get some points to seed the learner. 
     
+    Args:
+        interface (Interface): The interface to the experiment under optimization.
+        **kwargs (Optional [dict]): Dictionary of options to be passed to Controller parent class, initial training learner and Gaussian Process learner.
+    
+    Keyword Args:
+        
+    '''
+    
+    def __init__(self, interface, 
+                 num_params=None,
+                 min_boundary=None,
+                 max_boundary=None,
+                 trust_region=None, 
+                 learner_archive_filename = mll.default_learner_archive_filename,
+                 learner_archive_file_type = mll.default_learner_archive_file_type,
+                 **kwargs):
+        
+        super(GaussianProcessController,self).__init__(interface,
+                                                       num_params=num_params,
+                                                       min_boundary=min_boundary,
+                                                       max_boundary=max_boundary,
+                                                       trust_region=trust_region,
+                                                       learner_archive_filename=learner_archive_filename,
+                                                       learner_archive_file_type=learner_archive_file_type, 
+                                                       **kwargs)   
+        
+        self.ml_learner = mll.GaussianProcessLearner(start_datetime=self.start_datetime,
+                                                     num_params=num_params,
+                                                     min_boundary=min_boundary,
+                                                     max_boundary=max_boundary,
+                                                     trust_region=trust_region,
+                                                     learner_archive_filename=learner_archive_filename,
+                                                     learner_archive_file_type=learner_archive_file_type,
+                                                     **self.remaining_kwargs)
+        
+        self._update_controller_with_machine_learner_attributes()
+
+class NeuralNetController(MachineLearnerController):
+    '''
+    Controller for the Neural Net solver. Primarily suggests new points from the Neural Net learner. However, during the initial few runs it must rely on a different optimization algorithm to get some points to seed the learner. 
+    
+    Args:
+        interface (Interface): The interface to the experiment under optimization.
+        **kwargs (Optional [dict]): Dictionary of options to be passed to Controller parent class, initial training learner and Gaussian Process learner.
+    
+    Keyword Args:
+        
+    '''
+    
+    def __init__(self, interface, 
+                 num_params=None,
+                 min_boundary=None,
+                 max_boundary=None,
+                 trust_region=None, 
+                 learner_archive_filename = mll.default_learner_archive_filename,
+                 learner_archive_file_type = mll.default_learner_archive_file_type,
+                 **kwargs):
+        
+        super(GaussianProcessController,self).__init__(interface, 
+                                                       num_params=num_params,
+                                                       min_boundary=min_boundary,
+                                                       max_boundary=max_boundary,
+                                                       trust_region=trust_region,
+                                                       learner_archive_filename=learner_archive_filename,
+                                                       learner_archive_file_type=learner_archive_file_type, 
+                                                       **kwargs)   
+        
+        self.ml_learner = mll.NeuralNetLearner(start_datetime=self.start_datetime,
+                                               num_params=num_params,
+                                               min_boundary=min_boundary,
+                                               max_boundary=max_boundary,
+                                               trust_region=trust_region,
+                                               learner_archive_filename=learner_archive_filename,
+                                               learner_archive_file_type=learner_archive_file_type,
+                                               **self.remaining_kwargs)
+        
+        self._update_controller_with_machine_learner_attributes()
+
 
         
