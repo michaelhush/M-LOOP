@@ -32,7 +32,7 @@ class TestUnits(unittest.TestCase):
         controller = mlc.create_controller(interface, 
                                            max_num_runs = 5, 
                                            target_cost = -1,
-                                           max_num_runs_without_better_params = 2)
+                                           max_num_runs_without_better_params = 10)
         controller.optimize()
         self.assertTrue(controller.best_cost == 1.)
         self.assertTrue(np.array_equiv(np.array(controller.in_costs),

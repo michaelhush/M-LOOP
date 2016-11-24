@@ -675,7 +675,7 @@ class GaussianProcessController(Controller):
         '''
         Overrides _optimization_routine. Uses the parent routine for the training runs. Implements a customized _optimization_rountine when running the Gaussian Process learner. 
         '''
-        #Run the training runs using the standard optimization routine. Adjust the number of max_runs
+        #Run the training runs using the standard optimization routine.
         self.log.debug('Starting training optimization.')
         self.log.info('Run:' + str(self.num_in_costs +1))
         next_params = self._first_params()

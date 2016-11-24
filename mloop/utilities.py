@@ -57,6 +57,8 @@ def _config_logger(log_filename = default_log_filename,
         file_log_level (Optional[int]) : Level of log output for file, default is logging.DEBUG = 10
         console_log_level (Optional[int]) :Level of log output for console, defalut is logging.INFO = 20
     
+    Returns:
+        dictionary: Dict with extra keywords not used by the logging configuration.
     '''
     if not os.path.exists(log_foldername):
         os.makedirs(log_foldername)
