@@ -1675,7 +1675,7 @@ class NeuralNetLearner(Learner, mp.Process):
         '''
         return self.gaussian_process.predict(params[np.newaxis,:])
 
-    #--- FAKE NN CONSTRUCTOR END ---#
+    #--- FAKE NN METHODS END ---#
 
 
     def wait_for_new_params_event(self):
@@ -1853,7 +1853,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self.wait_for_new_params_event()
                 #self.log.debug('Gaussian process learner reading costs')
                 self.get_params_and_costs()
-                self.fit_gaussian_process()
+                self.fit_neural_net()
                 for _ in range(self.generation_num):
                     self.log.debug('Gaussian process learner generating parameter:'+ str(self.params_count+1))
                     next_params = self.find_next_parameters()
@@ -1864,7 +1864,7 @@ class NeuralNetLearner(Learner, mp.Process):
             pass
         if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
             self.get_params_and_costs()
-            self.fit_gaussian_process()
+            self.fit_neural_net()
         end_dict = {}
         if self.predict_global_minima_at_end:
             self.find_global_minima()
@@ -1904,6 +1904,7 @@ class NeuralNetLearner(Learner, mp.Process):
         for start_params in search_params:
             result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
             curr_best_params = result.x
+            # TODO: Doesn't apply to NN
             (curr_best_cost,curr_best_uncer) = self.gaussian_process.predict(curr_best_params[np.newaxis,:],return_std=True)
             if curr_best_cost<self.predicted_best_scaled_cost:
                 self.predicted_best_parameters = curr_best_params
@@ -1945,6 +1946,7 @@ class NeuralNetLearner(Learner, mp.Process):
         for start_params in self.all_params:
             result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
             curr_minima_params = result.x
+            # TODO: Doesn't apply to NN.
             (curr_minima_cost,curr_minima_uncer) = self.gaussian_process.predict(curr_minima_params[np.newaxis,:],return_std=True)
             if all( not np.all( np.abs(params - curr_minima_params) < self.minima_tolerance ) for params in self.local_minima_parameters):
                 #Non duplicate point so add to the list
