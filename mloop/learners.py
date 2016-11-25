@@ -1617,11 +1617,10 @@ class NeuralNetLearner(Learner, mp.Process):
 
     def create_neural_net(self):
         '''
-        TO DO: Implement correctly
-
         Create the nerual net.
 
         '''
+        #TODO: Do.
         gp_kernel = skk.RBF(length_scale=self.length_scale) + skk.WhiteKernel(noise_level=self.noise_level)
 
         if self.update_hyperparameters:
@@ -1631,13 +1630,12 @@ class NeuralNetLearner(Learner, mp.Process):
 
     def fit_neural_net(self):
         '''
-        TO DO: Implement correctly
-
         Determine the appropriate number of layers for the NN given the data.
 
         Fit the Neural Net with the appropriate topology to the data
 
         '''
+        #TODO: Do.
         self.log.debug('Fitting Gaussian process.')
         if self.all_params.size==0 or self.all_costs.size==0 or self.all_uncers.size==0:
             self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
@@ -1673,6 +1671,7 @@ class NeuralNetLearner(Learner, mp.Process):
         Returns:
             float : Predicted cost at paramters
         '''
+        #TODO: Do.
         return self.gaussian_process.predict(params[np.newaxis,:])
 
     #--- FAKE NN METHODS END ---#
@@ -1689,7 +1688,7 @@ class NeuralNetLearner(Learner, mp.Process):
             else:
                 continue
         else:
-            self.log.debug('GaussianProcessLearner end signal received. Ending')
+            self.log.debug('NeuralNetLearner end signal received. Ending')
             raise LearnerInterrupt
 
 
@@ -1698,7 +1697,7 @@ class NeuralNetLearner(Learner, mp.Process):
         Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region.
         '''
         if self.costs_in_queue.empty():
-            self.log.error('Gaussian process asked for new parameters but no new costs were provided.')
+            self.log.error('Neural network asked for new parameters but no new costs were provided.')
             raise ValueError
 
         new_params = []
@@ -1722,10 +1721,10 @@ class NeuralNetLearner(Learner, mp.Process):
 
             param = np.array(param, dtype=float)
             if not self.check_num_params(param):
-                self.log.error('Incorrect number of parameters provided to Gaussian process learner:' + repr(param) + '. Number of parameters:' + str(self.num_params))
+                self.log.error('Incorrect number of parameters provided to neural network learner:' + repr(param) + '. Number of parameters:' + str(self.num_params))
                 raise ValueError
             if not self.check_in_boundary(param):
-                self.log.warning('Parameters provided to Gaussian process learner not in boundaries:' + repr(param))
+                self.log.warning('Parameters provided to neural network learner not in boundaries:' + repr(param))
             cost = float(cost)
             if uncer < 0:
                 self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
@@ -1821,18 +1820,18 @@ class NeuralNetLearner(Learner, mp.Process):
 
     def find_next_parameters(self):
         '''
-        Returns next parameters to find. Increments counters and bias function appropriately.
+        Returns next parameters to find. Increments counters appropriately.
 
         Return:
-            next_params (array): Returns next parameters from biased cost search.
+            next_params (array): Returns next parameters from cost search.
         '''
+        # TODO: We could implement some other type of biasing.
         self.params_count += 1
-        self.update_bias_function()
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
         for start_params in self.search_params:
-            result = so.minimize(self.predict_biased_cost, start_params, bounds = self.search_region, tol=self.search_precision)
+            result = so.minimize(self.predict_cost, start_params, bounds = self.search_region, tol=self.search_precision)
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
@@ -1840,7 +1839,7 @@ class NeuralNetLearner(Learner, mp.Process):
 
     def run(self):
         '''
-        Starts running the Gaussian process learner. When the new parameters event is triggered, reads the cost information provided and updates the Gaussian process with the information. Then searches the Gaussian process for new optimal parameters to test based on the biased cost. Parameters to test next are put on the output parameters queue.
+        Starts running the neural network learner. When the new parameters event is triggered, reads the cost information provided and updates the neural network with the information. Then searches the neural network for new optimal parameters to test based on the biased cost. Parameters to test next are put on the output parameters queue.
         '''
         #logging to the main log file from a process (as apposed to a thread) in cpython is currently buggy on windows and/or python 2.7
         #current solution is to only log to the console for warning and above from a process
@@ -1855,7 +1854,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self.get_params_and_costs()
                 self.fit_neural_net()
                 for _ in range(self.generation_num):
-                    self.log.debug('Gaussian process learner generating parameter:'+ str(self.params_count+1))
+                    self.log.debug('Neural network learner generating parameter:'+ str(self.params_count+1))
                     next_params = self.find_next_parameters()
                     self.params_out_queue.put(next_params)
                     if self.end_event.is_set():
@@ -1869,16 +1868,14 @@ class NeuralNetLearner(Learner, mp.Process):
         if self.predict_global_minima_at_end:
             self.find_global_minima()
             end_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
-                             'predicted_best_cost':self.predicted_best_cost,
-                             'predicted_best_uncertainty':self.predicted_best_uncertainty})
+                             'predicted_best_cost':self.predicted_best_cost})
         if self.predict_local_minima_at_end:
             self.find_local_minima()
             end_dict.update({'local_minima_parameters':self.local_minima_parameters,
-                             'local_minima_costs':self.local_minima_costs,
-                             'local_minima_uncers':self.local_minima_uncers})
+                             'local_minima_costs':self.local_minima_costs})
         self.params_out_queue.put(end_dict)
         self._shut_down()
-        self.log.debug('Ended Gaussian Process Learner')
+        self.log.debug('Ended neural network learner')
 
     def find_global_minima(self):
         '''
@@ -1887,13 +1884,11 @@ class NeuralNetLearner(Learner, mp.Process):
         Attributes:
             predicted_best_parameters (array): the parameters for the predicted global minima
             predicted_best_cost (float): the cost at the predicted global minima
-            predicted_best_uncertainty (float): the uncertainty of the predicted global minima
         '''
         self.log.debug('Started search for predicted global minima.')
 
         self.predicted_best_parameters = None
         self.predicted_best_scaled_cost = float('inf')
-        self.predicted_best_scaled_uncertainty = None
 
         search_params = []
         search_params.append(self.best_params)
@@ -1902,23 +1897,19 @@ class NeuralNetLearner(Learner, mp.Process):
 
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         for start_params in search_params:
+            # TODO: Take advantage of the fact that we get the gradient for free, so can use that to speed up the minimizer.
             result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
             curr_best_params = result.x
-            # TODO: Doesn't apply to NN
-            (curr_best_cost,curr_best_uncer) = self.gaussian_process.predict(curr_best_params[np.newaxis,:],return_std=True)
+            curr_best_cost = result.fun
             if curr_best_cost<self.predicted_best_scaled_cost:
                 self.predicted_best_parameters = curr_best_params
                 self.predicted_best_scaled_cost = curr_best_cost
-                self.predicted_best_scaled_uncertainty = curr_best_uncer
 
         self.predicted_best_cost = self.cost_scaler.inverse_transform(self.predicted_best_scaled_cost)
-        self.predicted_best_uncertainty = self.predicted_best_scaled_uncertainty / self.cost_scaler.scale_
 
         self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                                   'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
-                                  'predicted_best_scaled_uncertainty':self.predicted_best_scaled_uncertainty,
-                                  'predicted_best_cost':self.predicted_best_cost,
-                                  'predicted_best_uncertainty':self.predicted_best_uncertainty})
+                                  'predicted_best_cost':self.predicted_best_cost})
 
         self.has_global_minima = True
         self.log.debug('Predicted global minima found.')
@@ -1930,7 +1921,6 @@ class NeuralNetLearner(Learner, mp.Process):
         Attributes:
             local_minima_parameters (list): list of all the parameters for local minima.
             local_minima_costs (list): list of all the costs at local minima.
-            local_minima_uncers (list): list of all the uncertainties at local minima.
 
         '''
         self.log.info('Searching for all minima.')
@@ -1940,25 +1930,22 @@ class NeuralNetLearner(Learner, mp.Process):
         self.number_of_local_minima = 0
         self.local_minima_parameters = []
         self.local_minima_costs = []
-        self.local_minima_uncers = []
 
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         for start_params in self.all_params:
+            # TODO: Take advantage of the fact that we get the gradient for free, so can use that to speed up the minimizer.
             result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
             curr_minima_params = result.x
-            # TODO: Doesn't apply to NN.
-            (curr_minima_cost,curr_minima_uncer) = self.gaussian_process.predict(curr_minima_params[np.newaxis,:],return_std=True)
+            curr_minima_cost = result.fun
             if all( not np.all( np.abs(params - curr_minima_params) < self.minima_tolerance ) for params in self.local_minima_parameters):
                 #Non duplicate point so add to the list
                 self.number_of_local_minima += 1
                 self.local_minima_parameters.append(curr_minima_params)
                 self.local_minima_costs.append(curr_minima_cost)
-                self.local_minima_uncers.append(curr_minima_uncer)
 
         self.archive_dict.update({'number_of_local_minima':self.number_of_local_minima,
                                   'local_minima_parameters':self.local_minima_parameters,
-                                  'local_minima_costs':self.local_minima_costs,
-                                  'local_minima_uncers':self.local_minima_uncers})
+                                  'local_minima_costs':self.local_minima_costs})
 
         self.has_local_minima = True
         self.log.info('Search completed')
