@@ -91,6 +91,7 @@ class Learner():
             self.min_boundary = np.full((self.num_params,), -1.0)
         else:
             self.min_boundary = np.array(min_boundary, dtype=np.float)
+            
         if self.min_boundary.shape != (self.num_params,):
             self.log.error('min_boundary array the wrong shape:' + repr(self.min_boundary.shape))
             raise ValueError
@@ -129,6 +130,9 @@ class Learner():
                              'start_datetime':mlu.datetime_to_string(self.start_datetime)}
         
         self.log.debug('Learner init completed.')   
+        
+        
+        
         
     def check_num_params(self,param):
         '''
@@ -918,12 +922,12 @@ class GaussianProcessLearner(Learner, mp.Process):
             
             #Basic optimization settings
             num_params = int(self.training_dict['num_params'])
-            min_boundary = np.squeeze(np.array(self.training_dict['min_boundary'], dtype=float))
-            max_boundary = np.squeeze(np.array(self.training_dict['max_boundary'], dtype=float))
+            min_boundary = mlu.safe_cast_to_list(self.training_dict['min_boundary'])
+            max_boundary = mlu.safe_cast_to_list(self.training_dict['max_boundary'])
             
             #Configuration of the learner
             self.cost_has_noise = bool(self.training_dict['cost_has_noise'])
-            self.length_scale = np.squeeze(np.array(self.training_dict['length_scale']))
+            self.length_scale = mlu.safe_squeeze(self.training_dict['length_scale'])
             self.length_scale_history = list(self.training_dict['length_scale_history'])
             self.noise_level = float(self.training_dict['noise_level'])
             self.noise_level_history = mlu.safe_cast_to_list(self.training_dict['noise_level_history'])
@@ -935,20 +939,20 @@ class GaussianProcessLearner(Learner, mp.Process):
             
             #Data from previous experiment
             self.all_params = np.array(self.training_dict['all_params'], dtype=float)
-            self.all_costs = np.squeeze(np.array(self.training_dict['all_costs'], dtype=float))
-            self.all_uncers = np.squeeze(np.array(self.training_dict['all_uncers'], dtype=float))
+            self.all_costs = mlu.safe_squeeze(self.training_dict['all_costs'])
+            self.all_uncers = mlu.safe_squeeze(self.training_dict['all_uncers'])
             
             self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
             
             #Derived properties
             self.best_cost = float(self.training_dict['best_cost'])
-            self.best_params = np.squeeze(np.array(self.training_dict['best_params'], dtype=float))
+            self.best_params = mlu.safe_squeeze(self.training_dict['best_params'])
             self.best_index = int(self.training_dict['best_index'])
             self.worst_cost = float(self.training_dict['worst_cost'])
             self.worst_index = int(self.training_dict['worst_index'])
             self.cost_range = float(self.training_dict['cost_range'])
             try:
-                self.predicted_best_parameters = np.squeeze(np.array(self.training_dict['predicted_best_parameters']))
+                self.predicted_best_parameters = mlu.safe_squeeze(self.training_dict['predicted_best_parameters'])
                 self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
                 self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
                 self.has_global_minima = True
@@ -969,7 +973,6 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.has_local_minima = True
             except KeyError:
                 self.has_local_minima = False
-            
         
             super(GaussianProcessLearner,self).__init__(num_params=num_params,
                              min_boundary=min_boundary, 
@@ -1024,9 +1027,6 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.bias_func_cost_factor = [1.0,1.0,1.0,1.0] 
         self.bias_func_uncer_factor =[0.0,1.0,2.0,3.0]
         self.generation_num = self.bias_func_cycle
-        if self.generation_num < 3:
-            self.log.error('Number in generation must be larger than 2.')
-            raise ValueError
         
         #Constants, limits and tolerances
         self.search_precision = 1.0e-6
@@ -1188,7 +1188,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.cost_range = self.worst_cost - self.best_cost
                 if not self.bad_defaults_set:
                     update_bads_flag = True
-            
+        
             new_params.append(param)
             new_costs.append(cost)
             new_uncers.append(uncer)
@@ -1263,13 +1263,13 @@ class GaussianProcessLearner(Learner, mp.Process):
                                   'update_hyperparameters':self.update_hyperparameters,
                                   'length_scale':self.length_scale,
                                   'noise_level':self.noise_level})    
-        
 
-    
+
     def fit_gaussian_process(self):
         '''
         Fit the Gaussian process to the current data
         '''
+        print('3-1')
         self.log.debug('Fitting Gaussian process.')
         if self.all_params.size==0 or self.all_costs.size==0 or self.all_uncers.size==0:
             self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
@@ -1279,6 +1279,7 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.gaussian_process.alpha_ = self.scaled_uncers
         self.gaussian_process.fit(self.all_params,self.scaled_costs)
         
+        print('3-2')
         if self.update_hyperparameters:
             
             self.fit_count += 1
@@ -1296,6 +1297,9 @@ class GaussianProcessLearner(Learner, mp.Process):
             else:
                 self.length_scale = last_hyperparameters['length_scale']
                 self.length_scale_history.append(self.length_scale)
+        print('3-3')
+        print(repr(self.length_scale))
+        print(repr(self.noise_level))
         
             
     def update_bias_function(self):
@@ -1313,7 +1317,10 @@ class GaussianProcessLearner(Learner, mp.Process):
         Returns:
             pred_bias_cost (float): Biased cost predicted at the given parameters
         '''
+        #print('2-8-1-1.')
+        #(pred_cost, pred_uncer) = (self.gaussian_process.predict(params[np.newaxis,:]), 0.1)
         (pred_cost, pred_uncer) = self.gaussian_process.predict(params[np.newaxis,:], return_std=True)
+        #print('2-8-1-2.')
         return self.cost_bias*pred_cost - self.uncer_bias*pred_uncer
     
     def find_next_parameters(self):
@@ -1324,15 +1331,20 @@ class GaussianProcessLearner(Learner, mp.Process):
             next_params (array): Returns next parameters from biased cost search.
         '''
         self.params_count += 1
+        print('2-6.')
         self.update_bias_function()
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
+        print('2-7.')
         for start_params in self.search_params:
+            print('2-8-1.')
             result = so.minimize(self.predict_biased_cost, start_params, bounds = self.search_region, tol=self.search_precision)
+            print('2-8-2.')
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
+        print('2-9.')
         return next_params
     
     def run(self):
@@ -1347,13 +1359,18 @@ class GaussianProcessLearner(Learner, mp.Process):
             while not self.end_event.is_set():
                 #self.log.debug('Learner waiting for new params event')
                 self.save_archive()
+                print('2-1.')
                 self.wait_for_new_params_event()
                 #self.log.debug('Gaussian process learner reading costs')
+                print('2-2.')
                 self.get_params_and_costs()
+                print('2-4.')
                 self.fit_gaussian_process()
                 for _ in range(self.generation_num):
+                    print('2-5.')
                     self.log.debug('Gaussian process learner generating parameter:'+ str(self.params_count+1))
                     next_params = self.find_next_parameters()
+                    print('2-10.')
                     self.params_out_queue.put(next_params)
                     if self.end_event.is_set():
                         raise LearnerInterrupt()
@@ -1520,41 +1537,106 @@ class NeuralNetLearner(Learner, mp.Process):
                  predict_local_minima_at_end = False,
                  **kwargs):
         
-       
+        if nn_training_filename is not None:
             
-        super(NeuralNetLearner,self).__init__(**kwargs)
-        
-        #Storage variables, archived
-        self.all_params = np.array([], dtype=float)
-        self.all_costs = np.array([], dtype=float)
-        self.all_uncers = np.array([], dtype=float)
-        self.bad_run_indexs = []
-        self.best_cost = float('inf')
-        self.best_params = float('nan')
-        self.best_index = 0
-        self.worst_cost = float('-inf')
-        self.worst_index = 0
-        self.cost_range = float('inf')
-        self.length_scale_history = []
-        self.noise_level_history = []
-        
-        self.costs_count = 0
-        self.fit_count = 0
-        self.params_count = 0
-        
-        self.has_local_minima = False
-        self.has_global_minima = False
+            nn_training_filename = str(nn_training_filename)
+            nn_training_file_type = str(nn_training_file_type)
+            if not mlu.check_file_type_supported(nn_training_file_type):
+                self.log.error('GP training file type not supported' + repr(nn_training_file_type))
             
+            self.training_dict = mlu.get_dict_from_file(nn_training_filename, nn_training_file_type)
+            
+            #Basic optimization settings
+            num_params = int(self.training_dict['num_params'])
+            min_boundary = mlu.safe_cast_to_list(self.training_dict['min_boundary'])
+            max_boundary = mlu.safe_cast_to_list(self.training_dict['max_boundary'])
+            
+            #Counters
+            self.costs_count = int(self.training_dict['costs_count'])
+            self.fit_count = int(self.training_dict['fit_count'])
+            self.params_count = int(self.training_dict['params_count'])
+            
+            #Data from previous experiment
+            self.all_params = np.array(self.training_dict['all_params'], dtype=float)
+            self.all_costs = mlu.safe_squeeze(self.training_dict['all_costs'])
+            self.all_uncers = mlu.safe_squeeze(self.training_dict['all_uncers'])
+            
+            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
+            
+            #Derived properties
+            self.best_cost = float(self.training_dict['best_cost'])
+            self.best_params = mlu.safe_squeeze(self.training_dict['best_params'])
+            self.best_index = int(self.training_dict['best_index'])
+            self.worst_cost = float(self.training_dict['worst_cost'])
+            self.worst_index = int(self.training_dict['worst_index'])
+            self.cost_range = float(self.training_dict['cost_range'])
+            
+            #Configuration of the fake neural net learner
+            self.length_scale = mlu.safe_squeeze(self.training_dict['length_scale'])
+            self.noise_level = float(self.training_dict['noise_level'])
+            
+            
+            try:
+                self.predicted_best_parameters = mlu.safe_squeeze(self.training_dict['predicted_best_parameters'])
+                self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
+                self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
+                self.has_global_minima = True
+            except KeyError:
+                self.has_global_minima = False
+            try:
+                self.local_minima_parameters = list(self.training_dict['local_minima_parameters'])
+                
+                if isinstance(self.training_dict['local_minima_costs'], np.ndarray):
+                    self.local_minima_costs = list(np.squeeze(self.training_dict['local_minima_costs']))
+                else:
+                    self.local_minima_costs = list(self.training_dict['local_minima_costs'])
+                if isinstance(self.training_dict['local_minima_uncers'], np.ndarray):
+                    self.local_minima_uncers = list(np.squeeze(self.training_dict['local_minima_uncers']))
+                else:
+                    self.local_minima_uncers = list(self.training_dict['local_minima_uncers'])
+                
+                self.has_local_minima = True
+            except KeyError:
+                self.has_local_minima = False
+        
+            super(NeuralNetLearner,self).__init__(num_params=num_params,
+                             min_boundary=min_boundary, 
+                             max_boundary=max_boundary, 
+                             **kwargs)
+        else:
+            
+            super(NeuralNetLearner,self).__init__(**kwargs)
+        
+            #Storage variables, archived
+            self.all_params = np.array([], dtype=float)
+            self.all_costs = np.array([], dtype=float)
+            self.all_uncers = np.array([], dtype=float)
+            self.bad_run_indexs = []
+            self.best_cost = float('inf')
+            self.best_params = float('nan')
+            self.best_index = 0
+            self.worst_cost = float('-inf')
+            self.worst_index = 0
+            self.cost_range = float('inf')
+            self.length_scale_history = []
+            self.noise_level_history = []
+        
+            self.costs_count = 0
+            self.fit_count = 0
+            self.params_count = 0
+            
+            self.has_local_minima = False
+            self.has_global_minima = False
+                
         #Multiprocessor controls
         self.new_params_event = mp.Event()
         
         #Storage variables and counters
         self.search_params = []
         self.scaled_costs = None
-        self.cost_bias = None
-        self.uncer_bias = None
         
         #Constants, limits and tolerances
+        self.generation_num = 1
         self.search_precision = 1.0e-6
         self.parameter_searches = max(10,self.num_params)
         self.hyperparameter_searches = max(10,self.num_params)
@@ -1572,6 +1654,13 @@ class NeuralNetLearner(Learner, mp.Process):
             self.default_bad_uncertainty = float(default_bad_uncertainty)
         else:
             self.default_bad_uncertainty = None
+        if (self.default_bad_cost is None) and (self.default_bad_uncertainty is None):
+            self.bad_defaults_set = False
+        elif (self.default_bad_cost is not None) and (self.default_bad_uncertainty is not None):
+            self.bad_defaults_set = True
+        else:
+            self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
+            raise ValueError
         
         self._set_trust_region(trust_region)
         
@@ -1590,7 +1679,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.cost_has_noise = True
         self.noise_level = 1
         
-        self.create_nerual_net()
+        self.create_neural_net()
         
         
         
@@ -1638,6 +1727,7 @@ class NeuralNetLearner(Learner, mp.Process):
         Fit the Neural Net with the appropriate topology to the data
         
         '''
+        
         self.log.debug('Fitting Gaussian process.')
         if self.all_params.size==0 or self.all_costs.size==0 or self.all_uncers.size==0:
             self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
@@ -1674,7 +1764,17 @@ class NeuralNetLearner(Learner, mp.Process):
             float : Predicted cost at paramters
         '''
         return self.gaussian_process.predict(params[np.newaxis,:])
-    
+
+
+    def predict_costs_from_param_array(self,params):
+        '''
+        Produces a prediction of costs from an array of params.
+         
+        Returns:
+            float : Predicted cost at paramters
+        '''
+        return self.gaussian_process.predict(params)
+ 
     #--- FAKE NN CONSTRUCTOR END ---#
 
     
@@ -1817,7 +1917,9 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'fit_count':self.fit_count,
                                   'costs_count':self.costs_count,
                                   'params_count':self.params_count,
-                                  'update_hyperparameters':self.update_hyperparameters})    
+                                  'update_hyperparameters':self.update_hyperparameters,
+                                  'length_scale':self.length_scale,
+                                  'noise_level':self.noise_level})    
 
     def find_next_parameters(self):
         '''
@@ -1827,12 +1929,11 @@ class NeuralNetLearner(Learner, mp.Process):
             next_params (array): Returns next parameters from biased cost search.
         '''
         self.params_count += 1
-        self.update_bias_function()
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
         for start_params in self.search_params:
-            result = so.minimize(self.predict_biased_cost, start_params, bounds = self.search_region, tol=self.search_precision)
+            result = so.minimize(self.predict_cost, start_params, bounds = self.search_region, tol=self.search_precision)
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
@@ -1853,7 +1954,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self.wait_for_new_params_event()
                 #self.log.debug('Gaussian process learner reading costs')
                 self.get_params_and_costs()
-                self.fit_gaussian_process()
+                self.fit_neural_net()
                 for _ in range(self.generation_num):
                     self.log.debug('Gaussian process learner generating parameter:'+ str(self.params_count+1))
                     next_params = self.find_next_parameters()
@@ -1864,7 +1965,7 @@ class NeuralNetLearner(Learner, mp.Process):
             pass
         if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
             self.get_params_and_costs()
-            self.fit_gaussian_process()
+            self.fit_neural_net()
         end_dict = {}
         if self.predict_global_minima_at_end:
             self.find_global_minima()
