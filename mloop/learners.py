@@ -1484,7 +1484,7 @@ class NeuralNetLearner(Learner, mp.Process):
         default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
         minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
         predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
-        predict_local_minima_at_end (Optional [bool]): If True finds the all minima when the learner is ended. Does not if False. Default False.
+        predict_local_minima_at_end (Optional [bool]): If True finds all minima when the learner is ended. Does not if False. Default False.
 
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
@@ -1590,13 +1590,13 @@ class NeuralNetLearner(Learner, mp.Process):
         self.cost_has_noise = True
         self.noise_level = 1
 
-        self.create_nerual_net()
+        self.create_neural_net()
 
 
 
         #--- FAKE NN CONSTRUCTOR END ---#
 
-        self.archive_dict.update({'archive_type':'nerual_net_learner',
+        self.archive_dict.update({'archive_type':'neural_net_learner',
                                   'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
@@ -1617,7 +1617,7 @@ class NeuralNetLearner(Learner, mp.Process):
 
     def create_neural_net(self):
         '''
-        Create the nerual net.
+        Create the neural net.
 
         '''
         #TODO: Do.
