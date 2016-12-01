@@ -1269,7 +1269,6 @@ class GaussianProcessLearner(Learner, mp.Process):
         '''
         Fit the Gaussian process to the current data
         '''
-        print('3-1')
         self.log.debug('Fitting Gaussian process.')
         if self.all_params.size==0 or self.all_costs.size==0 or self.all_uncers.size==0:
             self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
@@ -1279,7 +1278,6 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.gaussian_process.alpha_ = self.scaled_uncers
         self.gaussian_process.fit(self.all_params,self.scaled_costs)
         
-        print('3-2')
         if self.update_hyperparameters:
             
             self.fit_count += 1
@@ -1297,10 +1295,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             else:
                 self.length_scale = last_hyperparameters['length_scale']
                 self.length_scale_history.append(self.length_scale)
-        print('3-3')
-        print(repr(self.length_scale))
-        print(repr(self.noise_level))
-        
+                
             
     def update_bias_function(self):
         '''
@@ -1317,10 +1312,7 @@ class GaussianProcessLearner(Learner, mp.Process):
         Returns:
             pred_bias_cost (float): Biased cost predicted at the given parameters
         '''
-        #print('2-8-1-1.')
-        #(pred_cost, pred_uncer) = (self.gaussian_process.predict(params[np.newaxis,:]), 0.1)
         (pred_cost, pred_uncer) = self.gaussian_process.predict(params[np.newaxis,:], return_std=True)
-        #print('2-8-1-2.')
         return self.cost_bias*pred_cost - self.uncer_bias*pred_uncer
     
     def find_next_parameters(self):
@@ -1331,20 +1323,15 @@ class GaussianProcessLearner(Learner, mp.Process):
             next_params (array): Returns next parameters from biased cost search.
         '''
         self.params_count += 1
-        print('2-6.')
         self.update_bias_function()
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
-        print('2-7.')
         for start_params in self.search_params:
-            print('2-8-1.')
             result = so.minimize(self.predict_biased_cost, start_params, bounds = self.search_region, tol=self.search_precision)
-            print('2-8-2.')
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
-        print('2-9.')
         return next_params
     
     def run(self):
@@ -1359,18 +1346,13 @@ class GaussianProcessLearner(Learner, mp.Process):
             while not self.end_event.is_set():
                 #self.log.debug('Learner waiting for new params event')
                 self.save_archive()
-                print('2-1.')
                 self.wait_for_new_params_event()
                 #self.log.debug('Gaussian process learner reading costs')
-                print('2-2.')
                 self.get_params_and_costs()
-                print('2-4.')
                 self.fit_gaussian_process()
                 for _ in range(self.generation_num):
-                    print('2-5.')
                     self.log.debug('Gaussian process learner generating parameter:'+ str(self.params_count+1))
                     next_params = self.find_next_parameters()
-                    print('2-10.')
                     self.params_out_queue.put(next_params)
                     if self.end_event.is_set():
                         raise LearnerInterrupt()
