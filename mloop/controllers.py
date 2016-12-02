@@ -12,7 +12,7 @@ import logging
 import os
 
 controller_dict = {'random':1,'nelder_mead':2,'gaussian_process':3,'differential_evolution':4,'neural_net':5}
-number_of_controllers = 4
+number_of_controllers = len(controller_dict)
 default_controller_archive_filename = 'controller_archive'
 default_controller_archive_file_type = 'txt'
 
