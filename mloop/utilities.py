@@ -197,7 +197,23 @@ def safe_cast_to_list(in_array):
         out_list = list(in_array)
     
     return out_list
+
+def safe_squeeze(in_array, set_dtype = float):
+    '''
+    Attempts to squeeze an array, but has a different behavior for arrays with only a single value. 
     
+    Args:
+        in_array (array): The array to be squeezed
+    
+    Returns:
+        array: Array.
+    '''
+    
+    out_array = np.squeeze(np.array(in_array, dtype=set_dtype))
+    if out_array.shape == ():
+        out_array = np.array([out_array[()]])
+    
+    return out_array
     
 class NullQueueListener():
     '''

@@ -91,6 +91,7 @@ class Learner():
             self.min_boundary = np.full((self.num_params,), -1.0)
         else:
             self.min_boundary = np.array(min_boundary, dtype=np.float)
+            
         if self.min_boundary.shape != (self.num_params,):
             self.log.error('min_boundary array the wrong shape:' + repr(self.min_boundary.shape))
             raise ValueError
@@ -127,9 +128,9 @@ class Learner():
                              'min_boundary':self.min_boundary,
                              'max_boundary':self.max_boundary,
                              'start_datetime':mlu.datetime_to_string(self.start_datetime)}
-
-        self.log.debug('Learner init completed.')
-
+        
+        self.log.debug('Learner init completed.')   
+        
     def check_num_params(self,param):
         '''
         Check the number of parameters is right.
@@ -918,12 +919,12 @@ class GaussianProcessLearner(Learner, mp.Process):
 
             #Basic optimization settings
             num_params = int(self.training_dict['num_params'])
-            min_boundary = np.squeeze(np.array(self.training_dict['min_boundary'], dtype=float))
-            max_boundary = np.squeeze(np.array(self.training_dict['max_boundary'], dtype=float))
-
+            min_boundary = mlu.safe_cast_to_list(self.training_dict['min_boundary'])
+            max_boundary = mlu.safe_cast_to_list(self.training_dict['max_boundary'])
+            
             #Configuration of the learner
             self.cost_has_noise = bool(self.training_dict['cost_has_noise'])
-            self.length_scale = np.squeeze(np.array(self.training_dict['length_scale']))
+            self.length_scale = mlu.safe_squeeze(self.training_dict['length_scale'])
             self.length_scale_history = list(self.training_dict['length_scale_history'])
             self.noise_level = float(self.training_dict['noise_level'])
             self.noise_level_history = mlu.safe_cast_to_list(self.training_dict['noise_level_history'])
@@ -935,20 +936,20 @@ class GaussianProcessLearner(Learner, mp.Process):
 
             #Data from previous experiment
             self.all_params = np.array(self.training_dict['all_params'], dtype=float)
-            self.all_costs = np.squeeze(np.array(self.training_dict['all_costs'], dtype=float))
-            self.all_uncers = np.squeeze(np.array(self.training_dict['all_uncers'], dtype=float))
-
-            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])
-
+            self.all_costs = mlu.safe_squeeze(self.training_dict['all_costs'])
+            self.all_uncers = mlu.safe_squeeze(self.training_dict['all_uncers'])
+            
+            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
+            
             #Derived properties
             self.best_cost = float(self.training_dict['best_cost'])
-            self.best_params = np.squeeze(np.array(self.training_dict['best_params'], dtype=float))
+            self.best_params = mlu.safe_squeeze(self.training_dict['best_params'])
             self.best_index = int(self.training_dict['best_index'])
             self.worst_cost = float(self.training_dict['worst_cost'])
             self.worst_index = int(self.training_dict['worst_index'])
             self.cost_range = float(self.training_dict['cost_range'])
             try:
-                self.predicted_best_parameters = np.squeeze(np.array(self.training_dict['predicted_best_parameters']))
+                self.predicted_best_parameters = mlu.safe_squeeze(self.training_dict['predicted_best_parameters'])
                 self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
                 self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
                 self.has_global_minima = True
@@ -969,7 +970,6 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.has_local_minima = True
             except KeyError:
                 self.has_local_minima = False
-
 
             super(GaussianProcessLearner,self).__init__(num_params=num_params,
                              min_boundary=min_boundary,
@@ -1024,10 +1024,7 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.bias_func_cost_factor = [1.0,1.0,1.0,1.0]
         self.bias_func_uncer_factor =[0.0,1.0,2.0,3.0]
         self.generation_num = self.bias_func_cycle
-        if self.generation_num < 3:
-            self.log.error('Number in generation must be larger than 2.')
-            raise ValueError
-
+        
         #Constants, limits and tolerances
         self.search_precision = 1.0e-6
         self.parameter_searches = max(10,self.num_params)
@@ -1189,7 +1186,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.cost_range = self.worst_cost - self.best_cost
                 if not self.bad_defaults_set:
                     update_bads_flag = True
-
+        
             new_params.append(param)
             new_costs.append(cost)
             new_uncers.append(uncer)
@@ -1264,7 +1261,6 @@ class GaussianProcessLearner(Learner, mp.Process):
                                   'update_hyperparameters':self.update_hyperparameters,
                                   'length_scale':self.length_scale,
                                   'noise_level':self.noise_level})
-
 
 
     def fit_gaussian_process(self):
@@ -1521,42 +1517,107 @@ class NeuralNetLearner(Learner, mp.Process):
                  predict_global_minima_at_end = True,
                  predict_local_minima_at_end = False,
                  **kwargs):
-
-
-
-        super(NeuralNetLearner,self).__init__(**kwargs)
-
-        #Storage variables, archived
-        self.all_params = np.array([], dtype=float)
-        self.all_costs = np.array([], dtype=float)
-        self.all_uncers = np.array([], dtype=float)
-        self.bad_run_indexs = []
-        self.best_cost = float('inf')
-        self.best_params = float('nan')
-        self.best_index = 0
-        self.worst_cost = float('-inf')
-        self.worst_index = 0
-        self.cost_range = float('inf')
-        self.length_scale_history = []
-        self.noise_level_history = []
-
-        self.costs_count = 0
-        self.fit_count = 0
-        self.params_count = 0
-
-        self.has_local_minima = False
-        self.has_global_minima = False
-
+        
+        if nn_training_filename is not None:
+            
+            nn_training_filename = str(nn_training_filename)
+            nn_training_file_type = str(nn_training_file_type)
+            if not mlu.check_file_type_supported(nn_training_file_type):
+                self.log.error('GP training file type not supported' + repr(nn_training_file_type))
+            
+            self.training_dict = mlu.get_dict_from_file(nn_training_filename, nn_training_file_type)
+            
+            #Basic optimization settings
+            num_params = int(self.training_dict['num_params'])
+            min_boundary = mlu.safe_cast_to_list(self.training_dict['min_boundary'])
+            max_boundary = mlu.safe_cast_to_list(self.training_dict['max_boundary'])
+            
+            #Counters
+            self.costs_count = int(self.training_dict['costs_count'])
+            self.fit_count = int(self.training_dict['fit_count'])
+            self.params_count = int(self.training_dict['params_count'])
+            
+            #Data from previous experiment
+            self.all_params = np.array(self.training_dict['all_params'], dtype=float)
+            self.all_costs = mlu.safe_squeeze(self.training_dict['all_costs'])
+            self.all_uncers = mlu.safe_squeeze(self.training_dict['all_uncers'])
+            
+            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
+            
+            #Derived properties
+            self.best_cost = float(self.training_dict['best_cost'])
+            self.best_params = mlu.safe_squeeze(self.training_dict['best_params'])
+            self.best_index = int(self.training_dict['best_index'])
+            self.worst_cost = float(self.training_dict['worst_cost'])
+            self.worst_index = int(self.training_dict['worst_index'])
+            self.cost_range = float(self.training_dict['cost_range'])
+            
+            #Configuration of the fake neural net learner
+            self.length_scale = mlu.safe_squeeze(self.training_dict['length_scale'])
+            self.noise_level = float(self.training_dict['noise_level'])
+            
+            
+            try:
+                self.predicted_best_parameters = mlu.safe_squeeze(self.training_dict['predicted_best_parameters'])
+                self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
+                self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
+                self.has_global_minima = True
+            except KeyError:
+                self.has_global_minima = False
+            try:
+                self.local_minima_parameters = list(self.training_dict['local_minima_parameters'])
+                
+                if isinstance(self.training_dict['local_minima_costs'], np.ndarray):
+                    self.local_minima_costs = list(np.squeeze(self.training_dict['local_minima_costs']))
+                else:
+                    self.local_minima_costs = list(self.training_dict['local_minima_costs'])
+                if isinstance(self.training_dict['local_minima_uncers'], np.ndarray):
+                    self.local_minima_uncers = list(np.squeeze(self.training_dict['local_minima_uncers']))
+                else:
+                    self.local_minima_uncers = list(self.training_dict['local_minima_uncers'])
+                
+                self.has_local_minima = True
+            except KeyError:
+                self.has_local_minima = False
+        
+            super(NeuralNetLearner,self).__init__(num_params=num_params,
+                             min_boundary=min_boundary, 
+                             max_boundary=max_boundary, 
+                             **kwargs)
+        else:
+            
+            super(NeuralNetLearner,self).__init__(**kwargs)
+        
+            #Storage variables, archived
+            self.all_params = np.array([], dtype=float)
+            self.all_costs = np.array([], dtype=float)
+            self.all_uncers = np.array([], dtype=float)
+            self.bad_run_indexs = []
+            self.best_cost = float('inf')
+            self.best_params = float('nan')
+            self.best_index = 0
+            self.worst_cost = float('-inf')
+            self.worst_index = 0
+            self.cost_range = float('inf')
+            self.length_scale_history = []
+            self.noise_level_history = []
+        
+            self.costs_count = 0
+            self.fit_count = 0
+            self.params_count = 0
+            
+            self.has_local_minima = False
+            self.has_global_minima = False
+                
         #Multiprocessor controls
         self.new_params_event = mp.Event()
 
         #Storage variables and counters
         self.search_params = []
         self.scaled_costs = None
-        self.cost_bias = None
-        self.uncer_bias = None
-
+ 
         #Constants, limits and tolerances
+        self.generation_num = 1
         self.search_precision = 1.0e-6
         self.parameter_searches = max(10,self.num_params)
         self.hyperparameter_searches = max(10,self.num_params)
@@ -1574,7 +1635,14 @@ class NeuralNetLearner(Learner, mp.Process):
             self.default_bad_uncertainty = float(default_bad_uncertainty)
         else:
             self.default_bad_uncertainty = None
-
+        if (self.default_bad_cost is None) and (self.default_bad_uncertainty is None):
+            self.bad_defaults_set = False
+        elif (self.default_bad_cost is not None) and (self.default_bad_uncertainty is not None):
+            self.bad_defaults_set = True
+        else:
+            self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
+            raise ValueError
+        
         self._set_trust_region(trust_region)
 
         #Search bounds
@@ -1587,17 +1655,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.cost_has_noise = True
         self.noise_level = 1
 
-        # TODO: What are these?
-        self.generation_num = 4
-        if (self.default_bad_cost is None) and (self.default_bad_uncertainty is None):
-            self.bad_defaults_set = False
-        elif (self.default_bad_cost is not None) and (self.default_bad_uncertainty is not None):
-            self.bad_defaults_set = True
-        else:
-            self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
-            raise ValueError
-
-        self.archive_dict.update({'archive_type':'neural_net_learner',
+        self.archive_dict.update({'archive_type':'nerual_net_learner',
                                   'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
@@ -1629,6 +1687,18 @@ class NeuralNetLearner(Learner, mp.Process):
             float : Predicted cost at paramters
         '''
         return self.neural_net_impl.predict_cost(params)
+
+
+    def predict_costs_from_param_array(self,params):
+        '''
+        Produces a prediction of costs from an array of params.
+         
+        Returns:
+            float : Predicted cost at paramters
+        '''
+# TODO
+        return []
+ 
 
     def wait_for_new_params_event(self):
         '''
@@ -1769,7 +1839,9 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'fit_count':self.fit_count,
                                   'costs_count':self.costs_count,
                                   'params_count':self.params_count,
-                                  'update_hyperparameters':self.update_hyperparameters})
+                                  'update_hyperparameters':self.update_hyperparameters,
+                                  'length_scale':self.length_scale,
+                                  'noise_level':self.noise_level})    
 
     def find_next_parameters(self):
         '''

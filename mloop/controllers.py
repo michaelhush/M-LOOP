@@ -539,6 +539,7 @@ class MachineLearnerController(Controller):
 
     def __init__(self, interface,
                  training_type='differential_evolution',
+                 machine_learner_type='machine_learner',
                  num_training_runs=None,
                  no_delay=True,
                  num_params=None,
@@ -548,9 +549,10 @@ class MachineLearnerController(Controller):
                  learner_archive_filename = mll.default_learner_archive_filename,
                  learner_archive_file_type = mll.default_learner_archive_file_type,
                  **kwargs):
-
-        super(MachineLearnerController,self).__init__(interface, **kwargs)
-
+        
+        super(MachineLearnerController,self).__init__(interface, **kwargs)   
+        self.machine_learner_type = machine_learner_type
+        
         self.last_training_cost = None
         self.last_training_bad = None
         self.last_training_run_flag = False
@@ -678,13 +680,14 @@ class MachineLearnerController(Controller):
         self._put_params_and_out_dict(next_params)
         self.save_archive()
         self._get_cost_and_in_dict()
+        
         while (self.num_in_costs < self.num_training_runs) and self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1))
             next_params = self._next_params()
             self._put_params_and_out_dict(next_params)
             self.save_archive()
             self._get_cost_and_in_dict()
-
+        
         if self.check_end_conditions():
             #Start last training run
             self.log.info('Run:' + str(self.num_in_costs +1))
@@ -708,13 +711,14 @@ class MachineLearnerController(Controller):
                 ml_consec = 0
             else:
                 next_params = self.ml_learner_params_queue.get()
-                super(MachineLearnerController,self)._put_params_and_out_dict(next_params, param_type=self.ml_learner_name)
+                super(MachineLearnerController,self)._put_params_and_out_dict(next_params, param_type=self.machine_learner_type)
                 ml_consec += 1
                 ml_count += 1
-
-            if ml_count%self.generation_num == 2:
+            if ml_count==self.generation_num:
                 self.new_params_event.set()
-
+                ml_count = 0
+                
+            
             self.save_archive()
             self._get_cost_and_in_dict()
 
@@ -789,6 +793,7 @@ class GaussianProcessController(MachineLearnerController):
                  **kwargs):
 
         super(GaussianProcessController,self).__init__(interface,
+                                                       machine_learner_type='gaussian_process',
                                                        num_params=num_params,
                                                        min_boundary=min_boundary,
                                                        max_boundary=max_boundary,
@@ -797,7 +802,6 @@ class GaussianProcessController(MachineLearnerController):
                                                        learner_archive_file_type=learner_archive_file_type,
                                                        **kwargs)
 
-        self.ml_learner_name = 'gaussian_process'
         self.ml_learner = mll.GaussianProcessLearner(start_datetime=self.start_datetime,
                                                      num_params=num_params,
                                                      min_boundary=min_boundary,
@@ -829,17 +833,17 @@ class NeuralNetController(MachineLearnerController):
                  learner_archive_filename = mll.default_learner_archive_filename,
                  learner_archive_file_type = mll.default_learner_archive_file_type,
                  **kwargs):
+        
+        super(NeuralNetController,self).__init__(interface, 
+                                                machine_learner_type='neural_net',
+                                                num_params=num_params,
+                                                min_boundary=min_boundary,
+                                                max_boundary=max_boundary,
+                                                trust_region=trust_region,
+                                                learner_archive_filename=learner_archive_filename,
+                                                learner_archive_file_type=learner_archive_file_type, 
+                                                **kwargs)   
 
-        super(NeuralNetController,self).__init__(interface,
-                                                       num_params=num_params,
-                                                       min_boundary=min_boundary,
-                                                       max_boundary=max_boundary,
-                                                       trust_region=trust_region,
-                                                       learner_archive_filename=learner_archive_filename,
-                                                       learner_archive_file_type=learner_archive_file_type,
-                                                       **kwargs)
-
-        self.ml_learner_name = 'neural_net'
         self.ml_learner = mll.NeuralNetLearner(start_datetime=self.start_datetime,
                                                num_params=num_params,
                                                min_boundary=min_boundary,
