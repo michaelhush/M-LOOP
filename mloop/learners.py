@@ -1125,6 +1125,7 @@ class GaussianProcessLearner(Learner, mp.Process):
         '''
         Waits for a new parameters event and starts a new parameter generation cycle. Also checks end event and will break if it is triggered.
         '''
+        self.log.debug("Waiting for new params")
         while not self.end_event.is_set():
             if self.new_params_event.wait(timeout=self.learner_wait):
                 self.new_params_event.clear()
@@ -1487,6 +1488,7 @@ class NeuralNetLearner(Learner, mp.Process):
         predict_local_minima_at_end (Optional [bool]): If True finds all minima when the learner is ended. Does not if False. Default False.
 
     Attributes:
+        TODO: Update these.
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
         all_uncers (array): Array containing all uncertainties sent to learner.
@@ -1588,6 +1590,15 @@ class NeuralNetLearner(Learner, mp.Process):
         self.noise_level = 1
 
         self.neural_net_impl = NeuralNetImpl(self.num_params)
+        # TODO: What are these?
+        self.generation_num = 4
+        if (self.default_bad_cost is None) and (self.default_bad_uncertainty is None):
+            self.bad_defaults_set = False
+        elif (self.default_bad_cost is not None) and (self.default_bad_uncertainty is not None):
+            self.bad_defaults_set = True
+        else:
+            self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
+            raise ValueError
 
         self.archive_dict.update({'archive_type':'neural_net_learner',
                                   'bad_run_indexs':self.bad_run_indexs,
@@ -1792,10 +1803,10 @@ class NeuralNetLearner(Learner, mp.Process):
 
         try:
             while not self.end_event.is_set():
-                #self.log.debug('Learner waiting for new params event')
+                self.log.debug('Learner waiting for new params event')
                 self.save_archive()
                 self.wait_for_new_params_event()
-                #self.log.debug('Gaussian process learner reading costs')
+                self.log.debug('NN learner reading costs')
                 self.get_params_and_costs()
                 self.fit_neural_net()
                 for _ in range(self.generation_num):
