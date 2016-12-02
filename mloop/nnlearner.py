@@ -9,16 +9,13 @@ class NeuralNetImpl():
 
     Args:
         num_params (int): The number of params.
-
-
-    Attributes:
-        TODO
     '''
 
     def __init__(self,
                  num_params = None):
 
         self.log = logging.getLogger(__name__)
+        self.log.debug('Initialising neural network impl')
         if num_params is None:
             self.log.error("num_params must be provided")
             raise ValueError
@@ -45,6 +42,7 @@ class NeuralNetImpl():
         Creates the neural net with topology specified by the current hyperparameters.
 
         '''
+        self.log.debug('Creating neural network')
         # Forget about any old weights/biases
         self.weights = []
         self.biases = []
