@@ -1583,18 +1583,11 @@ class NeuralNetLearner(Learner, mp.Process):
 
         self.cost_scaler = skp.StandardScaler()
 
-
-        #--- FAKE NN CONSTRUCTOR START ---#
-
         self.length_scale = 1
         self.cost_has_noise = True
         self.noise_level = 1
 
-        self.create_neural_net()
-
-
-
-        #--- FAKE NN CONSTRUCTOR END ---#
+        self.neural_net_impl = NeuralNetImpl(self.num_params)
 
         self.archive_dict.update({'archive_type':'neural_net_learner',
                                   'bad_run_indexs':self.bad_run_indexs,
@@ -1611,23 +1604,6 @@ class NeuralNetLearner(Learner, mp.Process):
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
 
-
-    #--- FAKE NN METHODS START ---#
-
-
-    def create_neural_net(self):
-        '''
-        Create the neural net.
-
-        '''
-        #TODO: Do.
-        gp_kernel = skk.RBF(length_scale=self.length_scale) + skk.WhiteKernel(noise_level=self.noise_level)
-
-        if self.update_hyperparameters:
-            self.gaussian_process = skg.GaussianProcessRegressor(kernel=gp_kernel,n_restarts_optimizer=self.hyperparameter_searches)
-        else:
-            self.gaussian_process = skg.GaussianProcessRegressor(kernel=gp_kernel,optimizer=None)
-
     def fit_neural_net(self):
         '''
         Determine the appropriate number of layers for the NN given the data.
@@ -1635,34 +1611,7 @@ class NeuralNetLearner(Learner, mp.Process):
         Fit the Neural Net with the appropriate topology to the data
 
         '''
-        #TODO: Do.
-        self.log.debug('Fitting Gaussian process.')
-        if self.all_params.size==0 or self.all_costs.size==0 or self.all_uncers.size==0:
-            self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
-            raise ValueError
-
-        self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
-        self.scaled_uncers = self.all_uncers * self.cost_scaler.scale_
-        self.gaussian_process.alpha_ = self.scaled_uncers
-        self.gaussian_process.fit(self.all_params,self.scaled_costs)
-
-        if self.update_hyperparameters:
-
-            self.fit_count += 1
-            self.gaussian_process.kernel = self.gaussian_process.kernel_
-
-            last_hyperparameters = self.gaussian_process.kernel.get_params()
-
-            if self.cost_has_noise:
-                self.length_scale = last_hyperparameters['k1__length_scale']
-                if isinstance(self.length_scale, float):
-                    self.length_scale = np.array([self.length_scale])
-                self.length_scale_history.append(self.length_scale)
-                self.noise_level = last_hyperparameters['k2__noise_level']
-                self.noise_level_history.append(self.noise_level)
-            else:
-                self.length_scale = last_hyperparameters['length_scale']
-                self.length_scale_history.append(self.length_scale)
+        self.neural_net_impl.fit_neural_net(self.all_params, self.all_costs)
 
     def predict_cost(self,params):
         '''
@@ -1671,11 +1620,7 @@ class NeuralNetLearner(Learner, mp.Process):
         Returns:
             float : Predicted cost at paramters
         '''
-        #TODO: Do.
-        return self.gaussian_process.predict(params[np.newaxis,:])
-
-    #--- FAKE NN METHODS END ---#
-
+        return self.neural_net_impl.predict_cost(params)
 
     def wait_for_new_params_event(self):
         '''
