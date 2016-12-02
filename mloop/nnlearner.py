@@ -7,6 +7,8 @@ class NeuralNetImpl():
     '''
     Neural network implementation.
 
+    This must run in the same process in which it's created.
+
     Args:
         num_params (int): The number of params.
     '''

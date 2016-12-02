@@ -1587,7 +1587,6 @@ class NeuralNetLearner(Learner, mp.Process):
         self.cost_has_noise = True
         self.noise_level = 1
 
-        self.neural_net_impl = NeuralNetImpl(self.num_params)
         # TODO: What are these?
         self.generation_num = 4
         if (self.default_bad_cost is None) and (self.default_bad_uncertainty is None):
@@ -1798,6 +1797,10 @@ class NeuralNetLearner(Learner, mp.Process):
         #logging to the main log file from a process (as apposed to a thread) in cpython is currently buggy on windows and/or python 2.7
         #current solution is to only log to the console for warning and above from a process
         self.log = mp.log_to_stderr(logging.WARNING)
+
+        # The network needs to be created in the same process in which it runs
+        import mloop.nnlearner as mlnn
+        self.neural_net_impl = mlnn.NeuralNetImpl(self.num_params)
 
         try:
             while not self.end_event.is_set():
