@@ -1583,8 +1583,6 @@ class NeuralNetLearner(Learner, mp.Process):
         self.search_diff = self.search_max - self.search_min
         self.search_region = list(zip(self.search_min, self.search_max))
 
-        self.cost_scaler = skp.StandardScaler()
-
         self.length_scale = 1
         self.cost_has_noise = True
         self.noise_level = 1
@@ -1861,7 +1859,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self.predicted_best_parameters = curr_best_params
                 self.predicted_best_scaled_cost = curr_best_cost
 
-        self.predicted_best_cost = self.cost_scaler.inverse_transform(self.predicted_best_scaled_cost)
+            self.predicted_best_cost = self.predicted_best_scaled_cost
 
         self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                                   'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
