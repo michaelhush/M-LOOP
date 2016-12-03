@@ -1703,8 +1703,8 @@ class NeuralNetLearner(Learner, mp.Process):
         Returns:
             float : Predicted cost at paramters
         '''
-# TODO
-        return []
+        # TODO: Can do this more efficiently.
+        return [self.predict_cost(param) for param in params]
  
 
     def wait_for_new_params_event(self):
