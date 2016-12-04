@@ -1655,6 +1655,12 @@ class NeuralNetLearner(Learner, mp.Process):
         self.cost_has_noise = True
         self.noise_level = 1
 
+        # Set up the scaler to do nothing.
+        # TODO: Figure out how to use scaling for the NN (it's a bit difficult because we don't
+        # completely re-train each time, and don't want the scaling changing without doing a complete
+        # re-train).
+        self.cost_scaler = skp.StandardScaler(with_mean=False, with_std=False)
+
         self.archive_dict.update({'archive_type':'nerual_net_learner',
                                   'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
@@ -1684,7 +1690,9 @@ class NeuralNetLearner(Learner, mp.Process):
         Fit the Neural Net with the appropriate topology to the data
 
         '''
-        self.neural_net_impl.fit_neural_net(self.all_params, self.all_costs)
+        self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
+
+        self.neural_net_impl.fit_neural_net(self.all_params, self.scaled_costs)
 
     def predict_cost(self,params):
         '''
@@ -1940,8 +1948,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self.predicted_best_parameters = curr_best_params
                 self.predicted_best_scaled_cost = curr_best_cost
 
-            self.predicted_best_cost = self.predicted_best_scaled_cost
-
+        self.predicted_best_cost = float(self.cost_scaler.inverse_transform(self.predicted_best_scaled_cost))
         self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                                   'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
                                   'predicted_best_cost':self.predicted_best_cost})

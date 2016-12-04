@@ -653,7 +653,10 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             sample_parameters[:, ind] = cross_parameter_arrays[ind]
             costs = self.predict_costs_from_param_array(sample_parameters)
             cost_arrays.append(costs)
-        cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
+        if self.cost_scaler.scale_:
+            cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
+        else:
+            cross_parameter_arrays = np.array(cross_parameter_arrays)
         cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
         return (cross_parameter_arrays,cost_arrays) 
     
@@ -683,6 +686,3 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
         plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)    
-
-            
-            
