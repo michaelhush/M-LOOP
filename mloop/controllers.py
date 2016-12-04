@@ -714,13 +714,14 @@ class MachineLearnerController(Controller):
                 super(MachineLearnerController,self)._put_params_and_out_dict(next_params, param_type=self.machine_learner_type)
                 ml_consec += 1
                 ml_count += 1
+
+            self.save_archive()
+            self._get_cost_and_in_dict()
+
             if ml_count==self.generation_num:
                 self.new_params_event.set()
                 ml_count = 0
                 
-            
-            self.save_archive()
-            self._get_cost_and_in_dict()
 
 
     def _shut_down(self):
