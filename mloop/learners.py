@@ -1904,9 +1904,11 @@ class NeuralNetLearner(Learner, mp.Process):
                         raise LearnerInterrupt()
         except LearnerInterrupt:
             pass
-        if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
-            self.get_params_and_costs()
-            self.fit_neural_net()
+        # TODO: Fix this. We can't just do what's here because the costs queue might be empty, but
+        # we should get anything left in it and do one last train.
+        #if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
+        #    self.get_params_and_costs()
+        #    self.fit_neural_net()
         end_dict = {}
         if self.predict_global_minima_at_end:
             self.find_global_minima()
