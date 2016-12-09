@@ -763,8 +763,11 @@ class MachineLearnerController(Controller):
         super(MachineLearnerController,self).print_results()
         try:
             self.log.info('Predicted best parameters:' + str(self.predicted_best_parameters))
-            self.log.info('Predicted best cost:' + str(self.predicted_best_cost) + ' +/- ' + str(self.predicted_best_uncertainty))
-
+            try:
+                errorstring = ' +/- ' + str(self.predicted_best_uncertainty)
+            except AttributeError:
+                errorstring = ''
+            self.log.info('Predicted best cost:' + str(self.predicted_best_cost) + errorstring)
         except AttributeError:
             pass
         try:
