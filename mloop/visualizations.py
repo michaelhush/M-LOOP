@@ -12,6 +12,8 @@ import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
+from mpl_toolkits.mplot3d import Axes3D
+
 figure_counter = 0
 cmap = plt.get_cmap('hsv')
 run_label = 'Run number'
@@ -43,13 +45,20 @@ def show_all_default_visualizations(controller, show_plots=True):
         log.debug('Creating differential evolution visualizations.')
         create_differential_evolution_learner_visualizations(controller.learner.total_archive_filename, 
                                                              file_type=controller.learner.learner_archive_file_type)
+    
+    if isinstance(controller, mlc.NeuralNetController):
+        log.debug('Creating neural net visualizations.')
+        create_neural_net_learner_visualizations(controller.ml_learner.total_archive_filename, 
+                                                file_type=controller.learner.learner_archive_file_type)
+    
         
     if isinstance(controller, mlc.GaussianProcessController):
         log.debug('Creating gaussian process visualizations.')
-        plot_all_minima_vs_cost_flag = bool(controller.gp_learner.has_local_minima)
-        create_gaussian_process_learner_visualizations(controller.gp_learner.total_archive_filename, 
-                                                       file_type=controller.gp_learner.learner_archive_file_type,
+        plot_all_minima_vs_cost_flag = bool(controller.ml_learner.has_local_minima)
+        create_gaussian_process_learner_visualizations(controller.ml_learner.total_archive_filename, 
+                                                       file_type=controller.ml_learner.learner_archive_file_type,
                                                        plot_all_minima_vs_cost=plot_all_minima_vs_cost_flag)
+        
         
     log.info('Showing visualizations, close all to end MLOOP.')
     if show_plots:
@@ -546,3 +555,160 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plt.ylabel(noise_label)
             plt.title('GP Learner: Noise level vs fit number.')
             
+def create_neural_net_learner_visualizations(filename,
+                                             file_type='pkl',
+                                             plot_cross_sections=True):
+    '''
+    Creates plots from a neural nets learner file.
+    
+    Args:
+        filename (Optional [string]): Filename for the neural net archive. Must provide datetime or filename. Default None.
+        
+    Keyword Args:
+        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
+        plot_cross_sections (Optional [bool]): If True plot predict landscape cross sections, else do not. Default True. 
+        plot_all_minima_vs_cost (Optional [bool]): If True plot all minima parameters versus cost number, False does not. If None it will only make the plots if all minima were previously calculated. Default None. 
+    '''
+    visualization = NeuralNetVisualizer(filename, file_type=file_type)
+    if plot_cross_sections:
+        visualization.plot_cross_sections()
+        visualization.plot_surface()
+
+            
+class NeuralNetVisualizer(mll.NeuralNetLearner):
+    '''
+    NeuralNetVisualizer extends of NeuralNetLearner, designed not to be used as a learner, but to instead post process a NeuralNetLearner archive file and produce useful data for visualization of the state of the learner. 
+    
+    Args:
+        filename (String): Filename of the GaussianProcessLearner archive.
+    
+    Keyword Args:
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
+      
+    '''
+    
+    def __init__(self, filename, file_type = 'pkl', **kwargs):
+        
+        super(NeuralNetVisualizer, self).__init__(nn_training_filename = filename,
+                                                  nn_training_file_type = file_type,
+                                                  update_hyperparameters = False,
+                                                  **kwargs)
+        
+        self.log = logging.getLogger(__name__)
+        
+        #Trust region
+        self.has_trust_region = bool(np.array(self.training_dict['has_trust_region']))
+        self.trust_region = np.squeeze(np.array(self.training_dict['trust_region'], dtype=float))
+        
+        self.create_neural_net()
+        self.fit_neural_net()
+        
+        if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.min_boundary)):
+            self.finite_flag = True
+            self.param_scaler = lambda p: (p-self.min_boundary)/self.diff_boundary
+        else:
+            self.finite_flag = False
+        
+        self.param_colors = _color_list_from_num_of_params(self.num_params)
+        if self.has_trust_region:
+            self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
+            self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
+        
+    def run(self):
+        '''
+        Overides the GaussianProcessLearner multiprocessor run routine. Does nothing but makes a warning.
+        '''
+        self.log.warning('You should not have executed start() from the GaussianProcessVisualizer. It is not intended to be used as a independent process. Ending.')
+    
+      
+    def return_cross_sections(self, points=100, cross_section_center=None):
+        '''
+        Finds the predicted global minima, then returns a list of vectors of parameters values, costs and uncertainties, corresponding to the 1D cross sections along each parameter axis through the predicted global minima.
+        
+        Keyword Args:
+            points (int): the number of points to sample along each cross section. Default value is 100. 
+            cross_section_center (array): parameter array where the centre of the cross section should be taken. If None, the parameters for the best returned cost are used.  
+        
+        Returns:
+            a tuple (cross_arrays, cost_arrays, uncer_arrays)
+            cross_parameter_arrays (list): a list of arrays for each cross section, with the values of the varied parameter going from the minimum to maximum value.
+            cost_arrays (list): a list of arrays for the costs evaluated along each cross section about the minimum. 
+            uncertainty_arrays (list): a list of uncertainties 
+            
+        '''
+        points = int(points)
+        if points <= 0:
+            self.log.error('Points provided must be larger than zero:' + repr(points))
+            raise ValueError
+        
+        if cross_section_center is None:
+            cross_section_center = self.best_params
+        else:
+            cross_section_center = np.array(cross_section_center)
+            if not self.check_in_boundary(cross_section_center):
+                self.log.error('cross_section_center not in boundaries:' + repr(cross_section_center))
+                raise ValueError
+        
+        cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
+        cost_arrays = []
+        for ind in range(self.num_params):
+            sample_parameters = np.array([cross_section_center for _ in range(points)])
+            sample_parameters[:, ind] = cross_parameter_arrays[ind]
+            costs = self.predict_costs_from_param_array(sample_parameters)
+            cost_arrays.append(costs)
+        if self.cost_scaler.scale_:
+            cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
+        else:
+            cross_parameter_arrays = np.array(cross_parameter_arrays)
+        cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
+        return (cross_parameter_arrays,cost_arrays) 
+
+    def plot_cross_sections(self):
+        '''
+        Produce a figure of the cross section about best cost and parameters
+        '''
+        global figure_counter, legend_loc
+        figure_counter += 1
+        plt.figure(figure_counter)
+        points = 100
+        (_,cost_arrays) = self.return_cross_sections(points=points)
+        rel_params = np.linspace(0,1,points)
+        for ind in range(self.num_params):
+            plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
+        if self.has_trust_region:
+            axes = plt.gca()
+            ymin, ymax = axes.get_ylim()
+            ytrust = ymin + 0.1*(ymax - ymin)
+            for ind in range(self.num_params):
+                plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
+        plt.xlabel(scale_param_label)
+        plt.xlim((0,1))
+        plt.ylabel(cost_label)
+        plt.title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
+        artists = []
+        for ind in range(self.num_params):
+            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
+        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)    
+
+    def plot_surface(self):
+        '''
+        Produce a figure of the cost surface (only works when there are 2 parameters)
+        '''
+        if self.num_params != 2:
+            return
+        global figure_counter
+        figure_counter += 1
+        fig = plt.figure(figure_counter)
+        ax = fig.add_subplot(111, projection='3d')
+
+        points = 50
+        param_set = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
+        params = [(x,y) for x in param_set[0] for y in param_set[1]]
+        costs = self.predict_costs_from_param_array(params)
+        ax.scatter([param[0] for param in params], [param[1] for param in params], costs)
+        ax.set_zlim(top=100)
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_zlabel('cost')
+
+        ax.scatter(self.all_params[:,0], self.all_params[:,1], self.all_costs, c='r')
