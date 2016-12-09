@@ -73,6 +73,9 @@ class NeuralNetImpl():
                 + self.regularisation_coefficient * sum([tf.nn.l2_loss(W) for W in self.weights]))
         self.train_step = tf.train.AdamOptimizer(1.0).minimize(loss_func)
 
+        # Gradient
+        self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
+
         self.tf_session.run(tf.initialize_all_variables())
 
     def fit_neural_net(self, all_params, all_costs):
@@ -116,3 +119,12 @@ class NeuralNetImpl():
             float : Predicted cost at parameters
         '''
         return self.tf_session.run(self.output_var, feed_dict={self.input_placeholder: [params]})[0][0]
+
+    def predict_cost_gradient(self,params):
+        '''
+        Produces a prediction of the gradient of the cost function at params.
+
+        Returns:
+            float : Predicted gradient at parameters
+        '''
+        return self.tf_session.run(self.output_var_gradient, feed_dict={self.input_placeholder: [params]})[0][0]

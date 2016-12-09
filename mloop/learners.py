@@ -1703,6 +1703,16 @@ class NeuralNetLearner(Learner, mp.Process):
         '''
         return self.neural_net_impl.predict_cost(params)
 
+    def predict_cost_gradient(self,params):
+        '''
+        Produces a prediction of the gradient of the cost function at params.
+
+        Returns:
+            float : Predicted gradient at paramters
+        '''
+        # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
+        return np.float64(self.neural_net_impl.predict_cost_gradient(params))
+
 
     def predict_costs_from_param_array(self,params):
         '''
@@ -1871,7 +1881,11 @@ class NeuralNetLearner(Learner, mp.Process):
         next_params = None
         next_cost = float('inf')
         for start_params in self.search_params:
-            result = so.minimize(self.predict_cost, start_params, bounds = self.search_region, tol=self.search_precision)
+            result = so.minimize(fun = self.predict_cost,
+                                 x0 = start_params,
+                                 jac = self.predict_cost_gradient,
+                                 bounds = self.search_region,
+                                 tol = self.search_precision)
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
@@ -1942,8 +1956,11 @@ class NeuralNetLearner(Learner, mp.Process):
 
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         for start_params in search_params:
-            # TODO: Take advantage of the fact that we get the gradient for free, so can use that to speed up the minimizer.
-            result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
+            result = so.minimize(fun = self.predict_cost,
+                                 x0 = start_params,
+                                 jac = self.predict_cost_gradient,
+                                 bounds = search_bounds,
+                                 tol = self.search_precision)
             curr_best_params = result.x
             curr_best_cost = result.fun
             if curr_best_cost<self.predicted_best_scaled_cost:
@@ -1977,8 +1994,11 @@ class NeuralNetLearner(Learner, mp.Process):
 
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         for start_params in self.all_params:
-            # TODO: Take advantage of the fact that we get the gradient for free, so can use that to speed up the minimizer.
-            result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
+            result = so.minimize(fun = self.predict_cost,
+                                 x0 = start_params,
+                                 jac = self.predict_cost_gradient,
+                                 bounds = search_bounds,
+                                 tol = self.search_precision)
             curr_minima_params = result.x
             curr_minima_cost = result.fun
             if all( not np.all( np.abs(params - curr_minima_params) < self.minima_tolerance ) for params in self.local_minima_parameters):
