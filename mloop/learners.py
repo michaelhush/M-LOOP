@@ -1711,7 +1711,7 @@ class NeuralNetLearner(Learner, mp.Process):
             float : Predicted gradient at paramters
         '''
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return np.float64(self.neural_net_impl.predict_cost_gradient(params))
+        return self.neural_net_impl.predict_cost_gradient(params).astype(np.float64)
 
 
     def predict_costs_from_param_array(self,params):
