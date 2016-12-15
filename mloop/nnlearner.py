@@ -67,11 +67,11 @@ class NeuralNetImpl():
         self.output_var = tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]
 
         # Loss function and training
-        loss_func = (
+        self.loss_func = (
                 tf.reduce_mean(tf.reduce_sum(tf.square(self.output_var - self.output_placeholder),
                                              reduction_indices=[1]))
                 + self.regularisation_coefficient * sum([tf.nn.l2_loss(W) for W in self.weights]))
-        self.train_step = tf.train.AdamOptimizer(1.0).minimize(loss_func)
+        self.train_step = tf.train.AdamOptimizer(1.0).minimize(self.loss_func)
 
         # Gradient
         self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
@@ -96,6 +96,8 @@ class NeuralNetImpl():
             self.log.error("Params and costs must have the same length")
             raise ValueError
 
+        reg_co = 0.01
+
         # TODO: Fit hyperparameters.
 
         for i in range(self.train_epochs):
@@ -108,8 +110,15 @@ class NeuralNetImpl():
                 self.tf_session.run(self.train_step,
                                     feed_dict={self.input_placeholder: batch_input,
                                                self.output_placeholder: batch_output,
-                                               self.regularisation_coefficient: 0.01,
+                                               self.regularisation_coefficient: reg_co,
                                                })
+        self.log.debug('Fit neural network with total training cost '
+                + str(self.tf_session.run(
+                        self.loss_func,
+                        feed_dict={self.input_placeholder: all_params,
+                                   self.output_placeholder: [[c] for c in all_costs],
+                                   self.regularisation_coefficient: reg_co,
+                                   })))
 
     def predict_cost(self,params):
         '''
