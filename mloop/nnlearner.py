@@ -116,6 +116,20 @@ class SingleNeuralNet():
                                    self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
                                    })))
 
+
+    def cross_validation_loss(self, params, costs):
+        '''
+        Returns the loss of the network on a cross validation set.
+
+        Args:
+            params (array): array of parameter arrays
+            costs (array): array of costs (associated with the corresponding parameters)
+        '''
+        return self.tf_session.run(self.loss_func,
+                                  feed_dict={self.input_placeholder: params,
+                                  self.output_placeholder: [[c] for c in costs],
+                                  })
+
     def predict_cost(self,params):
         '''
         Produces a prediction of cost from the neural net at params.
@@ -159,6 +173,7 @@ class NeuralNetImpl():
 
         self.num_params = num_params
         self.fit_hyperparameters = fit_hyperparameters
+        self.last_hyperfit = 0
 
         self.net = self._make_net(0.01)
 
@@ -194,6 +209,43 @@ class NeuralNetImpl():
         if not len(all_params) == len(all_costs):
             self.log.error("Params and costs must have the same length")
             raise ValueError
+
+        # TODO: Consider adding some kind of "cost capping". Our NNs will never predict costs going
+        # off to infinity, so we could be "wasting" training cost due to totally irrelevant points.
+        # If we capped the costs to some value then this might help. Note that this is really just
+        # another form of cost scaling.
+
+        if self.fit_hyperparameters:
+            # Every 20 fits (starting at 5, just because), re-fit the hyperparameters
+            if False and int(len(all_params + 5) / 20) > self.last_hyperfit:
+                self.last_hyperfit = int(len(all_params + 5) / 20)
+
+                # Fit regularisation
+
+                # Split the data into training and cross validation
+                cv_size = int(len(all_params) / 10)
+                train_params = all_params[:-cv_size]
+                train_costs = all_costs[:-cv_size]
+                cv_params = all_params[cv_size:]
+                cv_costs = all_costs[cv_size:]
+
+                orig_cv_loss = self.net.cross_validation_loss(cv_params, cv_costs)
+                best_cv_loss = orig_cv_loss
+
+                self.log.debug("Fitting regularisation, current cv loss=" + str(orig_cv_loss))
+
+                # Try a bunch of different regularisation parameters, switching to a new one if it
+                # does significantly better on the cross validation set than the old one.
+                for r in [0.001, 0.01, 0.1, 1, 10]:
+                    net = self._make_net(r)
+                    net.fit(train_params, train_costs)
+                    this_cv_loss = net.cross_validation_loss(cv_params, cv_costs)
+                    if this_cv_loss < best_cv_loss and this_cv_loss < 0.1 * orig_cv_loss:
+                        best_cv_loss = this_cv_loss
+                        self.log.debug("Switching to reg=" + str(r) + ", cv loss=" + str(best_cv_loss))
+                        self.net = net
+
+                # TODO: Fit depth
 
         self.net.fit(all_params, all_costs)
 
