@@ -1875,7 +1875,6 @@ class NeuralNetLearner(Learner, mp.Process):
         Return:
             next_params (array): Returns next parameters from cost search.
         '''
-        # TODO: We could implement some other type of biasing.
         self.params_count += 1
         self.update_search_params()
         next_params = None
@@ -1889,6 +1888,16 @@ class NeuralNetLearner(Learner, mp.Process):
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
+        # Now tweak the selected parameters to make sure we don't just keep on looking in the same
+        # place (the actual minimum might be a short distance away).
+        # TODO: Rather than using [-0.1, 0.1] we should pick the fuzziness based on what we know
+        # about length scales.
+        # TODO: It would be nice to deal with uncertainty more cleverly. Even though the current
+        # method will help find the true local minimum, it doesn't help if we get stuck in a local
+        # minimum and there's another one a long way away that appears slightly higher. To do this
+        # cleverly would probably correspond to introducing some kind of uncertainty-based biasing
+        # (like the GP).
+        next_params = next_params + nr.uniform(-0.1, 0.1, size=next_params.shape)
         return next_params
 
     def run(self):
