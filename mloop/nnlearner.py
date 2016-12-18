@@ -217,7 +217,7 @@ class NeuralNetImpl():
 
         if self.fit_hyperparameters:
             # Every 20 fits (starting at 5, just because), re-fit the hyperparameters
-            if False and int(len(all_params + 5) / 20) > self.last_hyperfit:
+            if int(len(all_params + 5) / 20) > self.last_hyperfit:
                 self.last_hyperfit = int(len(all_params + 5) / 20)
 
                 # Fit regularisation
