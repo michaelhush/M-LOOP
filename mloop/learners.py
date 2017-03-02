@@ -971,8 +971,10 @@ class GaussianProcessLearner(Learner, mp.Process):
             except KeyError:
                 self.has_local_minima = False
             
-        
-            super(GaussianProcessLearner,self).__init__(num_params=num_params,
+            if 'num_params' in kwargs:
+                super(GaussianProcessLearner,self).__init__(**kwargs)
+            else:
+                super(GaussianProcessLearner,self).__init__(num_params=num_params,
                              min_boundary=min_boundary, 
                              max_boundary=max_boundary, 
                              **kwargs)
