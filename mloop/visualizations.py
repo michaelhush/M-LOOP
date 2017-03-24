@@ -340,7 +340,7 @@ class DifferentialEvolutionVisualizer():
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type='pkl',
                                                    plot_cross_sections=True,
-                                                   plot_all_minima_vs_cost=True,
+                                                   plot_all_minima_vs_cost=False,
                                                    plot_hyperparameters_vs_run=True):
     '''
     Runs the plots from a gaussian process learner file.
@@ -351,7 +351,7 @@ def create_gaussian_process_learner_visualizations(filename,
     Keyword Args:
         file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
         plot_cross_sections (Optional [bool]): If True plot predict landscape cross sections, else do not. Default True. 
-        plot_all_minima_vs_cost (Optional [bool]): If True plot all minima parameters versus cost number, False does not. If None it will only make the plots if all minima were previously calculated. Default None. 
+        plot_all_minima_vs_cost (Optional [bool]): If True plot all minima parameters versus cost number, False does not. If None it will only make the plots if all minima were previously calculated. Default False. 
     '''
     visualization = GaussianProcessVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
@@ -486,8 +486,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         '''
         Produce figure of the all the local minima versus cost.
         '''
-        if not self.has_all_minima:
-            self.find_all_minima()
+        self.find_all_minima()
         global figure_counter, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
