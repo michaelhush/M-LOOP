@@ -31,7 +31,7 @@ There are three stages:
 
       M-LOOP 
 
-   M-LOOP first looks for the configuration file *exp_input.txt*, which contains options like the number of parameters and their limits, in the folder it is executed, then starts the optimization process. 
+   M-LOOP first looks for the configuration file *exp_config.txt*, which contains options like the number of parameters and their limits, in the folder it is executed, then starts the optimization process. 
 
 2. M-LOOP controls and optimizes the experiment by exchanging files written to disk. M-LOOP produces a file called *exp_input.txt* which contains a variable params with the next parameters to be run by the experiment. The experiment is expected to run an experiment with these parameters and measure the resultant cost. The experiment should then write the file *exp_output.txt* which contains at least the variable cost which quantifies the performance of that experimental run, and optionally, the variables uncer (for uncertainty) and bad (if the run failed). This process is repeated many times until the halting condition is met.
 

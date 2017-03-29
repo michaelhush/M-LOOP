@@ -919,12 +919,12 @@ class GaussianProcessLearner(Learner, mp.Process):
             
             #Basic optimization settings
             num_params = int(self.training_dict['num_params'])
-            min_boundary = np.squeeze(np.array(self.training_dict['min_boundary'], dtype=float))
-            max_boundary = np.squeeze(np.array(self.training_dict['max_boundary'], dtype=float))
+            min_boundary = mlu.safe_cast_to_array(self.training_dict['min_boundary'])
+            max_boundary = mlu.safe_cast_to_array(self.training_dict['max_boundary'])
             
             #Configuration of the learner
             self.cost_has_noise = bool(self.training_dict['cost_has_noise'])
-            self.length_scale = np.squeeze(np.array(self.training_dict['length_scale']))
+            self.length_scale = mlu.safe_cast_to_array(self.training_dict['length_scale'])
             self.length_scale_history = list(self.training_dict['length_scale_history'])
             self.noise_level = float(self.training_dict['noise_level'])
             self.noise_level_history = mlu.safe_cast_to_list(self.training_dict['noise_level_history'])
@@ -935,37 +935,30 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.params_count = int(self.training_dict['params_count'])
             
             #Data from previous experiment
-            self.all_params = np.array(self.training_dict['all_params'], dtype=float)
-            self.all_costs = np.squeeze(np.array(self.training_dict['all_costs'], dtype=float))
-            self.all_uncers = np.squeeze(np.array(self.training_dict['all_uncers'], dtype=float))
+            self.all_params = np.array(self.training_dict['all_params'])
+            self.all_costs = mlu.safe_cast_to_array(self.training_dict['all_costs'])
+            self.all_uncers = mlu.safe_cast_to_array(self.training_dict['all_uncers'])
             
             self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
             
             #Derived properties
             self.best_cost = float(self.training_dict['best_cost'])
-            self.best_params = np.squeeze(np.array(self.training_dict['best_params'], dtype=float))
+            self.best_params = mlu.safe_cast_to_array(self.training_dict['best_params'])
             self.best_index = int(self.training_dict['best_index'])
             self.worst_cost = float(self.training_dict['worst_cost'])
             self.worst_index = int(self.training_dict['worst_index'])
             self.cost_range = float(self.training_dict['cost_range'])
             try:
-                self.predicted_best_parameters = np.squeeze(np.array(self.training_dict['predicted_best_parameters']))
+                self.predicted_best_parameters = mlu.safe_cast_to_array(self.training_dict['predicted_best_parameters'])
                 self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
                 self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
                 self.has_global_minima = True
             except KeyError:
                 self.has_global_minima = False
             try:
-                self.local_minima_parameters = list(self.training_dict['local_minima_parameters'])
-                
-                if isinstance(self.training_dict['local_minima_costs'], np.ndarray):
-                    self.local_minima_costs = list(np.squeeze(self.training_dict['local_minima_costs']))
-                else:
-                    self.local_minima_costs = list(self.training_dict['local_minima_costs'])
-                if isinstance(self.training_dict['local_minima_uncers'], np.ndarray):
-                    self.local_minima_uncers = list(np.squeeze(self.training_dict['local_minima_uncers']))
-                else:
-                    self.local_minima_uncers = list(self.training_dict['local_minima_uncers'])
+                self.local_minima_parameters = mlu.safe_cast_to_list(self.training_dict['local_minima_parameters'])
+                self.local_minima_costs = mlu.safe_cast_to_list(self.training_dict['local_minima_costs'])
+                self.local_minima_uncers = mlu.safe_cast_to_list(self.training_dict['local_minima_uncers'])
                 
                 self.has_local_minima = True
             except KeyError:
