@@ -57,7 +57,7 @@ class SingleNeuralNet():
             self.biases.append(tf.Variable(tf.random_normal([dim])))
             prev_layer_dim = dim
             prev_h = tf.nn.dropout(
-                  tf.nn.sigmoid(tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]),
+                  tf.abs(tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]),
                   keep_prob=self.keep_prob_placeholder)
 
         # Output node
@@ -192,7 +192,7 @@ class NeuralNetImpl():
         '''
         return SingleNeuralNet(
                 self.num_params,
-                2, # num_layers
+                1, # num_layers
                 32, # layer_dim
                 1000, # train_epochs
                 64, # batch_size
