@@ -1897,7 +1897,7 @@ class NeuralNetLearner(Learner, mp.Process):
         # minimum and there's another one a long way away that appears slightly higher. To do this
         # cleverly would probably correspond to introducing some kind of uncertainty-based biasing
         # (like the GP).
-        next_params = next_params + nr.uniform(-0.1, 0.1, size=next_params.shape)
+        #next_params = next_params + nr.uniform(-0.1, 0.1, size=next_params.shape)
         return next_params
 
     def run(self):
