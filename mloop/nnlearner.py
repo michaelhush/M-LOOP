@@ -11,8 +11,8 @@ class SingleNeuralNet():
 
     Args:
         num_params: The number of params.
-        num_layers: The number of layers.
-        layer_dim: The number of nodes in each layer.
+        layer_dims: The number of nodes in each layer.
+        layer_activations: The activation function for each layer.
         train_epochs: Epochs per train.
         batch_size: The training batch size.
         keep_prob: The dropoout keep probability.
@@ -21,8 +21,8 @@ class SingleNeuralNet():
 
     def __init__(self,
                  num_params,
-                 num_layers,
-                 layer_dim,
+                 layer_dims,
+                 layer_activations,
                  train_epochs,
                  batch_size,
                  keep_prob,
@@ -30,9 +30,11 @@ class SingleNeuralNet():
         self.log = logging.getLogger(__name__)
         self.tf_session = tf.InteractiveSession()
 
+        if not len(layer_dims) == len(layer_activations):
+            self.log.error('len(layer_dims) != len(layer_activations)')
+            raise ValueError
+
         self.num_params = num_params
-        self.num_layers = num_layers
-        self.layer_dim = layer_dim
         self.train_epochs = train_epochs
         self.batch_size = batch_size
         self.keep_prob = keep_prob
@@ -52,12 +54,12 @@ class SingleNeuralNet():
         # TODO: Use length scale for setting initial weights?
         prev_layer_dim = self.num_params
         prev_h = self.input_placeholder
-        for dim in [self.layer_dim] * self.num_layers:
+        for (dim, act) in zip(layer_dims, layer_activations):
             self.weights.append(tf.Variable(tf.random_normal([prev_layer_dim, dim], stddev=0.1)))
             self.biases.append(tf.Variable(tf.random_normal([dim])))
             prev_layer_dim = dim
             prev_h = tf.nn.dropout(
-                  tf.abs(tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]),
+                  act(tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]),
                   keep_prob=self.keep_prob_placeholder)
 
         # Output node
@@ -190,10 +192,12 @@ class NeuralNetImpl():
         Args:
             reg (float): Regularisation coefficient.
         '''
+        def gelu_fast(_x):
+            return 0.5 * _x * (1 + tf.tanh(tf.sqrt(2 / np.pi) * (_x + 0.044715 * tf.pow(_x, 3))))
         return SingleNeuralNet(
                 self.num_params,
-                1, # num_layers
-                32, # layer_dim
+                [32],#, 32], # layer_dims
+                [gelu_fast],#tf.abs, tf.abs], # layer_activations
                 1000, # train_epochs
                 64, # batch_size
                 1., # keep_prob
