@@ -38,7 +38,7 @@ def show_all_default_visualizations(controller, show_plots=True):
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
-    create_contoller_visualizations(controller.total_archive_filename, 
+    create_controller_visualizations(controller.total_archive_filename,
                                     file_type=controller.controller_archive_file_type)
     
     if isinstance(controller, mlc.DifferentialEvolutionController):
@@ -91,7 +91,7 @@ def configure_plots():
     mpl.rcParams['legend.scatterpoints'] = 1
     mpl.rcParams['legend.fontsize']= 'medium'
     
-def create_contoller_visualizations(filename,
+def create_controller_visualizations(filename,
                                     file_type='pkl',
                                     plot_cost_vs_run=True,
                                     plot_parameters_vs_run=True,
