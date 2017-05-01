@@ -114,8 +114,14 @@ class SingleNeuralNet():
                         feed_dict={self.input_placeholder: params,
                                    self.output_placeholder: [[c] for c in costs],
                                    self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
+                                   }))
+                + ', with unregularized cost '
+                + str(self.tf_session.run(
+                        self.loss_func,
+                        feed_dict={self.input_placeholder: params,
+                                   self.output_placeholder: [[c] for c in costs],
+                                   self.regularisation_coefficient_placeholder: 0,
                                    })))
-
 
     def cross_validation_loss(self, params, costs):
         '''
