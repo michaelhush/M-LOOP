@@ -70,7 +70,7 @@ class SingleNeuralNet():
                 tf.reduce_mean(tf.reduce_sum(tf.square(self.output_var - self.output_placeholder),
                                              reduction_indices=[1]))
                 + self.regularisation_coefficient_placeholder
-                        * sum([tf.nn.l2_loss(W) for W in self.weights]))
+                        * tf.reduce_mean([tf.nn.l2_loss(W) for W in self.weights]))
         self.train_step = tf.train.AdamOptimizer(1.0).minimize(self.loss_func)
 
         # Gradient
