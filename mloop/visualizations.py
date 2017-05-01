@@ -181,6 +181,7 @@ class ControllerVisualizer():
         plt.scatter(self.in_numbers,self.in_costs,marker='o',c=self.cost_colors,s=5*mpl.rcParams['lines.markersize'])
         plt.xlabel(run_label)
         plt.ylabel(cost_label)
+        plt.ylim((0,100))
         plt.title('Controller: Cost vs run number.')
         artists = []
         for ut in self.unique_types:

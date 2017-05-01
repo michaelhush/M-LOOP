@@ -192,8 +192,8 @@ class NeuralNetImpl():
         '''
         return SingleNeuralNet(
                 self.num_params,
-                1, # num_layers
-                128, # layer_dim
+                2, # num_layers
+                32, # layer_dim
                 1000, # train_epochs
                 64, # batch_size
                 1., # keep_prob
