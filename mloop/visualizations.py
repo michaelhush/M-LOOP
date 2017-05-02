@@ -673,7 +673,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         plt.figure(figure_counter)
         points = 100
         (_,cost_arrays) = self.return_cross_sections(points=points)
-        rel_params = np.linspace(0,1,points)
+        rel_params = np.linspace(-5,5,points)
         for ind in range(self.num_params):
             plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
         if self.has_trust_region:
@@ -683,7 +683,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             for ind in range(self.num_params):
                 plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
         plt.xlabel(scale_param_label)
-        plt.xlim((0,1))
+        plt.xlim((-5,5))
         plt.ylabel(cost_label)
         plt.title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
         artists = []
@@ -707,7 +707,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         params = [(x,y) for x in param_set[0] for y in param_set[1]]
         costs = self.predict_costs_from_param_array(params)
         ax.scatter([param[0] for param in params], [param[1] for param in params], costs)
-        ax.set_zlim(top=100)
+        ax.set_zlim(top=500,bottom=0)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_zlabel('cost')

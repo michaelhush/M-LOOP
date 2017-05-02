@@ -194,10 +194,12 @@ class NeuralNetImpl():
         '''
         def gelu_fast(_x):
             return 0.5 * _x * (1 + tf.tanh(tf.sqrt(2 / np.pi) * (_x + 0.044715 * tf.pow(_x, 3))))
+        def amazing_abs(_x):
+            return tf.maximum(1 - tf.abs(_x), 0)
         return SingleNeuralNet(
                 self.num_params,
-                [32],#, 32], # layer_dims
-                [gelu_fast],#tf.abs, tf.abs], # layer_activations
+                [32, 32, 32, 32],#, 32], # layer_dims
+                [tf.abs, tf.nn.relu, tf.abs, tf.nn.relu], # layer_activations
                 1000, # train_epochs
                 64, # batch_size
                 1., # keep_prob
