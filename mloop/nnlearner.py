@@ -34,6 +34,9 @@ class SingleNeuralNet():
             self.log.error('len(layer_dims) != len(layer_activations)')
             raise ValueError
 
+        # All member variables of this class are constants. The only things that change are the TF
+        # variables.
+
         self.num_params = num_params
         self.train_epochs = train_epochs
         self.batch_size = batch_size
@@ -78,7 +81,23 @@ class SingleNeuralNet():
         # Gradient
         self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
 
+        # Saver for saving and restoring params
+        self.saver = tf.train.Saver(write_version=tf.train.SaverDef.V2)
+
         self.tf_session.run(tf.initialize_all_variables())
+
+    def load(self, archive):
+        '''
+        Imports the net from an archive dictionary.
+        '''
+        self.saver.restore(self.tf_session, str(archive['saver_path']))
+
+    def save(self):
+        '''
+        Exports the net to an archive dictionary.
+        '''
+        # TODO: Use a proper timestamped filename.
+        return {'saver_path': self.saver.save(self.tf_session, 'net.ckpt')}
 
     def fit(self, params, costs):
         '''
@@ -179,9 +198,13 @@ class NeuralNetImpl():
             self.log.error("num_params must be provided")
             raise ValueError
 
+        # Constants.
         self.num_params = num_params
         self.fit_hyperparameters = fit_hyperparameters
+
+        # Tracking variables. These need to be set when importing and saved when exporting.
         self.last_hyperfit = 0
+        self.last_net_reg = 0.01
 
         self.net = self._make_net(0.01)
 
@@ -205,6 +228,26 @@ class NeuralNetImpl():
                 1., # keep_prob
                 reg)
 
+    def load(self, archive):
+        '''
+        Imports the net from an archive dictionary.
+        '''
+        self.log.debug('Importing neural network')
+        self.last_hyperfit = int(archive['last_hyperfit'])
+        self.last_net_reg = float(archive['last_net_reg'])
+
+        self.net = self._make_net(self.last_net_reg)
+        self.net.load(dict(archive['net']))
+
+    def save(self):
+        '''
+        Exports the net to an archive dictionary.
+        '''
+        self.log.debug('Exporting neural network')
+        return {'last_hyperfit': self.last_hyperfit,
+                'last_net_reg': self.last_net_reg,
+                'net': self.net.save(),
+                }
 
     def fit_neural_net(self, all_params, all_costs):
         '''
@@ -255,6 +298,7 @@ class NeuralNetImpl():
                     if this_cv_loss < best_cv_loss and this_cv_loss < 0.1 * orig_cv_loss:
                         best_cv_loss = this_cv_loss
                         self.log.debug("Switching to reg=" + str(r) + ", cv loss=" + str(best_cv_loss))
+                        self.last_net_reg = r
                         self.net = net
 
                 # TODO: Fit depth

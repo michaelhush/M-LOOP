@@ -1661,7 +1661,7 @@ class NeuralNetLearner(Learner, mp.Process):
         # re-train).
         self.cost_scaler = skp.StandardScaler(with_mean=False, with_std=False)
 
-        self.archive_dict.update({'archive_type':'nerual_net_learner',
+        self.archive_dict.update({'archive_type':'neural_net_learner',
                                   'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
@@ -1682,6 +1682,14 @@ class NeuralNetLearner(Learner, mp.Process):
         '''
         import mloop.nnlearner as mlnn
         self.neural_net_impl = mlnn.NeuralNetImpl(self.num_params)
+
+    def import_neural_net(self):
+        '''
+        Imports neural net parameters from the training dictionary provided at construction.
+        '''
+        if not self.training_dict:
+            raise ValueError
+        self.neural_net_impl.load(self.training_dict['net'])
 
     def fit_neural_net(self):
         '''
@@ -1866,7 +1874,9 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'params_count':self.params_count,
                                   'update_hyperparameters':self.update_hyperparameters,
                                   'length_scale':self.length_scale,
-                                  'noise_level':self.noise_level})    
+                                  'noise_level':self.noise_level})
+        if self.neural_net_impl:
+            self.archive_dict.update({'net':self.neural_net_impl.save()})
 
     def find_next_parameters(self):
         '''
