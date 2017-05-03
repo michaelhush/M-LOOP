@@ -19,6 +19,7 @@ import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
 import multiprocessing as mp
+import mloop.nnlearner as mlnn
 
 learner_thread_count = 0
 default_learner_archive_filename = 'learner_archive'
@@ -1676,19 +1677,23 @@ class NeuralNetLearner(Learner, mp.Process):
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
 
+    def _construct_net(self):
+        self.neural_net_impl = mlnn.NeuralNetImpl(self.num_params)
+
     def create_neural_net(self):
         '''
         Creates the neural net. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array.
         '''
-        import mloop.nnlearner as mlnn
-        self.neural_net_impl = mlnn.NeuralNetImpl(self.num_params)
+        self._construct_net()
+        self.neural_net_impl.init()
 
     def import_neural_net(self):
         '''
-        Imports neural net parameters from the training dictionary provided at construction.
+        Imports neural net parameters from the training dictionary provided at construction. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array. You must call exactly one of this and create_neural_net before calling other methods.
         '''
         if not self.training_dict:
             raise ValueError
+        self._construct_net()
         self.neural_net_impl.load(self.training_dict['net'])
 
     def fit_neural_net(self):

@@ -601,8 +601,8 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         self.has_trust_region = bool(np.array(self.training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(self.training_dict['trust_region'], dtype=float))
         
-        self.create_neural_net()
         self.import_neural_net()
+        self.fit_neural_net()
         
         if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.min_boundary)):
             self.finite_flag = True

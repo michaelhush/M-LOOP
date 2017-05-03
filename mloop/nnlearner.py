@@ -28,7 +28,8 @@ class SingleNeuralNet():
                  keep_prob,
                  regularisation_coefficient):
         self.log = logging.getLogger(__name__)
-        self.tf_session = tf.InteractiveSession()
+        self.graph = tf.Graph()
+        self.tf_session = tf.Session(graph=self.graph)
 
         if not len(layer_dims) == len(layer_activations):
             self.log.error('len(layer_dims) != len(layer_activations)')
@@ -43,61 +44,75 @@ class SingleNeuralNet():
         self.keep_prob = keep_prob
         self.regularisation_coefficient = regularisation_coefficient
 
-        # Inputs
-        self.input_placeholder = tf.placeholder(tf.float32, shape=[None, self.num_params])
-        self.output_placeholder = tf.placeholder(tf.float32, shape=[None, 1])
-        self.keep_prob_placeholder = tf.placeholder_with_default(1., shape=[])
-        self.regularisation_coefficient_placeholder = tf.placeholder_with_default(0., shape=[])
+        with self.graph.as_default():
+            # Inputs
+            self.input_placeholder = tf.placeholder(tf.float32, shape=[None, self.num_params])
+            self.output_placeholder = tf.placeholder(tf.float32, shape=[None, 1])
+            self.keep_prob_placeholder = tf.placeholder_with_default(1., shape=[])
+            self.regularisation_coefficient_placeholder = tf.placeholder_with_default(0., shape=[])
 
-        # Parameters
-        self.weights = []
-        self.biases = []
+            # Parameters
+            self.weights = []
+            self.biases = []
 
-        # Input + internal nodes
-        # TODO: Use length scale for setting initial weights?
-        prev_layer_dim = self.num_params
-        prev_h = self.input_placeholder
-        for (dim, act) in zip(layer_dims, layer_activations):
-            self.weights.append(tf.Variable(tf.random_normal([prev_layer_dim, dim], stddev=0.1)))
-            self.biases.append(tf.Variable(tf.random_normal([dim])))
-            prev_layer_dim = dim
-            prev_h = tf.nn.dropout(
-                  act(tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]),
-                  keep_prob=self.keep_prob_placeholder)
+            # Input + internal nodes
+            # TODO: Use length scale for setting initial weights?
+            prev_layer_dim = self.num_params
+            prev_h = self.input_placeholder
+            for (i, (dim, act)) in enumerate(zip(layer_dims, layer_activations)):
+                self.weights.append(tf.Variable(tf.random_normal([prev_layer_dim, dim], stddev=0.1), name="weight_"+str(i)))
+                self.biases.append(tf.Variable(tf.random_normal([dim]), name="bias_"+str(i)))
+                prev_layer_dim = dim
+                prev_h = tf.nn.dropout(
+                      act(tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]),
+                      keep_prob=self.keep_prob_placeholder)
 
-        # Output node
-        self.weights.append(tf.Variable(tf.random_normal([prev_layer_dim, 1])))
-        self.biases.append(tf.Variable(tf.random_normal([1])))
-        self.output_var = tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]
+            # Output node
+            self.weights.append(tf.Variable(tf.random_normal([prev_layer_dim, 1]), name="weight_out"))
+            self.biases.append(tf.Variable(tf.random_normal([1]), name="bias_out"))
+            self.output_var = tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]
 
-        # Loss function and training
-        self.loss_func = (
-                tf.reduce_mean(tf.reduce_sum(tf.square(self.output_var - self.output_placeholder),
-                                             reduction_indices=[1]))
-                + self.regularisation_coefficient_placeholder
-                        * tf.reduce_mean([tf.nn.l2_loss(W) for W in self.weights]))
-        self.train_step = tf.train.AdamOptimizer(1.0).minimize(self.loss_func)
+            # Loss function and training
+            self.loss_func = (
+                    tf.reduce_mean(tf.reduce_sum(tf.square(self.output_var - self.output_placeholder),
+                                                 reduction_indices=[1]))
+                    + self.regularisation_coefficient_placeholder
+                            * tf.reduce_mean([tf.nn.l2_loss(W) for W in self.weights]))
+            self.train_step = tf.train.AdamOptimizer(1.0).minimize(self.loss_func)
 
-        # Gradient
-        self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
+            # Gradient
+            self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
 
-        # Saver for saving and restoring params
-        self.saver = tf.train.Saver(write_version=tf.train.SaverDef.V2)
+            # Initialiser for ... initialising
+            self.initialiser = tf.initialize_all_variables()
 
-        self.tf_session.run(tf.initialize_all_variables())
+            # Saver for saving and restoring params
+            self.saver = tf.train.Saver(write_version=tf.train.SaverDef.V2)
+
+    def destroy(self):
+        self.tf_session.close()
+
+    def init(self):
+        '''
+        Initializes the net.
+        '''
+        self.tf_session.run(self.initialiser)
 
     def load(self, archive):
         '''
-        Imports the net from an archive dictionary.
+        Imports the net from an archive dictionary. You must call exactly one of this and init() before calling any other methods.
         '''
-        self.saver.restore(self.tf_session, str(archive['saver_path']))
+        self.log.debug("Loading neural network")
+        self.saver.restore(self.tf_session, "./" + str(archive['saver_path']))
 
     def save(self):
         '''
         Exports the net to an archive dictionary.
         '''
-        # TODO: Use a proper timestamped filename.
-        return {'saver_path': self.saver.save(self.tf_session, 'net.ckpt')}
+        # TODO: Use a proper timestamped filename, maybe?
+        path = self.saver.save(self.tf_session, "net.ckpt")
+        self.log.debug("Saving neural network to: " + path)
+        return {'saver_path': path}
 
     def fit(self, params, costs):
         '''
@@ -210,7 +225,7 @@ class NeuralNetImpl():
 
     def _make_net(self, reg):
         '''
-        Helper method to create a new net with a specified regularisation coefficient.
+        Helper method to create a new net with a specified regularisation coefficient. The net is not initialised, so you must call init() or load() on it before any other method.
 
         Args:
             reg (float): Regularisation coefficient.
@@ -228,14 +243,21 @@ class NeuralNetImpl():
                 1., # keep_prob
                 reg)
 
+    def init(self):
+        '''
+        Initializes the net.
+        '''
+        self.net.init()
+
     def load(self, archive):
         '''
-        Imports the net from an archive dictionary.
+        Imports the net from an archive dictionary. You must call exactly one of this and init() before calling any other methods.
         '''
-        self.log.debug('Importing neural network')
         self.last_hyperfit = int(archive['last_hyperfit'])
         self.last_net_reg = float(archive['last_net_reg'])
 
+        # Destroy the old net, and replace it with the new loaded one.
+        self.net.destroy()
         self.net = self._make_net(self.last_net_reg)
         self.net.load(dict(archive['net']))
 
@@ -243,7 +265,6 @@ class NeuralNetImpl():
         '''
         Exports the net to an archive dictionary.
         '''
-        self.log.debug('Exporting neural network')
         return {'last_hyperfit': self.last_hyperfit,
                 'last_net_reg': self.last_net_reg,
                 'net': self.net.save(),
@@ -293,13 +314,17 @@ class NeuralNetImpl():
                 # does significantly better on the cross validation set than the old one.
                 for r in [0.001, 0.01, 0.1, 1, 10]:
                     net = self._make_net(r)
+                    net.init()
                     net.fit(train_params, train_costs)
                     this_cv_loss = net.cross_validation_loss(cv_params, cv_costs)
                     if this_cv_loss < best_cv_loss and this_cv_loss < 0.1 * orig_cv_loss:
                         best_cv_loss = this_cv_loss
                         self.log.debug("Switching to reg=" + str(r) + ", cv loss=" + str(best_cv_loss))
                         self.last_net_reg = r
+                        self.net.destroy()
                         self.net = net
+                    else:
+                        net.destroy()
 
                 # TODO: Fit depth
 
