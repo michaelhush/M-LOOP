@@ -117,6 +117,23 @@ class SingleNeuralNet():
         self.log.debug("Saving neural network to: " + path)
         return {'saver_path': path}
 
+    def _loss(self, params, costs):
+        '''
+        Returns the loss and unregularised loss for the given params and costs.
+        '''
+        return (self.tf_session.run(
+            self.loss_func,
+            feed_dict={self.input_placeholder: params,
+                       self.output_placeholder: [[c] for c in costs],
+                       self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
+                       }),
+            self.tf_session.run(
+                self.loss_func,
+                feed_dict={self.input_placeholder: params,
+                           self.output_placeholder: [[c] for c in costs],
+                           self.regularisation_coefficient_placeholder: 0,
+                           }))
+
     def fit(self, params, costs):
         '''
         Fit the neural net to the provided data
@@ -133,34 +150,32 @@ class SingleNeuralNet():
             self.log.error("Params and costs must have the same length")
             raise ValueError
 
-        for i in range(self.train_epochs):
-            # Split the data into random batches, and train on each batch
-            indices = np.random.permutation(len(params))
-            for j in range(math.ceil(len(params) / self.batch_size)):
-                batch_indices = indices[j * self.batch_size : (j + 1) * self.batch_size]
-                batch_input = [params[index] for index in batch_indices]
-                batch_output = [[costs[index]] for index in batch_indices]
-                self.tf_session.run(self.train_step,
-                                    feed_dict={self.input_placeholder: batch_input,
-                                               self.output_placeholder: batch_output,
-                                               self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
-                                               self.keep_prob_placeholder: self.keep_prob,
-                                               })
-
-        self.log.debug('Fit neural network with total training cost '
-                + str(self.tf_session.run(
-                        self.loss_func,
-                        feed_dict={self.input_placeholder: params,
-                                   self.output_placeholder: [[c] for c in costs],
-                                   self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
-                                   }))
-                + ', with unregularized cost '
-                + str(self.tf_session.run(
-                        self.loss_func,
-                        feed_dict={self.input_placeholder: params,
-                                   self.output_placeholder: [[c] for c in costs],
-                                   self.regularisation_coefficient_placeholder: 0,
-                                   })))
+        # The general training procedure is as follows:
+        # - set a threshold of 80% of the current loss
+        # - train for train_epochs epochs
+        # - if the new loss is greater than the threshold then we haven't improved much, so stop
+        # - else start from the top
+        while True:
+            threshold = 0.8 * self._loss(params, costs)[0]
+            for i in range(self.train_epochs):
+                # Split the data into random batches, and train on each batch
+                indices = np.random.permutation(len(params))
+                for j in range(math.ceil(len(params) / self.batch_size)):
+                    batch_indices = indices[j * self.batch_size : (j + 1) * self.batch_size]
+                    batch_input = [params[index] for index in batch_indices]
+                    batch_output = [[costs[index]] for index in batch_indices]
+                    self.tf_session.run(self.train_step,
+                                        feed_dict={self.input_placeholder: batch_input,
+                                                   self.output_placeholder: batch_output,
+                                                   self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
+                                                   self.keep_prob_placeholder: self.keep_prob,
+                                                   })
+            (l, ul) = self._loss(params, costs)
+            self.log.debug('Fit neural network with total training cost ' + str(l)
+                    + ', with unregularized cost ' + str(ul))
+            if l > threshold:
+                break
+            self.log.debug('Cost decreased by a lot, train again')
 
     def cross_validation_loss(self, params, costs):
         '''
