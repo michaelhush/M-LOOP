@@ -80,7 +80,8 @@ class SingleNeuralNet():
                                                  reduction_indices=[1]))
                     + self.regularisation_coefficient_placeholder
                             * tf.reduce_mean([tf.nn.l2_loss(W) for W in self.weights]))
-            self.train_step = tf.train.AdamOptimizer(1.0).minimize(self.loss_func)
+            # TODO: Set learning rate based on length scale?
+            self.train_step = tf.train.AdamOptimizer().minimize(self.loss_func)
 
             # Gradient
             self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
