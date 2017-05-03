@@ -157,6 +157,8 @@ class SingleNeuralNet():
         # - else start from the top
         while True:
             threshold = 0.8 * self._loss(params, costs)[0]
+            if threshold == 0:
+                break
             for i in range(self.train_epochs):
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
