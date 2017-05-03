@@ -9,6 +9,8 @@ class SingleNeuralNet():
 
     This must run in the same process in which it's created.
 
+    This class should be considered private to this module.
+
     Args:
         num_params: The number of params.
         layer_dims: The number of nodes in each layer.
