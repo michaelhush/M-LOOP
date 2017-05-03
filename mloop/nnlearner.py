@@ -151,12 +151,12 @@ class SingleNeuralNet():
             raise ValueError
 
         # The general training procedure is as follows:
-        # - set a threshold of 80% of the current loss
+        # - set a threshold of 10% of the current loss
         # - train for train_epochs epochs
         # - if the new loss is greater than the threshold then we haven't improved much, so stop
         # - else start from the top
         while True:
-            threshold = 0.8 * self._loss(params, costs)[0]
+            threshold = 0.1 * self._loss(params, costs)[0]
             if threshold == 0:
                 break
             for i in range(self.train_epochs):
