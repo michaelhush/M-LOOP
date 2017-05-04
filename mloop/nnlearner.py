@@ -156,9 +156,10 @@ class SingleNeuralNet():
         # - if the new loss is greater than the threshold then we haven't improved much, so stop
         # - else start from the top
         while True:
-            threshold = 0.1 * self._loss(params, costs)[0]
+            threshold = 0.9 * self._loss(params, costs)[0]
             if threshold == 0:
                 break
+            tot = 0
             for i in range(self.train_epochs):
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
@@ -172,10 +173,17 @@ class SingleNeuralNet():
                                                    self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
                                                    self.keep_prob_placeholder: self.keep_prob,
                                                    })
+                tot += self._loss(params, costs)[0]
+                if i % 10 == 0:
+                    (l, ul) = self._loss(params, costs)
+                    self.log.debug('Fit neural network with total training cost ' + str(l)
+                            + ', with unregularized cost ' + str(ul))
+
             (l, ul) = self._loss(params, costs)
+            al = tot / float(self.train_epochs)
             self.log.debug('Fit neural network with total training cost ' + str(l)
-                    + ', with unregularized cost ' + str(ul))
-            if l > threshold:
+                    + ', with unregularized cost ' + str(ul) + "avg: " + str(al))
+            if al > threshold:
                 break
             self.log.debug('Cost decreased by a lot, train again')
 
@@ -199,7 +207,13 @@ class SingleNeuralNet():
         Returns:
             float : Predicted cost at parameters
         '''
-        return self.tf_session.run(self.output_var, feed_dict={self.input_placeholder: [params]})[0][0]
+        runs = 100
+        # Do some runs with dropout, and return the smallest. This is kind of LCB.
+        results = [y[0] for y in self.tf_session.run(self.output_var, feed_dict={
+                self.input_placeholder: [params] * runs,
+                self.keep_prob_placeholder: 0.99})]
+        results.sort()
+        return results[int(runs * 0.2)]
 
     def predict_cost_gradient(self,params):
         '''
@@ -256,11 +270,10 @@ class NeuralNetImpl():
             return tf.maximum(1 - tf.abs(_x), 0)
         return SingleNeuralNet(
                 self.num_params,
-                [32, 32, 32, 32],#, 32], # layer_dims
-                [tf.abs, tf.nn.relu, tf.abs, tf.nn.relu], # layer_activations
-                1000, # train_epochs
+                [64]*5, [tf.nn.relu]*5,
+                100, # train_epochs
                 64, # batch_size
-                1., # keep_prob
+                0.99, # keep_prob
                 reg)
 
     def init(self):
