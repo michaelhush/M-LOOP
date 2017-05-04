@@ -186,6 +186,11 @@ class ControllerVisualizer():
         for ut in self.unique_types:
             artists.append(plt.Line2D((0,1),(0,0), color=_color_from_controller_name(ut), marker='o', linestyle=''))
         plt.legend(artists,self.unique_types,loc=legend_loc)
+        f = open("output.txt", "w")
+        for (x, y) in zip(self.in_numbers, self.in_costs):
+            f.write(str(x) + " " + str(y) + "\n")
+        f.close()
+
         
     def plot_parameters_vs_run(self):
         '''
