@@ -265,11 +265,11 @@ class NeuralNetImpl():
 
         # Tracking variables. These need to be set when importing and saved when exporting.
         self.last_hyperfit = 0
-        self.last_net_reg = 0.01
+        self.last_net_reg = 0.001
 
         self.losses_list = []
 
-        self.net = self._make_net(0.01)
+        self.net = self._make_net(0.001)
 
     def _make_net(self, reg):
         '''
@@ -284,10 +284,10 @@ class NeuralNetImpl():
             return tf.maximum(1 - tf.abs(_x), 0)
         return SingleNeuralNet(
                 self.num_params,
-                [64]*5, [tf.nn.relu]*5,
+                [64]*5, [gelu_fast]*5,
                 100, # train_epochs
                 64, # batch_size
-                0.99, # keep_prob
+                0.8, # keep_prob
                 reg,
                 self.losses_list)
 
