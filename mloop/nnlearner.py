@@ -216,13 +216,14 @@ class SingleNeuralNet():
         Returns:
             float : Predicted cost at parameters
         '''
-        runs = 100
-        # Do some runs with dropout, and return the smallest. This is kind of LCB.
-        results = [y[0] for y in self.tf_session.run(self.output_var, feed_dict={
-                self.input_placeholder: [params] * runs,
-                self.keep_prob_placeholder: 0.99})]
-        results.sort()
-        return results[int(runs * 0.2)]
+        return self.tf_session.run(self.output_var, feed_dict={self.input_placeholder: [params]})[0][0]
+        #runs = 100
+        ## Do some runs with dropout, and return the smallest. This is kind of LCB.
+        #results = [y[0] for y in self.tf_session.run(self.output_var, feed_dict={
+        #        self.input_placeholder: [params] * runs,
+        #        self.keep_prob_placeholder: 0.99})]
+        #results.sort()
+        #return results[int(runs * 0.2)]
 
     def predict_cost_gradient(self,params):
         '''
