@@ -61,17 +61,26 @@ class SingleNeuralNet():
             # TODO: Use length scale for setting initial weights?
             prev_layer_dim = self.num_params
             prev_h = self.input_placeholder
+            stddev=0.1
             for (i, (dim, act)) in enumerate(zip(layer_dims, layer_activations)):
-                self.weights.append(tf.Variable(tf.random_normal([prev_layer_dim, dim], stddev=0.1), name="weight_"+str(i)))
-                self.biases.append(tf.Variable(tf.random_normal([dim]), name="bias_"+str(i)))
+                self.weights.append(tf.Variable(
+                    tf.random_normal([prev_layer_dim, dim], stddev=stddev),
+                    name="weight_"+str(i)))
+                self.biases.append(tf.Variable(
+                    tf.random_normal([dim], stddev=stddev),
+                    name="bias_"+str(i)))
                 prev_layer_dim = dim
                 prev_h = tf.nn.dropout(
                       act(tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]),
                       keep_prob=self.keep_prob_placeholder)
 
             # Output node
-            self.weights.append(tf.Variable(tf.random_normal([prev_layer_dim, 1]), name="weight_out"))
-            self.biases.append(tf.Variable(tf.random_normal([1]), name="bias_out"))
+            self.weights.append(tf.Variable(
+                tf.random_normal([prev_layer_dim, 1], stddev=stddev),
+                name="weight_out"))
+            self.biases.append(tf.Variable(
+                tf.random_normal([1], stddev=stddev),
+                name="bias_out"))
             self.output_var = tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]
 
             # Loss function and training
@@ -151,12 +160,13 @@ class SingleNeuralNet():
             raise ValueError
 
         # The general training procedure is as follows:
-        # - set a threshold of 10% of the current loss
+        # - set a threshold based on the current loss
         # - train for train_epochs epochs
         # - if the new loss is greater than the threshold then we haven't improved much, so stop
         # - else start from the top
         while True:
             threshold = 0.9 * self._loss(params, costs)[0]
+            self.log.debug("Training with threshold " + str(threshold))
             if threshold == 0:
                 break
             tot = 0
@@ -173,19 +183,18 @@ class SingleNeuralNet():
                                                    self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
                                                    self.keep_prob_placeholder: self.keep_prob,
                                                    })
-                tot += self._loss(params, costs)[0]
+                (l, ul) = self._loss(params, costs)
+                self.losses_list.append(l)
+                tot += l
                 if i % 10 == 0:
-                    (l, ul) = self._loss(params, costs)
                     self.log.debug('Fit neural network with total training cost ' + str(l)
                             + ', with unregularized cost ' + str(ul))
 
             (l, ul) = self._loss(params, costs)
             al = tot / float(self.train_epochs)
-            self.log.debug('Fit neural network with total training cost ' + str(l)
-                    + ', with unregularized cost ' + str(ul) + "avg: " + str(al))
-            if al > threshold:
+            self.log.debug('Loss ' + str(l) + ', average loss ' + str(al))
+            if l > threshold:
                 break
-            self.log.debug('Cost decreased by a lot, train again')
 
     def cross_validation_loss(self, params, costs):
         '''
