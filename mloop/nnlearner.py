@@ -19,6 +19,7 @@ class SingleNeuralNet():
         batch_size: The training batch size.
         keep_prob: The dropoout keep probability.
         regularisation_coefficient: The regularisation coefficient.
+        losses_list: A list to which this object will append training losses.
     '''
 
     def __init__(self,
@@ -28,7 +29,8 @@ class SingleNeuralNet():
                  train_epochs,
                  batch_size,
                  keep_prob,
-                 regularisation_coefficient):
+                 regularisation_coefficient,
+                 losses_list):
         self.log = logging.getLogger(__name__)
         self.graph = tf.Graph()
         self.tf_session = tf.Session(graph=self.graph)
@@ -37,14 +39,14 @@ class SingleNeuralNet():
             self.log.error('len(layer_dims) != len(layer_activations)')
             raise ValueError
 
-        # All member variables of this class are constants. The only things that change are the TF
-        # variables.
-
+        # Hyperparameters for the net. These are all constant.
         self.num_params = num_params
         self.train_epochs = train_epochs
         self.batch_size = batch_size
         self.keep_prob = keep_prob
         self.regularisation_coefficient = regularisation_coefficient
+
+        self.losses_list = losses_list
 
         with self.graph.as_default():
             # Inputs
@@ -265,6 +267,8 @@ class NeuralNetImpl():
         self.last_hyperfit = 0
         self.last_net_reg = 0.01
 
+        self.losses_list = []
+
         self.net = self._make_net(0.01)
 
     def _make_net(self, reg):
@@ -284,7 +288,8 @@ class NeuralNetImpl():
                 100, # train_epochs
                 64, # batch_size
                 0.99, # keep_prob
-                reg)
+                reg,
+                self.losses_list)
 
     def init(self):
         '''
@@ -299,6 +304,8 @@ class NeuralNetImpl():
         self.last_hyperfit = int(archive['last_hyperfit'])
         self.last_net_reg = float(archive['last_net_reg'])
 
+        self.losses_list = list(archive['losses_list'])
+
         # Destroy the old net, and replace it with the new loaded one.
         self.net.destroy()
         self.net = self._make_net(self.last_net_reg)
@@ -310,6 +317,7 @@ class NeuralNetImpl():
         '''
         return {'last_hyperfit': self.last_hyperfit,
                 'last_net_reg': self.last_net_reg,
+                'losses_list': self.losses_list,
                 'net': self.net.save(),
                 }
 
@@ -390,3 +398,11 @@ class NeuralNetImpl():
             float : Predicted gradient at parameters
         '''
         return self.net.predict_cost_gradient(params)
+
+    # Methods for debugging/analysis.
+
+    def get_losses(self):
+        '''
+        Returns a list of training losses experienced by the network.
+        '''
+        return self.losses_list

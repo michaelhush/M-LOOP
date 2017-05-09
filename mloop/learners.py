@@ -2038,9 +2038,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.has_local_minima = True
         self.log.info('Search completed')
 
+    # Methods for debugging/analysis.
 
-
-
-
-
-
+    def get_losses(self):
+        return self.neural_net_impl.get_losses()
