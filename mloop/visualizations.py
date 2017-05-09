@@ -578,6 +578,7 @@ def create_neural_net_learner_visualizations(filename,
     if plot_cross_sections:
         visualization.plot_cross_sections()
         visualization.plot_surface()
+    visualization.plot_losses()
 
             
 class NeuralNetVisualizer(mll.NeuralNetLearner):
@@ -716,3 +717,17 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         ax.set_zlabel('cost')
 
         ax.scatter(self.all_params[:,0], self.all_params[:,1], self.all_costs, c='r')
+
+    def plot_losses(self):
+        '''
+        Produce a figure of the loss as a function of training run.
+        '''
+        global figure_counter
+        figure_counter += 1
+        fig = plt.figure(figure_counter)
+
+        losses = self.get_losses()
+        plt.scatter(range(len(losses)), losses)
+        plt.xlabel("Run")
+        plt.ylabel("Training cost")
+        plt.title('Loss vs training run.')
