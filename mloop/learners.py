@@ -1557,10 +1557,9 @@ class NeuralNetLearner(Learner, mp.Process):
             self.length_scale = mlu.safe_squeeze(self.training_dict['length_scale'])
             self.noise_level = float(self.training_dict['noise_level'])
 
-            self.cost_scaler = skp.StandardScaler()
             self.cost_scaler_init_index = self.training_dict['cost_scaler_init_index']
             if not self.cost_scaler_init_index is None:
-                self.cost_scaler.fit(self.all_costs[:self.cost_scaler_init_index,np.newaxis])
+                self._init_cost_scaler()
             
             try:
                 self.predicted_best_parameters = mlu.safe_squeeze(self.training_dict['predicted_best_parameters'])
@@ -1614,7 +1613,8 @@ class NeuralNetLearner(Learner, mp.Process):
             self.has_local_minima = False
             self.has_global_minima = False
 
-            self.cost_scaler = skp.StandardScaler()
+            # The scaler will be initialised when we're ready to fit it
+            self.cost_scaler = None
             self.cost_scaler_init_index = None
                 
         #Multiprocessor controls
@@ -1680,6 +1680,13 @@ class NeuralNetLearner(Learner, mp.Process):
 
     def _construct_net(self):
         self.neural_net_impl = mlnn.NeuralNetImpl(self.num_params)
+
+    def _init_cost_scaler(self):
+        '''
+        Initialises the cost scaler. cost_scaler_init_index must be set.
+        '''
+        self.cost_scaler = skp.StandardScaler(with_mean=False, with_std=False)
+        self.cost_scaler.fit(self.all_costs[:self.cost_scaler_init_index,np.newaxis])
 
     def create_neural_net(self):
         '''
@@ -1936,7 +1943,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self.get_params_and_costs()
                 if self.cost_scaler_init_index is None:
                     self.cost_scaler_init_index = len(self.all_costs)
-                    self.cost_scaler.fit(self.all_costs[:,np.newaxis])
+                    self._init_cost_scaler()
                 self.fit_neural_net()
                 for _ in range(self.generation_num):
                     self.log.debug('Neural network learner generating parameter:'+ str(self.params_count+1))
