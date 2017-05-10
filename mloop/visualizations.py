@@ -578,6 +578,7 @@ def create_neural_net_learner_visualizations(filename,
     if plot_cross_sections:
         visualization.plot_cross_sections()
         visualization.plot_surface()
+        visualization.plot_density_surface()
     visualization.plot_losses()
 
             
@@ -717,6 +718,28 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         ax.set_zlabel('cost')
 
         ax.scatter(self.all_params[:,0], self.all_params[:,1], self.all_costs, c='r')
+
+    def plot_density_surface(self):
+        '''
+        Produce a density plot of the cost surface (only works when there are 2 parameters)
+        '''
+        if self.num_params != 2:
+            return
+        global figure_counter
+        figure_counter += 1
+        fig = plt.figure(figure_counter)
+
+        points = 50
+        xs, ys = np.meshgrid(
+                np.linspace(self.min_boundary[0], self.max_boundary[0], points),
+                np.linspace(self.min_boundary[1], self.max_boundary[1], points))
+        zs_list = self.predict_costs_from_param_array(list(zip(xs.flatten(),ys.flatten())))
+        zs = np.array(zs_list).reshape(points,points)
+        plt.pcolormesh(xs,ys,zs)
+        plt.scatter(self.all_params[:,0], self.all_params[:,1], c=self.all_costs, vmin=np.min(zs), vmax=np.max(zs), s=100)
+        plt.colorbar()
+        plt.xlabel("Param 0")
+        plt.ylabel("Param 1")
 
     def plot_losses(self):
         '''
