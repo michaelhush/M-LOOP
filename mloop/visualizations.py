@@ -111,10 +111,10 @@ def create_controller_visualizations(filename,
     visualization = ControllerVisualizer(filename,file_type=file_type)
     if plot_cost_vs_run:
         visualization.plot_cost_vs_run()
-    if plot_parameters_vs_run:
-        visualization.plot_parameters_vs_run()
-    if plot_parameters_vs_cost:
-        visualization.plot_parameters_vs_cost()
+    #if plot_parameters_vs_run:
+    #    visualization.plot_parameters_vs_run()
+    #if plot_parameters_vs_cost:
+    #    visualization.plot_parameters_vs_cost()
 
 class ControllerVisualizer():
     '''
@@ -577,7 +577,7 @@ def create_neural_net_learner_visualizations(filename,
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
         visualization.plot_cross_sections()
-        visualization.plot_surface()
+        #visualization.plot_surface()
         visualization.plot_density_surface()
     visualization.plot_losses()
 
