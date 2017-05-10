@@ -17,7 +17,11 @@ class SingleNeuralNet():
         num_params: The number of params.
         layer_dims: The number of nodes in each layer.
         layer_activations: The activation function for each layer.
-        train_epochs: Epochs per train.
+        train_epochs: Base epochs per train.
+        train_threshold_ratio: (Relative) loss improvement per train under which training should
+            terminate. E.g. 0.1 means we will train (train_epochs at a time) until the improvement in
+            loss is less than 0.1 of the loss when that train started (so lower values mean we will
+            train for longer).
         batch_size: The training batch size.
         keep_prob: The dropoout keep probability.
         regularisation_coefficient: The regularisation coefficient.
@@ -29,6 +33,7 @@ class SingleNeuralNet():
                  layer_dims,
                  layer_activations,
                  train_epochs,
+                 train_threshold_ratio,
                  batch_size,
                  keep_prob,
                  regularisation_coefficient,
@@ -44,6 +49,7 @@ class SingleNeuralNet():
         # Hyperparameters for the net. These are all constant.
         self.num_params = num_params
         self.train_epochs = train_epochs
+        self.train_threshold_ratio = train_threshold_ratio
         self.batch_size = batch_size
         self.keep_prob = keep_prob
         self.regularisation_coefficient = regularisation_coefficient
@@ -169,7 +175,7 @@ class SingleNeuralNet():
         # - if the new loss is greater than the threshold then we haven't improved much, so stop
         # - else start from the top
         while True:
-            threshold = 0.9 * self._loss(params, costs)[0]
+            threshold = (1 - self.train_threshold_ratio) * self._loss(params, costs)[0]
             self.log.debug("Training with threshold " + str(threshold))
             if threshold == 0:
                 break
@@ -305,6 +311,7 @@ class NeuralNetImpl():
                 self.num_params,
                 [64]*5, [gelu_fast]*5,
                 100, # train_epochs
+                0.5, # train_threshold_ratio
                 64, # batch_size
                 0.8, # keep_prob
                 reg,
