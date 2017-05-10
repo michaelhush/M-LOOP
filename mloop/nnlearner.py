@@ -279,7 +279,7 @@ class NeuralNetImpl():
 
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
-        self.last_net_reg = 0.001
+        self.last_net_reg = 1e-6
 
         self.cost_scaler = skp.StandardScaler(with_mean=True, with_std=True)
         self.param_scaler = skp.StandardScaler(with_mean=True, with_std=True)
@@ -313,7 +313,7 @@ class NeuralNetImpl():
                 100, # train_epochs
                 0.5, # train_threshold_ratio
                 64, # batch_size
-                0.8, # keep_prob
+                1., # keep_prob
                 reg,
                 self.losses_list)
 
