@@ -2,6 +2,7 @@ import logging
 import math
 
 import numpy as np
+import sklearn.preprocessing as skp
 import tensorflow as tf
 
 class SingleNeuralNet():
@@ -245,6 +246,9 @@ class NeuralNetImpl():
 
     This must run in the same process in which it's created.
 
+    This handles scaling of parameters and costs internally, so there is no need to ensure that these
+    values are scaled or normalised in any way.
+
     All parameters should be considered private to this class. That is, you should only interact with
     this class via the methods documented to be public.
 
@@ -270,6 +274,12 @@ class NeuralNetImpl():
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
         self.last_net_reg = 0.001
+
+        self.cost_scaler = skp.StandardScaler(with_mean=True, with_std=True)
+        self.param_scaler = skp.StandardScaler(with_mean=True, with_std=True)
+        # The samples used to fit param_scaler and cost_scaler. When set, this will be a tuple of
+        # (params samples, cost samples).
+        self.scaler_samples = None
 
         # The training losses incurred by the network. This is a concatenation of the losses
         # associated with each instance of SingleNeuralNet.
@@ -299,6 +309,46 @@ class NeuralNetImpl():
                 0.8, # keep_prob
                 reg,
                 self.losses_list)
+
+    def _fit_scaler(self):
+        if self.scaler_samples is None:
+            self.log.error("_fit_scaler() called before samples set")
+            raise ValueError
+        self.param_scaler.fit(self.scaler_samples[0])
+        # Cost is scalar but numpy doesn't like scalars, so reshape to be a 0D vector instead.
+        self.cost_scaler.fit(np.array(self.scaler_samples[1]).reshape(-1,1))
+
+        # Now that the scaler is fitted, calculate the parameters we'll need to unscale gradients.
+        # We need to know which unscaled gradient would correspond to a scaled gradient of [1,...1],
+        # which we can calculate as the unscaled gradient associated with a scaled rise of 1 and a
+        # scaled run of [1,...1]:
+        rise_unscaled = (
+            self._unscale_cost(np.float64(1))
+            - self._unscale_cost(np.float64(0)))
+        run_unscaled = (
+            self._unscale_params([np.float64(1)]*self.num_params)
+            - self._unscale_params([np.float64(0)]*self.num_params))
+        self._gradient_unscale = rise_unscaled / run_unscaled
+
+    def _scale_params_and_cost_list(self, params_list_unscaled, cost_list_unscaled):
+        params_list_scaled = self.param_scaler.transform(params_list_unscaled)
+        # As above, numpy doesn't like scalars, so we need to do some reshaping.
+        cost_vector_list_unscaled = np.array(cost_list_unscaled).reshape(-1,1)
+        cost_vector_list_scaled = self.cost_scaler.transform(cost_vector_list_unscaled)
+        cost_list_scaled = cost_vector_list_scaled[:,0]
+        return params_list_scaled, cost_list_scaled
+
+    def _scale_params(self, params_unscaled):
+        return self.param_scaler.transform([params_unscaled])[0]
+
+    def _unscale_params(self, params_scaled):
+        return self.param_scaler.inverse_transform([params_scaled])[0]
+
+    def _unscale_cost(self, cost_scaled):
+        return self.cost_scaler.inverse_transform([[cost_scaled]])[0][0]
+
+    def _unscale_gradient(self, gradient_scaled):
+        return np.multiply(gradient_scaled, self._gradient_unscale)
 
     # Public methods.
 
@@ -331,6 +381,10 @@ class NeuralNetImpl():
 
         self.losses_list = list(archive['losses_list'])
 
+        self.scaler_samples = archive['scaler_samples']
+        if not self.scaler_samples is None:
+            self._fit_scaler()
+
         self.net = self._make_net(self.last_net_reg)
         self.net.load(dict(archive['net']))
 
@@ -341,6 +395,7 @@ class NeuralNetImpl():
         return {'last_hyperfit': self.last_hyperfit,
                 'last_net_reg': self.last_net_reg,
                 'losses_list': self.losses_list,
+                'scaler_samples': self.scaler_samples,
                 'net': self.net.save(),
                 }
 
@@ -359,6 +414,13 @@ class NeuralNetImpl():
         if not len(all_params) == len(all_costs):
             self.log.error("Params and costs must have the same length")
             raise ValueError
+
+        # If we haven't initialised the scaler yet, do it now.
+        if self.scaler_samples is None:
+            self.scaler_samples = (all_params.copy(), all_costs.copy())
+            self._fit_scaler()
+
+        all_params, all_costs = self._scale_params_and_cost_list(all_params, all_costs)
 
         # TODO: Consider adding some kind of "cost capping". Our NNs will never predict costs going
         # off to infinity, so we could be "wasting" training cost due to totally irrelevant points.
@@ -413,7 +475,7 @@ class NeuralNetImpl():
         Returns:
             float : Predicted cost at parameters
         '''
-        return self.net.predict_cost(params)
+        return self._unscale_cost(self.net.predict_cost(self._scale_params(params)))
 
     def predict_cost_gradient(self,params):
         '''
@@ -424,7 +486,7 @@ class NeuralNetImpl():
         Returns:
             float : Predicted gradient at parameters
         '''
-        return self.net.predict_cost_gradient(params)
+        return self._unscale_gradient(self.net.predict_cost_gradient(self._scale_params(params)))
 
     # Public mmethods to be used only for debugging/analysis.
 
