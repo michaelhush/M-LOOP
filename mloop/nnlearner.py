@@ -1,7 +1,8 @@
 import logging
 import math
-import tensorflow as tf
+
 import numpy as np
+import tensorflow as tf
 
 class SingleNeuralNet():
     '''
@@ -244,6 +245,9 @@ class NeuralNetImpl():
 
     This must run in the same process in which it's created.
 
+    All parameters should be considered private to this class. That is, you should only interact with
+    this class via the methods documented to be public.
+
     Args:
         num_params (int): The number of params.
         fit_hyperparameters (bool): Whether to try to fit the hyperparameters to the data.
@@ -263,17 +267,22 @@ class NeuralNetImpl():
         self.num_params = num_params
         self.fit_hyperparameters = fit_hyperparameters
 
-        # Tracking variables. These need to be set when importing and saved when exporting.
+        # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
         self.last_net_reg = 0.001
 
+        # The training losses incurred by the network. This is a concatenation of the losses
+        # associated with each instance of SingleNeuralNet.
         self.losses_list = []
 
-        self.net = self._make_net(0.001)
+        self.net = None
+
+    # Private helper methods.
 
     def _make_net(self, reg):
         '''
-        Helper method to create a new net with a specified regularisation coefficient. The net is not initialised, so you must call init() or load() on it before any other method.
+        Helper method to create a new net with a specified regularisation coefficient. The net is not
+        initialised, so you must call init() or load() on it before any other method.
 
         Args:
             reg (float): Regularisation coefficient.
@@ -291,23 +300,37 @@ class NeuralNetImpl():
                 reg,
                 self.losses_list)
 
+    # Public methods.
+
     def init(self):
         '''
-        Initializes the net.
+        Initializes the net. You must call exactly one of this and load() before calling any other
+        methods.
         '''
+        if not self.net is None:
+            self.log.error("Called init() when already initialised/loaded")
+            raise ValueError
+
+        self.net = self._make_net(self.last_net_reg)
         self.net.init()
 
     def load(self, archive):
         '''
-        Imports the net from an archive dictionary. You must call exactly one of this and init() before calling any other methods.
+        Imports the net from an archive dictionary. You must call exactly one of this and init()
+        before calling any other methods.
+
+        You must only load a net from an archive if that archive corresponds to a net with the same
+        constructor parameters.
         '''
+        if not self.net is None:
+            self.log.error("Called load() when net already initialised/loaded")
+            raise ValueError
+
         self.last_hyperfit = int(archive['last_hyperfit'])
         self.last_net_reg = float(archive['last_net_reg'])
 
         self.losses_list = list(archive['losses_list'])
 
-        # Destroy the old net, and replace it with the new loaded one.
-        self.net.destroy()
         self.net = self._make_net(self.last_net_reg)
         self.net.load(dict(archive['net']))
 
@@ -323,7 +346,7 @@ class NeuralNetImpl():
 
     def fit_neural_net(self, all_params, all_costs):
         '''
-        Fits the neural net with the appropriate topology to the data
+        Fits the neural net to the data.
 
         Args:
             all_params (array): array of all parameter arrays
@@ -385,6 +408,8 @@ class NeuralNetImpl():
         '''
         Produces a prediction of cost from the neural net at params.
 
+        Must not be called before fit_neural_net().
+
         Returns:
             float : Predicted cost at parameters
         '''
@@ -394,12 +419,14 @@ class NeuralNetImpl():
         '''
         Produces a prediction of the gradient of the cost function at params.
 
+        Must not be called before fit_neural_net().
+
         Returns:
             float : Predicted gradient at parameters
         '''
         return self.net.predict_cost_gradient(params)
 
-    # Methods for debugging/analysis.
+    # Public mmethods to be used only for debugging/analysis.
 
     def get_losses(self):
         '''
