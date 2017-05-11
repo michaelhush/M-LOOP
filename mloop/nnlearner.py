@@ -282,8 +282,6 @@ class NeuralNetImpl():
         self.last_hyperfit = 0
         self.last_net_reg = 1e-6
 
-        self.cost_scaler = skp.StandardScaler(with_mean=True, with_std=True)
-        self.param_scaler = skp.StandardScaler(with_mean=True, with_std=True)
         # The samples used to fit param_scaler and cost_scaler. When set, this will be a tuple of
         # (params samples, cost samples).
         self.scaler_samples = None
@@ -322,6 +320,9 @@ class NeuralNetImpl():
         if self.scaler_samples is None:
             self.log.error("_fit_scaler() called before samples set")
             raise ValueError
+        self.cost_scaler = skp.StandardScaler(with_mean=True, with_std=True)
+        self.param_scaler = skp.StandardScaler(with_mean=True, with_std=True)
+
         self.param_scaler.fit(self.scaler_samples[0])
         # Cost is scalar but numpy doesn't like scalars, so reshape to be a 0D vector instead.
         self.cost_scaler.fit(np.array(self.scaler_samples[1]).reshape(-1,1))
