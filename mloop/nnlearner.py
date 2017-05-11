@@ -19,9 +19,10 @@ class SingleNeuralNet():
         layer_activations: The activation function for each layer.
         train_epochs: Base epochs per train.
         train_threshold_ratio: (Relative) loss improvement per train under which training should
-            terminate. E.g. 0.1 means we will train (train_epochs at a time) until the improvement in
-            loss is less than 0.1 of the loss when that train started (so lower values mean we will
-            train for longer).
+            terminate. E.g. 0.1 means we will train (train_epochs at a time) until the improvement
+            in loss is less than 0.1 of the loss when that train started (so lower values mean we
+            will train for longer). Alternatively, you can think of this as the smallest gradient
+            we'll allow before deciding that the loss isn't improving any more.
         batch_size: The training batch size.
         keep_prob: The dropoout keep probability.
         regularisation_coefficient: The regularisation coefficient.
@@ -311,8 +312,8 @@ class NeuralNetImpl():
                 self.num_params,
                 [64]*5, [gelu_fast]*5,
                 100, # train_epochs
-                0.5, # train_threshold_ratio
-                64, # batch_size
+                0.1, # train_threshold_ratio
+                8, # batch_size
                 1., # keep_prob
                 reg,
                 self.losses_list)
