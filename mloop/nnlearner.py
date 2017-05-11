@@ -343,7 +343,7 @@ class NeuralNetImpl():
         params_list_scaled = self.param_scaler.transform(params_list_unscaled)
         # As above, numpy doesn't like scalars, so we need to do some reshaping.
         cost_vector_list_unscaled = np.array(cost_list_unscaled).reshape(-1,1)
-        cost_vector_list_scaled = self.cost_scaler.transform(cost_vector_list_unscaled)
+        cost_vector_list_scaled = self.cost_scaler.transform(cost_vector_list_unscaled) + 10
         cost_list_scaled = cost_vector_list_scaled[:,0]
         return params_list_scaled, cost_list_scaled
 
@@ -354,7 +354,7 @@ class NeuralNetImpl():
         return self.param_scaler.inverse_transform([params_scaled])[0]
 
     def _unscale_cost(self, cost_scaled):
-        return self.cost_scaler.inverse_transform([[cost_scaled]])[0][0]
+        return self.cost_scaler.inverse_transform([[cost_scaled - 10]])[0][0]
 
     def _unscale_gradient(self, gradient_scaled):
         return np.multiply(gradient_scaled, self._gradient_unscale)
