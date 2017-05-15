@@ -327,6 +327,8 @@ class NeuralNetImpl():
         # Cost is scalar but numpy doesn't like scalars, so reshape to be a 0D vector instead.
         self._cost_scaler.fit(np.array(self.scaler_samples[1]).reshape(-1,1))
 
+        self._mean_offset = 10
+
         # Now that the scaler is fitted, calculate the parameters we'll need to unscale gradients.
         # We need to know which unscaled gradient would correspond to a scaled gradient of [1,...1],
         # which we can calculate as the unscaled gradient associated with a scaled rise of 1 and a
@@ -343,7 +345,8 @@ class NeuralNetImpl():
         params_list_scaled = self._param_scaler.transform(params_list_unscaled)
         # As above, numpy doesn't like scalars, so we need to do some reshaping.
         cost_vector_list_unscaled = np.array(cost_list_unscaled).reshape(-1,1)
-        cost_vector_list_scaled = self._cost_scaler.transform(cost_vector_list_unscaled) + 10
+        cost_vector_list_scaled = (self._cost_scaler.transform(cost_vector_list_unscaled)
+                + self._mean_offset)
         cost_list_scaled = cost_vector_list_scaled[:,0]
         return params_list_scaled, cost_list_scaled
 
@@ -354,7 +357,7 @@ class NeuralNetImpl():
         return self._param_scaler.inverse_transform([params_scaled])[0]
 
     def _unscale_cost(self, cost_scaled):
-        return self._cost_scaler.inverse_transform([[cost_scaled - 10]])[0][0]
+        return self._cost_scaler.inverse_transform([[cost_scaled - self._mean_offset]])[0][0]
 
     def _unscale_gradient(self, gradient_scaled):
         return np.multiply(gradient_scaled, self._gradient_unscale)
