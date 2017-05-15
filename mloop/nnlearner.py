@@ -282,7 +282,7 @@ class NeuralNetImpl():
         self.last_hyperfit = 0
         self.last_net_reg = 1e-6
 
-        # The samples used to fit param_scaler and cost_scaler. When set, this will be a tuple of
+        # The samples used to fit the scalers. When set, this will be a tuple of
         # (params samples, cost samples).
         self.scaler_samples = None
 
@@ -320,12 +320,12 @@ class NeuralNetImpl():
         if self.scaler_samples is None:
             self.log.error("_fit_scaler() called before samples set")
             raise ValueError
-        self.cost_scaler = skp.StandardScaler(with_mean=True, with_std=True)
-        self.param_scaler = skp.StandardScaler(with_mean=True, with_std=True)
+        self._cost_scaler = skp.StandardScaler(with_mean=True, with_std=True)
+        self._param_scaler = skp.StandardScaler(with_mean=True, with_std=True)
 
-        self.param_scaler.fit(self.scaler_samples[0])
+        self._param_scaler.fit(self.scaler_samples[0])
         # Cost is scalar but numpy doesn't like scalars, so reshape to be a 0D vector instead.
-        self.cost_scaler.fit(np.array(self.scaler_samples[1]).reshape(-1,1))
+        self._cost_scaler.fit(np.array(self.scaler_samples[1]).reshape(-1,1))
 
         # Now that the scaler is fitted, calculate the parameters we'll need to unscale gradients.
         # We need to know which unscaled gradient would correspond to a scaled gradient of [1,...1],
@@ -340,21 +340,21 @@ class NeuralNetImpl():
         self._gradient_unscale = rise_unscaled / run_unscaled
 
     def _scale_params_and_cost_list(self, params_list_unscaled, cost_list_unscaled):
-        params_list_scaled = self.param_scaler.transform(params_list_unscaled)
+        params_list_scaled = self._param_scaler.transform(params_list_unscaled)
         # As above, numpy doesn't like scalars, so we need to do some reshaping.
         cost_vector_list_unscaled = np.array(cost_list_unscaled).reshape(-1,1)
-        cost_vector_list_scaled = self.cost_scaler.transform(cost_vector_list_unscaled) + 10
+        cost_vector_list_scaled = self._cost_scaler.transform(cost_vector_list_unscaled) + 10
         cost_list_scaled = cost_vector_list_scaled[:,0]
         return params_list_scaled, cost_list_scaled
 
     def _scale_params(self, params_unscaled):
-        return self.param_scaler.transform([params_unscaled])[0]
+        return self._param_scaler.transform([params_unscaled])[0]
 
     def _unscale_params(self, params_scaled):
-        return self.param_scaler.inverse_transform([params_scaled])[0]
+        return self._param_scaler.inverse_transform([params_scaled])[0]
 
     def _unscale_cost(self, cost_scaled):
-        return self.cost_scaler.inverse_transform([[cost_scaled - 10]])[0][0]
+        return self._cost_scaler.inverse_transform([[cost_scaled - 10]])[0][0]
 
     def _unscale_gradient(self, gradient_scaled):
         return np.multiply(gradient_scaled, self._gradient_unscale)
