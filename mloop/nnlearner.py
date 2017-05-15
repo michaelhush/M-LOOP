@@ -327,7 +327,7 @@ class NeuralNetImpl():
         # Cost is scalar but numpy doesn't like scalars, so reshape to be a 0D vector instead.
         self._cost_scaler.fit(np.array(self.scaler_samples[1]).reshape(-1,1))
 
-        self._mean_offset = 10
+        self._mean_offset = 0
 
         # Now that the scaler is fitted, calculate the parameters we'll need to unscale gradients.
         # We need to know which unscaled gradient would correspond to a scaled gradient of [1,...1],
