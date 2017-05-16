@@ -242,6 +242,63 @@ class SingleNeuralNet():
         '''
         return self.tf_session.run(self.output_var_gradient, feed_dict={self.input_placeholder: [params]})[0][0]
 
+class SampledNeuralNet():
+    def __init__(self,
+                 net_creator,
+                 count):
+        self.log = logging.getLogger(__name__)
+        self.net_creator = net_creator
+        self.nets = [self.net_creator() for _ in range(count)]
+        self.fit_count = 0
+
+    def _random_net(self):
+        return self.nets[np.random.randint(0, len(self.nets))]
+
+    def destroy(self):
+        for n in self.nets:
+            n.destroy()
+
+    def init(self):
+        for n in self.nets:
+            n.init()
+
+    def load(self, archive):
+        for i, n in enumerate(self.nets):
+            #n.load(archive[str(i)])
+            n.load(archive)
+
+    def save(self):
+        return self.nets[0].save()
+        #ret = {}
+        #for i, n in enumerate(self.nets):
+        #    ret[str(i)] = n.save()
+        #return ret
+
+    def fit(self, params, costs, epochs):
+        self.fit_count += 1
+        # Every per'th fit we clear out a net and re-train it.
+        #per = 2
+        #if self.fit_count % per == 0:
+        #    index = int(self.fit_count / per) % len(self.nets)
+        #    self.log.debug("Re-creating net " + str(index))
+        #    self.nets[index].destroy()
+        #    self.nets[index] = self.net_creator()
+        #    self.nets[index].init()
+
+        for n in self.nets:
+            n.fit(params, costs, epochs)
+
+    def cross_validation_loss(self, params, costs):
+        return np.mean([n.cross_validation_loss(params, costs) for n in self.nets])
+
+    def predict_cost(self,params):
+        return self._random_net().predict_cost(params)
+        #return np.mean([n.predict_cost(params) for n in self.nets])
+
+    def predict_cost_gradient(self,params):
+        return self._random_net().predict_cost_gradient(params)
+        #return np.mean([n.predict_cost_gradient(params) for n in self.nets])
+
 
 class NeuralNetImpl():
     '''
@@ -305,14 +362,15 @@ class NeuralNetImpl():
             return 0.5 * _x * (1 + tf.tanh(tf.sqrt(2 / np.pi) * (_x + 0.044715 * tf.pow(_x, 3))))
         def amazing_abs(_x):
             return tf.maximum(1 - tf.abs(_x), 0)
-        return SingleNeuralNet(
-                self.num_params,
-                [64]*5, [gelu_fast]*5,
-                0.1, # train_threshold_ratio
-                8, # batch_size
-                1., # keep_prob
-                reg,
-                self.losses_list)
+        creator = lambda: SingleNeuralNet(
+                    self.num_params,
+                    [64]*5, [tf.nn.relu]*5,
+                    0.5, # train_threshold_ratio
+                    16, # batch_size
+                    1., # keep_prob
+                    reg,
+                    self.losses_list)
+        return SampledNeuralNet(creator, 3)
 
     def _fit_scaler(self):
         if self.scaler_samples is None:
