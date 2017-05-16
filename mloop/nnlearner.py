@@ -17,7 +17,6 @@ class SingleNeuralNet():
         num_params: The number of params.
         layer_dims: The number of nodes in each layer.
         layer_activations: The activation function for each layer.
-        train_epochs: Base epochs per train.
         train_threshold_ratio: (Relative) loss improvement per train under which training should
             terminate. E.g. 0.1 means we will train (train_epochs at a time) until the improvement
             in loss is less than 0.1 of the loss when that train started (so lower values mean we
@@ -33,7 +32,6 @@ class SingleNeuralNet():
                  num_params,
                  layer_dims,
                  layer_activations,
-                 train_epochs,
                  train_threshold_ratio,
                  batch_size,
                  keep_prob,
@@ -49,7 +47,6 @@ class SingleNeuralNet():
 
         # Hyperparameters for the net. These are all constant.
         self.num_params = num_params
-        self.train_epochs = train_epochs
         self.train_threshold_ratio = train_threshold_ratio
         self.batch_size = batch_size
         self.keep_prob = keep_prob
@@ -154,7 +151,7 @@ class SingleNeuralNet():
                            self.regularisation_coefficient_placeholder: 0,
                            }))
 
-    def fit(self, params, costs):
+    def fit(self, params, costs, epochs):
         '''
         Fit the neural net to the provided data
 
@@ -181,7 +178,7 @@ class SingleNeuralNet():
             if threshold == 0:
                 break
             tot = 0
-            for i in range(self.train_epochs):
+            for i in range(epochs):
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
                 for j in range(math.ceil(len(params) / self.batch_size)):
@@ -202,7 +199,7 @@ class SingleNeuralNet():
                             + ', with unregularized cost ' + str(ul))
 
             (l, ul) = self._loss(params, costs)
-            al = tot / float(self.train_epochs)
+            al = tot / float(epochs)
             self.log.debug('Loss ' + str(l) + ', average loss ' + str(al))
             if l > threshold:
                 break
@@ -278,6 +275,8 @@ class NeuralNetImpl():
         self.num_params = num_params
         self.fit_hyperparameters = fit_hyperparameters
 
+        self.epochs = 100
+
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
         self.last_net_reg = 1e-6
@@ -309,7 +308,6 @@ class NeuralNetImpl():
         return SingleNeuralNet(
                 self.num_params,
                 [64]*5, [gelu_fast]*5,
-                100, # train_epochs
                 0.1, # train_threshold_ratio
                 8, # batch_size
                 1., # keep_prob
@@ -463,7 +461,7 @@ class NeuralNetImpl():
                 for r in [0.001, 0.01, 0.1, 1, 10]:
                     net = self._make_net(r)
                     net.init()
-                    net.fit(train_params, train_costs)
+                    net.fit(train_params, train_costs, self.epochs)
                     this_cv_loss = net.cross_validation_loss(cv_params, cv_costs)
                     if this_cv_loss < best_cv_loss and this_cv_loss < 0.1 * orig_cv_loss:
                         best_cv_loss = this_cv_loss
@@ -476,7 +474,7 @@ class NeuralNetImpl():
 
                 # TODO: Fit depth
 
-        self.net.fit(all_params, all_costs)
+        self.net.fit(all_params, all_costs, self.epochs)
 
     def predict_cost(self,params):
         '''
