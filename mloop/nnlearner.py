@@ -490,8 +490,11 @@ class NeuralNetImpl():
 
         # If we haven't initialised the scaler yet, do it now.
         if self.scaler_samples is None:
+            first_fit = True
             self.scaler_samples = (all_params.copy(), all_costs.copy())
             self._fit_scaler()
+        else:
+            first_fit = False
 
         all_params, all_costs = self._scale_params_and_cost_list(all_params, all_costs)
 
@@ -537,7 +540,7 @@ class NeuralNetImpl():
 
                 # TODO: Fit depth
 
-        self.net.fit(all_params, all_costs, self.epochs)
+        self.net.fit(all_params, all_costs, self.epochs if first_fit else int(self.epochs / 10))
 
     def predict_cost(self,params):
         '''
