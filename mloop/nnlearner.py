@@ -93,13 +93,15 @@ class SingleNeuralNet():
             self.output_var = tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]
 
             # Loss function and training
-            self.loss_func = (
-                    tf.reduce_mean(tf.reduce_sum(tf.square(self.output_var - self.output_placeholder),
-                                                 reduction_indices=[1]))
-                    + self.regularisation_coefficient_placeholder
-                            * tf.reduce_mean([tf.nn.l2_loss(W) for W in self.weights]))
+            self.loss_unreg = tf.reduce_mean(tf.reduce_sum(
+                tf.square(self.output_var - self.output_placeholder),
+                reduction_indices=[1]))
+            self.loss_reg = (self.regularisation_coefficient_placeholder
+                * tf.reduce_mean([tf.nn.l2_loss(W) for W in self.weights]))
+            self.loss_total = self.loss_unreg + self.loss_reg
+
             # TODO: Set learning rate based on length scale?
-            self.train_step = tf.train.AdamOptimizer().minimize(self.loss_func)
+            self.train_step = tf.train.AdamOptimizer().minimize(self.loss_total)
 
             # Gradient
             self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
@@ -139,18 +141,12 @@ class SingleNeuralNet():
         '''
         Returns the loss and unregularised loss for the given params and costs.
         '''
-        return (self.tf_session.run(
-            self.loss_func,
+        return self.tf_session.run(
+            [self.loss_total, self.loss_unreg],
             feed_dict={self.input_placeholder: params,
                        self.output_placeholder: [[c] for c in costs],
                        self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
-                       }),
-            self.tf_session.run(
-                self.loss_func,
-                feed_dict={self.input_placeholder: params,
-                           self.output_placeholder: [[c] for c in costs],
-                           self.regularisation_coefficient_placeholder: 0,
-                           }))
+                       })
 
     def fit(self, params, costs, epochs):
         '''
@@ -217,7 +213,7 @@ class SingleNeuralNet():
             params (array): array of parameter arrays
             costs (array): array of costs (associated with the corresponding parameters)
         '''
-        return self.tf_session.run(self.loss_func,
+        return self.tf_session.run(self.loss_total,
                                   feed_dict={self.input_placeholder: params,
                                   self.output_placeholder: [[c] for c in costs],
                                   })
