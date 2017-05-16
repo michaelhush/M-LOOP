@@ -178,9 +178,11 @@ class SingleNeuralNet():
             tot = 0
             run_start = time.time()
             for i in range(epochs):
+                epoch_start = time.time()
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
                 for j in range(math.ceil(len(params) / self.batch_size)):
+                    batch_start = time.time()
                     batch_indices = indices[j * self.batch_size : (j + 1) * self.batch_size]
                     batch_input = [params[index] for index in batch_indices]
                     batch_output = [[costs[index]] for index in batch_indices]
@@ -190,12 +192,14 @@ class SingleNeuralNet():
                                                    self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
                                                    self.keep_prob_placeholder: self.keep_prob,
                                                    })
+                    self.log.debug("Batch time: " + str(time.time() - batch_start))
                 (l, ul) = self._loss(params, costs)
                 self.losses_list.append(l)
                 tot += l
                 if i % 10 == 0:
                     self.log.debug('Fit neural network with total training cost ' + str(l)
                             + ', with unregularized cost ' + str(ul))
+                self.log.debug("Epoch trained for: " + str(time.time() - epoch_start))
             self.log.debug("Run trained for: " + str(time.time() - run_start))
 
             (l, ul) = self._loss(params, costs)
