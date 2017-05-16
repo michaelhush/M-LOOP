@@ -1,5 +1,6 @@
 import logging
 import math
+import time
 
 import numpy as np
 import sklearn.preprocessing as skp
@@ -172,12 +173,14 @@ class SingleNeuralNet():
         # - train for train_epochs epochs
         # - if the new loss is greater than the threshold then we haven't improved much, so stop
         # - else start from the top
+        start = time.time()
         while True:
             threshold = (1 - self.train_threshold_ratio) * self._loss(params, costs)[0]
             self.log.debug("Training with threshold " + str(threshold))
             if threshold == 0:
                 break
             tot = 0
+            run_start = time.time()
             for i in range(epochs):
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
@@ -197,12 +200,14 @@ class SingleNeuralNet():
                 if i % 10 == 0:
                     self.log.debug('Fit neural network with total training cost ' + str(l)
                             + ', with unregularized cost ' + str(ul))
+            self.log.debug("Run trained for: " + str(time.time() - run_start))
 
             (l, ul) = self._loss(params, costs)
             al = tot / float(epochs)
             self.log.debug('Loss ' + str(l) + ', average loss ' + str(al))
             if l > threshold:
                 break
+        self.log.debug("Total trained for: " + str(time.time() - start))
 
     def cross_validation_loss(self, params, costs):
         '''
