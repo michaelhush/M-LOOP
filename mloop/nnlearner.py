@@ -39,6 +39,8 @@ class SingleNeuralNet():
                  regularisation_coefficient,
                  losses_list):
         self.log = logging.getLogger(__name__)
+        start = time.time()
+        self.log.debug("Constructing net")
         self.graph = tf.Graph()
         self.tf_session = tf.Session(graph=self.graph)
 
@@ -126,6 +128,7 @@ class SingleNeuralNet():
 
             # Saver for saving and restoring params
             self.saver = tf.train.Saver(write_version=tf.train.SaverDef.V2)
+        self.log.debug("Finished constructing net in: " + str(time.time() - start))
 
     def destroy(self):
         self.tf_session.close()
