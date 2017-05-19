@@ -56,55 +56,69 @@ class SingleNeuralNet():
         self.losses_list = losses_list
 
         with self.graph.as_default():
-            # Inputs
+            ## Inputs
             self.input_placeholder = tf.placeholder(tf.float32, shape=[None, self.num_params])
             self.output_placeholder = tf.placeholder(tf.float32, shape=[None, 1])
             self.keep_prob_placeholder = tf.placeholder_with_default(1., shape=[])
             self.regularisation_coefficient_placeholder = tf.placeholder_with_default(0., shape=[])
 
-            # Parameters
-            self.weights = []
-            self.biases = []
+            ## Initialise the network
+
+            weights = []
+            biases = []
 
             # Input + internal nodes
             # TODO: Use length scale for setting initial weights?
             prev_layer_dim = self.num_params
-            prev_h = self.input_placeholder
             stddev=0.1
             for (i, (dim, act)) in enumerate(zip(layer_dims, layer_activations)):
-                self.weights.append(tf.Variable(
+                weights.append(tf.Variable(
                     tf.random_normal([prev_layer_dim, dim], stddev=stddev),
                     name="weight_"+str(i)))
-                self.biases.append(tf.Variable(
+                biases.append(tf.Variable(
                     tf.random_normal([dim], stddev=stddev),
                     name="bias_"+str(i)))
                 prev_layer_dim = dim
-                prev_h = tf.nn.dropout(
-                      act(tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]),
-                      keep_prob=self.keep_prob_placeholder)
 
             # Output node
-            self.weights.append(tf.Variable(
+            weights.append(tf.Variable(
                 tf.random_normal([prev_layer_dim, 1], stddev=stddev),
                 name="weight_out"))
-            self.biases.append(tf.Variable(
+            biases.append(tf.Variable(
                 tf.random_normal([1], stddev=stddev),
                 name="bias_out"))
-            self.output_var = tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]
 
-            # Loss function and training
-            self.loss_unreg = tf.reduce_mean(tf.reduce_sum(
-                tf.square(self.output_var - self.output_placeholder),
-                reduction_indices=[1]))
-            self.loss_reg = (self.regularisation_coefficient_placeholder
-                * tf.reduce_mean([tf.nn.l2_loss(W) for W in self.weights]))
-            self.loss_total = self.loss_unreg + self.loss_reg
+            # Get the output var given an input var
+            def get_output_var(input_var):
+                prev_h = input_var
+                for w, b in zip(weights[:-1], biases[:-1]):
+                    prev_h = tf.nn.dropout(
+                          act(tf.matmul(prev_h, w) + b),
+                          keep_prob=self.keep_prob_placeholder)
+                return tf.matmul(prev_h, weights[-1]) + biases[-1]
+
+            ## Define tensors for evaluating the output var and gradient on the full input
+            self.output_var = get_output_var(self.input_placeholder)
+            self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
+
+            ## Declare common loss functions
+
+            # Get the raw loss given the expected and actual output vars
+            def get_loss_raw(expected, actual):
+                return tf.reduce_mean(tf.reduce_sum(
+                    tf.square(expected - actual),
+                    reduction_indices=[1]))
+
+            # Regularisation component of the loss.
+            loss_reg = (self.regularisation_coefficient_placeholder
+                * tf.reduce_mean([tf.nn.l2_loss(W) for W in weights]))
+
+            ## Define tensors for evaluating the loss on the full input
+            self.loss_raw = get_loss_raw(self.output_placeholder, self.output_var)
+            self.loss_total = self.loss_raw + loss_reg
 
             # TODO: Set learning rate based on length scale?
             self.train_step = tf.train.AdamOptimizer().minimize(self.loss_total)
-
-            # Gradient
-            self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
 
             # Initialiser for ... initialising
             self.initialiser = tf.global_variables_initializer()
@@ -142,7 +156,7 @@ class SingleNeuralNet():
         Returns the loss and unregularised loss for the given params and costs.
         '''
         return self.tf_session.run(
-            [self.loss_total, self.loss_unreg],
+            [self.loss_total, self.loss_raw],
             feed_dict={self.input_placeholder: params,
                        self.output_placeholder: [[c] for c in costs],
                        self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
