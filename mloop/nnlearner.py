@@ -271,6 +271,7 @@ class SampledNeuralNet():
         self.net_creator = net_creator
         self.nets = [self.net_creator() for _ in range(count)]
         self.fit_count = 0
+        self.opt_net = None
 
     def _random_net(self):
         return self.nets[np.random.randint(0, len(self.nets))]
@@ -313,13 +314,24 @@ class SampledNeuralNet():
         return np.mean([n.cross_validation_loss(params, costs) for n in self.nets])
 
     def predict_cost(self,params):
-        return self._random_net().predict_cost(params)
+        if self.opt_net:
+            return self.opt_net.predict_cost(params)
+        else:
+            return self._random_net().predict_cost(params)
         #return np.mean([n.predict_cost(params) for n in self.nets])
 
     def predict_cost_gradient(self,params):
-        return self._random_net().predict_cost_gradient(params)
+        if self.opt_net:
+            return self.opt_net.predict_cost_gradient(params)
+        else:
+            return self._random_net().predict_cost_gradient(params)
         #return np.mean([n.predict_cost_gradient(params) for n in self.nets])
 
+    def start_opt(self):
+        self.opt_net = self._random_net()
+
+    def stop_opt(self):
+        self.opt_net = None
 
 class NeuralNetImpl():
     '''
@@ -586,3 +598,16 @@ class NeuralNetImpl():
         Returns a list of training losses experienced by the network.
         '''
         return self.losses_list
+
+    def start_opt(self):
+        '''
+        Starts an optimisation run. Until stop_opt() is called, predict_cost() and
+        predict_cost_gradient() will return consistent values.
+        '''
+        self.net.start_opt()
+
+    def stop_opt(self):
+        '''
+        Stops an optimisation run.
+        '''
+        self.net.stop_opt()

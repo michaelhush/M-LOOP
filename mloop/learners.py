@@ -1913,6 +1913,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
+        self.neural_net_impl.start_opt()
         for start_params in self.search_params:
             result = so.minimize(fun = self.predict_cost,
                                  x0 = start_params,
@@ -1922,6 +1923,7 @@ class NeuralNetLearner(Learner, mp.Process):
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
+        self.neural_net_impl.stop_opt()
         # Now tweak the selected parameters to make sure we don't just keep on looking in the same
         # place (the actual minimum might be a short distance away).
         # TODO: Rather than using [-0.1, 0.1] we should pick the fuzziness based on what we know
