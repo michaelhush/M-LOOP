@@ -107,7 +107,7 @@ class SingleNeuralNet():
             self.output_var_gradient = tf.gradients(self.output_var, self.input_placeholder)
 
             # Initialiser for ... initialising
-            self.initialiser = tf.initialize_all_variables()
+            self.initialiser = tf.global_variables_initializer()
 
             # Saver for saving and restoring params
             self.saver = tf.train.Saver(write_version=tf.train.SaverDef.V2)
