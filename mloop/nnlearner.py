@@ -66,19 +66,10 @@ class SingleNeuralNet():
             self.weights = []
             self.biases = []
 
-            # Loss function and training
-            inp, outp = tf.train.shuffle_batch(
-                    tensors=[self.input_placeholder, self.output_placeholder],
-                    batch_size=self.batch_size,
-                    capacity=5000,
-                    min_after_dequeue=0,
-                    enqueue_many=True,
-                    allow_smaller_final_batch=True)
-
             # Input + internal nodes
             # TODO: Use length scale for setting initial weights?
             prev_layer_dim = self.num_params
-            prev_h = inp
+            prev_h = self.input_placeholder
             stddev=0.1
             for (i, (dim, act)) in enumerate(zip(layer_dims, layer_activations)):
                 self.weights.append(tf.Variable(
@@ -101,8 +92,9 @@ class SingleNeuralNet():
                 name="bias_out"))
             self.output_var = tf.matmul(prev_h, self.weights[-1]) + self.biases[-1]
 
+            # Loss function and training
             self.loss_func = (
-                    tf.reduce_mean(tf.reduce_sum(tf.square(self.output_var - outp),
+                    tf.reduce_mean(tf.reduce_sum(tf.square(self.output_var - self.output_placeholder),
                                                  reduction_indices=[1]))
                     + self.regularisation_coefficient_placeholder
                             * tf.reduce_mean([tf.nn.l2_loss(W) for W in self.weights]))
@@ -190,24 +182,18 @@ class SingleNeuralNet():
             tot = 0
             run_start = time.time()
             for i in range(epochs):
-                self.tf_session.run(self.train_step,
-                                    feed_dict={self.input_placeholder: params,
-                                               self.output_placeholder: [[c] for c in costs],
-                                               self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
-                                               self.keep_prob_placeholder: self.keep_prob,
-                                               })
-                ## Split the data into random batches, and train on each batch
-                #indices = np.random.permutation(len(params))
-                #for j in range(math.ceil(len(params) / self.batch_size)):
-                #    batch_indices = indices[j * self.batch_size : (j + 1) * self.batch_size]
-                #    batch_input = [params[index] for index in batch_indices]
-                #    batch_output = [[costs[index]] for index in batch_indices]
-                #    self.tf_session.run(self.train_step,
-                #                        feed_dict={self.input_placeholder: batch_input,
-                #                                   self.output_placeholder: batch_output,
-                #                                   self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
-                #                                   self.keep_prob_placeholder: self.keep_prob,
-                #                                   })
+                # Split the data into random batches, and train on each batch
+                indices = np.random.permutation(len(params))
+                for j in range(math.ceil(len(params) / self.batch_size)):
+                    batch_indices = indices[j * self.batch_size : (j + 1) * self.batch_size]
+                    batch_input = [params[index] for index in batch_indices]
+                    batch_output = [[costs[index]] for index in batch_indices]
+                    self.tf_session.run(self.train_step,
+                                        feed_dict={self.input_placeholder: batch_input,
+                                                   self.output_placeholder: batch_output,
+                                                   self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
+                                                   self.keep_prob_placeholder: self.keep_prob,
+                                                   })
                 (l, ul) = self._loss(params, costs)
                 self.losses_list.append(l)
                 tot += l
