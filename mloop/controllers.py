@@ -695,9 +695,11 @@ class MachineLearnerController(Controller):
             self._put_params_and_out_dict(next_params)
 
             self.log.debug('Starting ML optimization.')
-            self.new_params_event.set()
-            self.save_archive()
+            # TODO: This is a race. There's no guarantee that this will be available by the time the
+            # event is set.
             self._get_cost_and_in_dict()
+            self.save_archive()
+            self.new_params_event.set()
             self.log.debug('End training runs.')
 
             ml_consec = 0

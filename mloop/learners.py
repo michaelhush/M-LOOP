@@ -14,6 +14,7 @@ import scipy.optimize as so
 import logging
 import datetime
 import os
+import queue
 import mloop.utilities as mlu
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
@@ -1764,18 +1765,28 @@ class NeuralNetLearner(Learner, mp.Process):
         '''
         Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region.
         '''
-        if self.costs_in_queue.empty():
-            self.log.error('Neural network asked for new parameters but no new costs were provided.')
-            raise ValueError
-
         new_params = []
         new_costs = []
         new_uncers = []
         new_bads = []
         update_bads_flag = False
 
-        while not self.costs_in_queue.empty():
-            (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
+        first_dequeue = True
+        while True:
+            if first_dequeue:
+                try:
+                    # Block for 1s, because there might be a race with the event being set.
+                    (param, cost, uncer, bad) = self.costs_in_queue.get(block=True, timeout=1)
+                    first_dequeue = False
+                except queue.Empty:
+                    self.log.error('Neural network asked for new parameters but no new costs were provided after 1s.')
+                    raise ValueError
+            else:
+                try:
+                    (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
+                except queue.Empty:
+                    break
+
             self.costs_count +=1
 
             if bad:
