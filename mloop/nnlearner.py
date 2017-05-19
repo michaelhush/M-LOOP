@@ -209,10 +209,9 @@ class SingleNeuralNet():
                                                    self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
                                                    self.keep_prob_placeholder: self.keep_prob,
                                                    })
-                (l, ul) = self._loss(params, costs)
-                self.losses_list.append(l)
-                tot += l
                 if i % 10 == 0:
+                    (l, ul) = self._loss(params, costs)
+                    self.losses_list.append(l)
                     self.log.debug('Fit neural network with total training cost ' + str(l)
                             + ', with unregularized cost ' + str(ul))
                 self.log.debug("Epoch trained for: " + str(time.time() - epoch_start))
