@@ -1937,7 +1937,8 @@ class NeuralNetLearner(Learner, mp.Process):
         try:
             while not self.end_event.is_set():
                 self.log.debug('Learner waiting for new params event')
-                self.save_archive()
+                # TODO: Not doing this because it's slow. Is it necessary?
+                #self.save_archive()
                 self.wait_for_new_params_event()
                 self.log.debug('NN learner reading costs')
                 self.get_params_and_costs()
