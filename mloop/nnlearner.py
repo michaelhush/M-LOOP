@@ -199,7 +199,6 @@ class SingleNeuralNet():
             tot = 0
             run_start = time.time()
             for i in range(epochs):
-                epoch_start = time.time()
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
                 for j in range(math.ceil(len(params) / self.batch_size)):
@@ -217,7 +216,6 @@ class SingleNeuralNet():
                     self.losses_list.append(l)
                     self.log.debug('Fit neural network with total training cost ' + str(l)
                             + ', with unregularized cost ' + str(ul))
-                self.log.debug("Epoch trained for: " + str(time.time() - epoch_start))
             self.log.debug("Run trained for: " + str(time.time() - run_start))
 
             (l, ul) = self._loss(params, costs)
