@@ -117,6 +117,26 @@ class SingleNeuralNet():
             self.loss_raw = get_loss_raw(self.output_placeholder, self.output_var)
             self.loss_total = self.loss_raw + loss_reg
 
+            ## Training
+            def process_batch(i):
+                length = tf.minimum(batch_size, tf.shape(self.input_placeholder)[0] - i * batch_size)
+                input_batch = tf.slice(self.input_placeholder, [i * batch_size, 0], [length, -1])
+                output_batch = tf.slice(self.output_placeholder, [i * batch_size, 0], [length, -1])
+                return tf.train.AdamOptimizer().minimize(
+                        get_loss_raw(
+                            output_batch, get_output_var(input_batch)))
+
+            i = tf.constant(0)
+            nbatches = tf.to_int32(tf.ceil(
+                    tf.to_float(tf.shape(self.input_placeholder)[0]) / tf.to_float(batch_size)))
+            self.train_epoch = tf.while_loop(
+                    lambda i: tf.less(i, nbatches),
+                    lambda i: tf.tuple([tf.add(i,1)], control_inputs=[process_batch(i)])[0],
+                    [i],
+                    back_prop=False,
+                    parallel_iterations=1)
+
+
             # TODO: Set learning rate based on length scale?
             self.train_step = tf.train.AdamOptimizer().minimize(self.loss_total)
 
@@ -178,6 +198,9 @@ class SingleNeuralNet():
             self.log.error("Params and costs must have the same length")
             raise ValueError
 
+        lparams = np.array(params)
+        lcosts = np.expand_dims(np.array(costs), axis=1)
+
         # The general training procedure is as follows:
         # - set a threshold based on the current loss
         # - train for train_epochs epochs
@@ -192,7 +215,30 @@ class SingleNeuralNet():
             tot = 0
             run_start = time.time()
             for i in range(epochs):
+                # Split the data into random batches, and train on each batch
                 epoch_start = time.time()
+
+                # Shuffle the params
+                #state = np.random.get_state()
+                #np.random.shuffle(lparams)
+                #np.random.set_state(state)
+                #np.random.shuffle(lcosts)
+                #self.tf_session.run(self.train_epoch,
+                #                        feed_dict={self.input_placeholder: lparams,
+                #                                   self.output_placeholder: lcosts,
+                #                                   self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
+                #                                   self.keep_prob_placeholder: self.keep_prob,
+                #                                   })
+                #for j in range(math.ceil(len(params) / self.batch_size)):
+                #    batch_input = lparams[j * self.batch_size : (j + 1) * self.batch_size]
+                #    batch_output = lcosts[j * self.batch_size : (j + 1) * self.batch_size]
+
+                #    self.tf_session.run(self.train_step,
+                #                        feed_dict={self.input_placeholder: batch_input,
+                #                                   self.output_placeholder: batch_output,
+                #                                   self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
+                #                                   self.keep_prob_placeholder: self.keep_prob,
+                #                                   })
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
                 for j in range(math.ceil(len(params) / self.batch_size)):
