@@ -200,7 +200,6 @@ class SingleNeuralNet():
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
                 for j in range(math.ceil(len(params) / self.batch_size)):
-                    batch_start = time.time()
                     batch_indices = indices[j * self.batch_size : (j + 1) * self.batch_size]
                     batch_input = lparams[batch_indices]
                     batch_output = lcosts[batch_indices]
@@ -210,7 +209,6 @@ class SingleNeuralNet():
                                                    self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
                                                    self.keep_prob_placeholder: self.keep_prob,
                                                    })
-                    self.log.debug("Batch time: " + str(time.time() - batch_start))
                 (l, ul) = self._loss(params, costs)
                 self.losses_list.append(l)
                 tot += l
