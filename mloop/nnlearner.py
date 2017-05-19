@@ -117,6 +117,7 @@ class SingleNeuralNet():
             self.loss_raw = get_loss_raw(self.output_placeholder, self.output_var)
             self.loss_total = self.loss_raw + loss_reg
 
+            ## Training
             # TODO: Set learning rate based on length scale?
             self.train_step = tf.train.AdamOptimizer().minimize(self.loss_total)
 
