@@ -369,7 +369,7 @@ class NeuralNetImpl():
 
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
-        self.last_net_reg = 1e-6
+        self.last_net_reg = 1e-8
 
         # The samples used to fit the scalers. When set, this will be a tuple of
         # (params samples, cost samples).
@@ -397,13 +397,13 @@ class NeuralNetImpl():
             return tf.maximum(1 - tf.abs(_x), 0)
         creator = lambda: SingleNeuralNet(
                     self.num_params,
-                    [64]*5, [tf.nn.relu]*5,
-                    0.5, # train_threshold_ratio
+                    [64]*5, [gelu_fast]*5,
+                    0.2, # train_threshold_ratio
                     16, # batch_size
                     1., # keep_prob
                     reg,
                     self.losses_list)
-        return SampledNeuralNet(creator, 3)
+        return SampledNeuralNet(creator, 1)
 
     def _fit_scaler(self):
         if self.scaler_samples is None:
@@ -567,7 +567,7 @@ class NeuralNetImpl():
 
                 # TODO: Fit depth
 
-        self.net.fit(all_params, all_costs, self.epochs if first_fit else int(self.epochs / 10))
+        self.net.fit(all_params, all_costs, self.epochs if first_fit else int(self.epochs / 5))
 
     def predict_cost(self,params):
         '''
