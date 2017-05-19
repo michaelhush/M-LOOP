@@ -40,7 +40,7 @@ class SingleNeuralNet():
                  losses_list):
         self.log = logging.getLogger(__name__)
         start = time.time()
-        self.log.debug("Constructing net")
+        self.log.info("Constructing net")
         self.graph = tf.Graph()
         self.tf_session = tf.Session(graph=self.graph)
 
@@ -143,7 +143,7 @@ class SingleNeuralNet():
         '''
         Imports the net from an archive dictionary. You must call exactly one of this and init() before calling any other methods.
         '''
-        self.log.debug("Loading neural network")
+        self.log.info("Loading neural network")
         self.saver.restore(self.tf_session, "./" + str(archive['saver_path']))
 
     def save(self):
@@ -152,7 +152,7 @@ class SingleNeuralNet():
         '''
         # TODO: Use a proper timestamped filename, maybe?
         path = self.saver.save(self.tf_session, "net.ckpt")
-        self.log.debug("Saving neural network to: " + path)
+        self.log.info("Saving neural network to: " + path)
         return {'saver_path': path}
 
     def _loss(self, params, costs):
@@ -174,7 +174,7 @@ class SingleNeuralNet():
             params (array): array of parameter arrays
             costs (array): array of costs (associated with the corresponding parameters)
         '''
-        self.log.debug('Fitting neural network')
+        self.log.info('Fitting neural network')
         if len(params) == 0:
             self.log.error('No data provided.')
             raise ValueError
@@ -214,7 +214,7 @@ class SingleNeuralNet():
                 if i % 10 == 0:
                     (l, ul) = self._loss(params, costs)
                     self.losses_list.append(l)
-                    self.log.debug('Fit neural network with total training cost ' + str(l)
+                    self.log.info('Fit neural network with total training cost ' + str(l)
                             + ', with unregularized cost ' + str(ul))
             self.log.debug("Run trained for: " + str(time.time() - run_start))
 
@@ -344,7 +344,7 @@ class NeuralNetImpl():
                  fit_hyperparameters = False):
 
         self.log = logging.getLogger(__name__)
-        self.log.debug('Initialising neural network impl')
+        self.log.info('Initialising neural network impl')
         if num_params is None:
             self.log.error("num_params must be provided")
             raise ValueError
@@ -496,7 +496,6 @@ class NeuralNetImpl():
             all_params (array): array of all parameter arrays
             all_costs (array): array of costs (associated with the corresponding parameters)
         '''
-        self.log.debug('Fitting neural network')
         if len(all_params) == 0:
             self.log.error('No data provided.')
             raise ValueError
