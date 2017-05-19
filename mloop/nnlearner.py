@@ -179,6 +179,9 @@ class SingleNeuralNet():
             self.log.error("Params and costs must have the same length")
             raise ValueError
 
+        lparams = np.array(params)
+        lcosts = np.expand_dims(np.array(costs), axis=1)
+
         # The general training procedure is as follows:
         # - set a threshold based on the current loss
         # - train for train_epochs epochs
@@ -199,8 +202,8 @@ class SingleNeuralNet():
                 for j in range(math.ceil(len(params) / self.batch_size)):
                     batch_start = time.time()
                     batch_indices = indices[j * self.batch_size : (j + 1) * self.batch_size]
-                    batch_input = [params[index] for index in batch_indices]
-                    batch_output = [[costs[index]] for index in batch_indices]
+                    batch_input = lparams[batch_indices]
+                    batch_output = lcosts[batch_indices]
                     self.tf_session.run(self.train_step,
                                         feed_dict={self.input_placeholder: batch_input,
                                                    self.output_placeholder: batch_output,
