@@ -365,7 +365,8 @@ class NeuralNetImpl():
         self.num_params = num_params
         self.fit_hyperparameters = fit_hyperparameters
 
-        self.epochs = 100
+        self.initial_epochs = 100
+        self.subsequent_epochs = 20
 
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
@@ -554,7 +555,7 @@ class NeuralNetImpl():
                 for r in [0.001, 0.01, 0.1, 1, 10]:
                     net = self._make_net(r)
                     net.init()
-                    net.fit(train_params, train_costs, self.epochs)
+                    net.fit(train_params, train_costs, self.initial_epochs)
                     this_cv_loss = net.cross_validation_loss(cv_params, cv_costs)
                     if this_cv_loss < best_cv_loss and this_cv_loss < 0.1 * orig_cv_loss:
                         best_cv_loss = this_cv_loss
@@ -567,7 +568,10 @@ class NeuralNetImpl():
 
                 # TODO: Fit depth
 
-        self.net.fit(all_params, all_costs, self.epochs if first_fit else int(self.epochs / 5))
+        self.net.fit(
+                all_params,
+                all_costs,
+                self.initial_epochs if first_fit else self.subsequent_epochs)
 
     def predict_cost(self,params):
         '''
