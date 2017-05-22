@@ -72,7 +72,7 @@ class SingleNeuralNet():
             # Input + internal nodes
             prev_layer_dim = self.num_params
             bias_stddev=0.1
-            for (i, (dim, act)) in enumerate(zip(layer_dims, layer_activations)):
+            for (i, dim) in enumerate(layer_dims):
                 weights.append(tf.Variable(
                     tf.random_normal([prev_layer_dim, dim], stddev=1.4/np.sqrt(prev_layer_dim)),
                     name="weight_"+str(i)))
@@ -92,7 +92,7 @@ class SingleNeuralNet():
             # Get the output var given an input var
             def get_output_var(input_var):
                 prev_h = input_var
-                for w, b in zip(weights[:-1], biases[:-1]):
+                for w, b, act in zip(weights[:-1], biases[:-1], layer_activations):
                     prev_h = tf.nn.dropout(
                           act(tf.matmul(prev_h, w) + b),
                           keep_prob=self.keep_prob_placeholder)
