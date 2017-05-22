@@ -71,13 +71,13 @@ class SingleNeuralNet():
 
             # Input + internal nodes
             prev_layer_dim = self.num_params
-            stddev=0.1
+            bias_stddev=0.1
             for (i, (dim, act)) in enumerate(zip(layer_dims, layer_activations)):
                 weights.append(tf.Variable(
                     tf.random_normal([prev_layer_dim, dim], stddev=1.4/np.sqrt(prev_layer_dim)),
                     name="weight_"+str(i)))
                 biases.append(tf.Variable(
-                    tf.random_normal([dim], stddev=stddev),
+                    tf.random_normal([dim], stddev=bias_stddev),
                     name="bias_"+str(i)))
                 prev_layer_dim = dim
 
@@ -86,7 +86,7 @@ class SingleNeuralNet():
                 tf.random_normal([prev_layer_dim, 1], stddev=1.4/np.sqrt(prev_layer_dim)),
                 name="weight_out"))
             biases.append(tf.Variable(
-                tf.random_normal([1], stddev=stddev),
+                tf.random_normal([1], stddev=bias_stddev),
                 name="bias_out"))
 
             # Get the output var given an input var
