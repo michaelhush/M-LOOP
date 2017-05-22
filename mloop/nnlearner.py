@@ -70,12 +70,11 @@ class SingleNeuralNet():
             biases = []
 
             # Input + internal nodes
-            # TODO: Use length scale for setting initial weights?
             prev_layer_dim = self.num_params
             stddev=0.1
             for (i, (dim, act)) in enumerate(zip(layer_dims, layer_activations)):
                 weights.append(tf.Variable(
-                    tf.random_normal([prev_layer_dim, dim], stddev=stddev),
+                    tf.random_normal([prev_layer_dim, dim], stddev=1.4/np.sqrt(prev_layer_dim)),
                     name="weight_"+str(i)))
                 biases.append(tf.Variable(
                     tf.random_normal([dim], stddev=stddev),
@@ -84,7 +83,7 @@ class SingleNeuralNet():
 
             # Output node
             weights.append(tf.Variable(
-                tf.random_normal([prev_layer_dim, 1], stddev=stddev),
+                tf.random_normal([prev_layer_dim, 1], stddev=1.4/np.sqrt(prev_layer_dim)),
                 name="weight_out"))
             biases.append(tf.Variable(
                 tf.random_normal([1], stddev=stddev),
@@ -120,7 +119,6 @@ class SingleNeuralNet():
             self.loss_total = self.loss_raw + loss_reg
 
             ## Training
-            # TODO: Set learning rate based on length scale?
             self.train_step = tf.train.AdamOptimizer().minimize(self.loss_total)
 
             # Initialiser for ... initialising
