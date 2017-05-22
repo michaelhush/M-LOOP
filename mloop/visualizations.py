@@ -678,7 +678,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         plt.figure(figure_counter)
         points = 100
         (_,cost_arrays) = self.return_cross_sections(points=points)
-        rel_params = np.linspace(-5,5,points)
+        rel_params = np.linspace(0,1,points)
         for ind in range(self.num_params):
             plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
         if self.has_trust_region:
@@ -688,7 +688,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             for ind in range(self.num_params):
                 plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
         plt.xlabel(scale_param_label)
-        plt.xlim((-5,5))
+        plt.xlim((0,1))
         plt.ylabel(cost_label)
         plt.title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
         artists = []
