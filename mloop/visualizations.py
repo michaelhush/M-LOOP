@@ -111,8 +111,8 @@ def create_controller_visualizations(filename,
     visualization = ControllerVisualizer(filename,file_type=file_type)
     if plot_cost_vs_run:
         visualization.plot_cost_vs_run()
-    #if plot_parameters_vs_run:
-    #    visualization.plot_parameters_vs_run()
+    if plot_parameters_vs_run:
+        visualization.plot_parameters_vs_run()
     #if plot_parameters_vs_cost:
     #    visualization.plot_parameters_vs_cost()
 
@@ -677,7 +677,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         figure_counter += 1
         plt.figure(figure_counter)
         points = 100
-        (_,cost_arrays) = self.return_cross_sections(points=points)
+        (_,cost_arrays) = self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters())
         rel_params = np.linspace(0,1,points)
         for ind in range(self.num_params):
             plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
