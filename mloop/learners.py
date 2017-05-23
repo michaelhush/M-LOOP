@@ -1934,6 +1934,8 @@ class NeuralNetLearner(Learner, mp.Process):
         # cleverly would probably correspond to introducing some kind of uncertainty-based biasing
         # (like the GP).
         #next_params = next_params + nr.uniform(-0.1, 0.1, size=next_params.shape)
+        self.log.debug("Suggesting params " + str(next_params) + " with predicted cost: "
+                + str(next_cost))
         return next_params
 
     def run(self):
