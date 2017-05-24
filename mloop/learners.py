@@ -20,7 +20,7 @@ import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
 import multiprocessing as mp
-import mloop.nnlearner as mlnn
+import mloop.neuralnet as mlnn
 
 learner_thread_count = 0
 default_learner_archive_filename = 'learner_archive'
