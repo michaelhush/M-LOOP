@@ -1512,6 +1512,7 @@ class NeuralNetLearner(Learner, mp.Process):
                  default_bad_uncertainty = None,
                  nn_training_filename =None,
                  nn_training_file_type ='txt',
+                 minimum_uncertainty = 1e-8,
                  predict_global_minima_at_end = True,
                  predict_local_minima_at_end = False,
                  **kwargs):
@@ -1628,6 +1629,7 @@ class NeuralNetLearner(Learner, mp.Process):
         #Optional user set variables
         self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
         self.predict_local_minima_at_end = bool(predict_local_minima_at_end)
+        self.minimum_uncertainty = float(minimum_uncertainty)
         if default_bad_cost is not None:
             self.default_bad_cost = float(default_bad_cost)
         else:
@@ -1642,6 +1644,9 @@ class NeuralNetLearner(Learner, mp.Process):
             self.bad_defaults_set = True
         else:
             self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
+            raise ValueError
+        if self.minimum_uncertainty <= 0:
+            self.log.error('Minimum uncertainty must be larger than zero for the learner.')
             raise ValueError
         
         self._set_trust_region(trust_region)
