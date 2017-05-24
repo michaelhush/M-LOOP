@@ -1680,7 +1680,7 @@ class NeuralNetLearner(Learner, mp.Process):
         #self.log = None
 
     def _construct_net(self):
-        self.neural_net_impl = mlnn.NeuralNetImpl(self.num_params)
+        self.neural_net = mlnn.NeuralNet(self.num_params)
 
     def _init_cost_scaler(self):
         '''
@@ -1694,7 +1694,7 @@ class NeuralNetLearner(Learner, mp.Process):
         Creates the neural net. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array.
         '''
         self._construct_net()
-        self.neural_net_impl.init()
+        self.neural_net.init()
 
     def import_neural_net(self):
         '''
@@ -1703,7 +1703,7 @@ class NeuralNetLearner(Learner, mp.Process):
         if not self.training_dict:
             raise ValueError
         self._construct_net()
-        self.neural_net_impl.load(self.training_dict['net'])
+        self.neural_net.load(self.training_dict['net'])
 
     def fit_neural_net(self):
         '''
@@ -1713,7 +1713,7 @@ class NeuralNetLearner(Learner, mp.Process):
         '''
         self.scaled_costs = self.cost_scaler.transform(self.all_costs[:,np.newaxis])[:,0]
 
-        self.neural_net_impl.fit_neural_net(self.all_params, self.scaled_costs)
+        self.neural_net.fit_neural_net(self.all_params, self.scaled_costs)
 
     def predict_cost(self,params):
         '''
@@ -1722,7 +1722,7 @@ class NeuralNetLearner(Learner, mp.Process):
         Returns:
             float : Predicted cost at paramters
         '''
-        return self.neural_net_impl.predict_cost(params)
+        return self.neural_net.predict_cost(params)
 
     def predict_cost_gradient(self,params):
         '''
@@ -1732,7 +1732,7 @@ class NeuralNetLearner(Learner, mp.Process):
             float : Predicted gradient at paramters
         '''
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net_impl.predict_cost_gradient(params).astype(np.float64)
+        return self.neural_net.predict_cost_gradient(params).astype(np.float64)
 
 
     def predict_costs_from_param_array(self,params):
@@ -1899,8 +1899,8 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'length_scale':self.length_scale,
                                   'noise_level':self.noise_level,
                                   'cost_scaler_init_index':self.cost_scaler_init_index})
-        if self.neural_net_impl:
-            self.archive_dict.update({'net':self.neural_net_impl.save()})
+        if self.neural_net:
+            self.archive_dict.update({'net':self.neural_net.save()})
 
     def find_next_parameters(self):
         '''
@@ -1913,7 +1913,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
-        self.neural_net_impl.start_opt()
+        self.neural_net.start_opt()
         for start_params in self.search_params:
             result = so.minimize(fun = self.predict_cost,
                                  x0 = start_params,
@@ -1923,7 +1923,7 @@ class NeuralNetLearner(Learner, mp.Process):
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
-        self.neural_net_impl.stop_opt()
+        self.neural_net.stop_opt()
         # Now tweak the selected parameters to make sure we don't just keep on looking in the same
         # place (the actual minimum might be a short distance away).
         # TODO: Rather than using [-0.1, 0.1] we should pick the fuzziness based on what we know
@@ -2068,4 +2068,4 @@ class NeuralNetLearner(Learner, mp.Process):
     # Methods for debugging/analysis.
 
     def get_losses(self):
-        return self.neural_net_impl.get_losses()
+        return self.neural_net.get_losses()

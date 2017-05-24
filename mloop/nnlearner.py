@@ -270,7 +270,21 @@ class SingleNeuralNet():
         '''
         return self.tf_session.run(self.output_var_gradient, feed_dict={self.input_placeholder: [params]})[0][0]
 
+
 class SampledNeuralNet():
+    '''
+    A "neural network" that tracks a collection of SingleNeuralNet objects, and predicts the landscape
+    by sampling from that collection.
+
+    This must run in the same process in which it's created.
+
+    This class should be considered private to this module.
+
+    Args:
+        net_creator: Callable that creates and returns a new SingleNeuralNet.
+        count: The number of individual networks to track.
+    '''
+
     def __init__(self,
                  net_creator,
                  count):
@@ -340,7 +354,7 @@ class SampledNeuralNet():
     def stop_opt(self):
         self.opt_net = None
 
-class NeuralNetImpl():
+class NeuralNet():
     '''
     Neural network implementation. This may actually create multiple neural networks with different
     topologies or hyperparameters, and switch between them based on the data.
@@ -401,8 +415,6 @@ class NeuralNetImpl():
         '''
         def gelu_fast(_x):
             return 0.5 * _x * (1 + tf.tanh(tf.sqrt(2 / np.pi) * (_x + 0.044715 * tf.pow(_x, 3))))
-        def amazing_abs(_x):
-            return tf.maximum(1 - tf.abs(_x), 0)
         creator = lambda: SingleNeuralNet(
                     self.num_params,
                     [64]*5, [gelu_fast]*5,
@@ -414,6 +426,9 @@ class NeuralNetImpl():
         return SampledNeuralNet(creator, 1)
 
     def _fit_scaler(self):
+        '''
+        Fits the cost and param scalers based on the scaler_samples member variable.
+        '''
         if self.scaler_samples is None:
             self.log.error("_fit_scaler() called before samples set")
             raise ValueError
