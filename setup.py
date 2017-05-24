@@ -26,7 +26,8 @@ def main():
                             'scipy>=0.17',
                             'matplotlib>=1.5',
                             'pytest>=2.9',
-                            'scikit-learn>=0.18'],
+                            'scikit-learn>=0.18',
+                            'tensorflow>=1.1.0'],
         tests_require=['pytest','setuptools>=26'],
         
         package_data = {
@@ -60,4 +61,4 @@ def main():
 
 if __name__=='__main__':
     mp.freeze_support()
-    main()  
+    main()
