@@ -1469,7 +1469,7 @@ class GaussianProcessLearner(Learner, mp.Process):
 
 class NeuralNetLearner(Learner, mp.Process):
     '''
-    Shell of Neural Net Learner.
+    Learner that uses a neural network for function approximation.
 
     Args:
         params_out_queue (queue): Queue for parameters sent to controller.
