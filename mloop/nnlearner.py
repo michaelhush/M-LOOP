@@ -524,11 +524,6 @@ class NeuralNetImpl():
 
         all_params, all_costs = self._scale_params_and_cost_list(all_params, all_costs)
 
-        # TODO: Consider adding some kind of "cost capping". Our NNs will never predict costs going
-        # off to infinity, so we could be "wasting" training cost due to totally irrelevant points.
-        # If we capped the costs to some value then this might help. Note that this is really just
-        # another form of cost scaling.
-
         if self.fit_hyperparameters:
             # Every 20 fits (starting at 5, just because), re-fit the hyperparameters
             if int(len(all_params + 5) / 20) > self.last_hyperfit:
@@ -563,8 +558,6 @@ class NeuralNetImpl():
                         self.net = net
                     else:
                         net.destroy()
-
-                # TODO: Fit depth
 
         self.net.fit(
                 all_params,
