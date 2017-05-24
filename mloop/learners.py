@@ -1477,7 +1477,6 @@ class NeuralNetLearner(Learner, mp.Process):
         end_event (event): Event to trigger end of learner.
 
     Keyword Args:
-        length_scale (Optional [array]): The initial guess for length scale(s) of the gaussian process. The array can either of size one or the number of parameters or None. If it is size one, it is assumed all the correlation lengths are the same. If it is the number of the parameters then all the parameters have their own independent length scale. If it is None, it is assumed all the length scales should be independent and they are all given an initial value of 1. Default None.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction.
         default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
         default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
@@ -1486,11 +1485,10 @@ class NeuralNetLearner(Learner, mp.Process):
         predict_local_minima_at_end (Optional [bool]): If True finds all minima when the learner is ended. Does not if False. Default False.
 
     Attributes:
-        TODO: Update these.
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
         all_uncers (array): Array containing all uncertainties sent to learner.
-        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1. Needed for training the gaussian process.
+        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1.
         bad_run_indexs (list): list of indexes to all runs that were marked as bad.
         best_cost (float): Minimum received cost, updated during execution.
         best_params (array): Parameters of best run. (reference to element in params array).
@@ -1499,18 +1497,16 @@ class NeuralNetLearner(Learner, mp.Process):
         worst_index (int): index to run with worst cost.
         cost_range (float): Difference between worst_cost and best_cost
         generation_num (int): Number of sets of parameters to generate each generation. Set to 5.
-        length_scale_history (list): List of length scales found after each fit.
         noise_level_history (list): List of noise levels found after each fit.
-        fit_count (int): Counter for the number of times the gaussian process has been fit.
         cost_count (int): Counter for the number of costs, parameters and uncertainties added to learner.
         params_count (int): Counter for the number of parameters asked to be evaluated by the learner.
-        gaussian_process (GaussianProcessRegressor): Gaussian process that is fitted to data and used to make predictions
+        neural_net (NeuralNet): Neural net that is fitted to data and used to make predictions.
         cost_scaler (StandardScaler): Scaler used to normalize the provided costs.
+        cost_scaler_init_index (int): The number of params to use to initialise cost_scaler.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
 
     def __init__(self,
-                 update_hyperparameters = True,
                  trust_region=None,
                  default_bad_cost = None,
                  default_bad_uncertainty = None,
@@ -1536,7 +1532,6 @@ class NeuralNetLearner(Learner, mp.Process):
             
             #Counters
             self.costs_count = int(self.training_dict['costs_count'])
-            self.fit_count = int(self.training_dict['fit_count'])
             self.params_count = int(self.training_dict['params_count'])
             
             #Data from previous experiment
@@ -1604,11 +1599,9 @@ class NeuralNetLearner(Learner, mp.Process):
             self.worst_cost = float('-inf')
             self.worst_index = 0
             self.cost_range = float('inf')
-            self.length_scale_history = []
             self.noise_level_history = []
         
             self.costs_count = 0
-            self.fit_count = 0
             self.params_count = 0
             
             self.has_local_minima = False
@@ -1633,7 +1626,6 @@ class NeuralNetLearner(Learner, mp.Process):
         self.bad_uncer_frac = 0.1 #Fraction of cost range to set a bad run uncertainty
 
         #Optional user set variables
-        self.update_hyperparameters = bool(update_hyperparameters)
         self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
         self.predict_local_minima_at_end = bool(predict_local_minima_at_end)
         if default_bad_cost is not None:
@@ -1892,10 +1884,8 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'worst_cost':self.worst_cost,
                                   'worst_index':self.worst_index,
                                   'cost_range':self.cost_range,
-                                  'fit_count':self.fit_count,
                                   'costs_count':self.costs_count,
                                   'params_count':self.params_count,
-                                  'update_hyperparameters':self.update_hyperparameters,
                                   'length_scale':self.length_scale,
                                   'noise_level':self.noise_level,
                                   'cost_scaler_init_index':self.cost_scaler_init_index})
