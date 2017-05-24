@@ -38,7 +38,7 @@ def show_all_default_visualizations(controller, show_plots=True):
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
-    create_contoller_visualizations(controller.total_archive_filename, 
+    create_controller_visualizations(controller.total_archive_filename,
                                     file_type=controller.controller_archive_file_type)
     
     if isinstance(controller, mlc.DifferentialEvolutionController):
@@ -91,7 +91,7 @@ def configure_plots():
     mpl.rcParams['legend.scatterpoints'] = 1
     mpl.rcParams['legend.fontsize']= 'medium'
     
-def create_contoller_visualizations(filename,
+def create_controller_visualizations(filename,
                                     file_type='pkl',
                                     plot_cost_vs_run=True,
                                     plot_parameters_vs_run=True,
@@ -113,8 +113,8 @@ def create_contoller_visualizations(filename,
         visualization.plot_cost_vs_run()
     if plot_parameters_vs_run:
         visualization.plot_parameters_vs_run()
-    if plot_parameters_vs_cost:
-        visualization.plot_parameters_vs_cost()
+    #if plot_parameters_vs_cost:
+    #    visualization.plot_parameters_vs_cost()
 
 class ControllerVisualizer():
     '''
@@ -572,7 +572,9 @@ def create_neural_net_learner_visualizations(filename,
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
         visualization.plot_cross_sections()
-        visualization.plot_surface()
+    visualization.plot_surface()
+    visualization.plot_density_surface()
+    visualization.plot_losses()
 
             
 class NeuralNetVisualizer(mll.NeuralNetLearner):
@@ -600,8 +602,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         self.has_trust_region = bool(np.array(self.training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(self.training_dict['trust_region'], dtype=float))
         
-        self.create_neural_net()
-        self.fit_neural_net()
+        self.import_neural_net()
         
         if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.min_boundary)):
             self.finite_flag = True
@@ -671,7 +672,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         figure_counter += 1
         plt.figure(figure_counter)
         points = 100
-        (_,cost_arrays) = self.return_cross_sections(points=points)
+        (_,cost_arrays) = self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters())
         rel_params = np.linspace(0,1,points)
         for ind in range(self.num_params):
             plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
@@ -706,9 +707,45 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         params = [(x,y) for x in param_set[0] for y in param_set[1]]
         costs = self.predict_costs_from_param_array(params)
         ax.scatter([param[0] for param in params], [param[1] for param in params], costs)
-        ax.set_zlim(top=100)
+        ax.set_zlim(top=500,bottom=0)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_zlabel('cost')
 
         ax.scatter(self.all_params[:,0], self.all_params[:,1], self.all_costs, c='r')
+
+    def plot_density_surface(self):
+        '''
+        Produce a density plot of the cost surface (only works when there are 2 parameters)
+        '''
+        if self.num_params != 2:
+            return
+        global figure_counter
+        figure_counter += 1
+        fig = plt.figure(figure_counter)
+
+        points = 50
+        xs, ys = np.meshgrid(
+                np.linspace(self.min_boundary[0], self.max_boundary[0], points),
+                np.linspace(self.min_boundary[1], self.max_boundary[1], points))
+        zs_list = self.predict_costs_from_param_array(list(zip(xs.flatten(),ys.flatten())))
+        zs = np.array(zs_list).reshape(points,points)
+        plt.pcolormesh(xs,ys,zs)
+        plt.scatter(self.all_params[:,0], self.all_params[:,1], c=self.all_costs, vmin=np.min(zs), vmax=np.max(zs), s=100)
+        plt.colorbar()
+        plt.xlabel("Param 0")
+        plt.ylabel("Param 1")
+
+    def plot_losses(self):
+        '''
+        Produce a figure of the loss as a function of training run.
+        '''
+        global figure_counter
+        figure_counter += 1
+        fig = plt.figure(figure_counter)
+
+        losses = self.get_losses()
+        plt.scatter(range(len(losses)), losses)
+        plt.xlabel("Run")
+        plt.ylabel("Training cost")
+        plt.title('Loss vs training run.')

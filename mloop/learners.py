@@ -14,11 +14,13 @@ import scipy.optimize as so
 import logging
 import datetime
 import os
+import queue
 import mloop.utilities as mlu
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
 import multiprocessing as mp
+import mloop.neuralnet as mlnn
 
 learner_thread_count = 0
 default_learner_archive_filename = 'learner_archive'
@@ -1467,7 +1469,7 @@ class GaussianProcessLearner(Learner, mp.Process):
 
 class NeuralNetLearner(Learner, mp.Process):
     '''
-    Shell of Neural Net Learner.
+    Learner that uses a neural network for function approximation.
 
     Args:
         params_out_queue (queue): Queue for parameters sent to controller.
@@ -1475,7 +1477,6 @@ class NeuralNetLearner(Learner, mp.Process):
         end_event (event): Event to trigger end of learner.
 
     Keyword Args:
-        length_scale (Optional [array]): The initial guess for length scale(s) of the gaussian process. The array can either of size one or the number of parameters or None. If it is size one, it is assumed all the correlation lengths are the same. If it is the number of the parameters then all the parameters have their own independent length scale. If it is None, it is assumed all the length scales should be independent and they are all given an initial value of 1. Default None.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction.
         default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
         default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
@@ -1484,11 +1485,10 @@ class NeuralNetLearner(Learner, mp.Process):
         predict_local_minima_at_end (Optional [bool]): If True finds all minima when the learner is ended. Does not if False. Default False.
 
     Attributes:
-        TODO: Update these.
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
         all_uncers (array): Array containing all uncertainties sent to learner.
-        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1. Needed for training the gaussian process.
+        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1.
         bad_run_indexs (list): list of indexes to all runs that were marked as bad.
         best_cost (float): Minimum received cost, updated during execution.
         best_params (array): Parameters of best run. (reference to element in params array).
@@ -1497,23 +1497,22 @@ class NeuralNetLearner(Learner, mp.Process):
         worst_index (int): index to run with worst cost.
         cost_range (float): Difference between worst_cost and best_cost
         generation_num (int): Number of sets of parameters to generate each generation. Set to 5.
-        length_scale_history (list): List of length scales found after each fit.
         noise_level_history (list): List of noise levels found after each fit.
-        fit_count (int): Counter for the number of times the gaussian process has been fit.
         cost_count (int): Counter for the number of costs, parameters and uncertainties added to learner.
         params_count (int): Counter for the number of parameters asked to be evaluated by the learner.
-        gaussian_process (GaussianProcessRegressor): Gaussian process that is fitted to data and used to make predictions
+        neural_net (NeuralNet): Neural net that is fitted to data and used to make predictions.
         cost_scaler (StandardScaler): Scaler used to normalize the provided costs.
+        cost_scaler_init_index (int): The number of params to use to initialise cost_scaler.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
 
     def __init__(self,
-                 update_hyperparameters = True,
                  trust_region=None,
                  default_bad_cost = None,
                  default_bad_uncertainty = None,
                  nn_training_filename =None,
                  nn_training_file_type ='txt',
+                 minimum_uncertainty = 1e-8,
                  predict_global_minima_at_end = True,
                  predict_local_minima_at_end = False,
                  **kwargs):
@@ -1534,7 +1533,6 @@ class NeuralNetLearner(Learner, mp.Process):
             
             #Counters
             self.costs_count = int(self.training_dict['costs_count'])
-            self.fit_count = int(self.training_dict['fit_count'])
             self.params_count = int(self.training_dict['params_count'])
             
             #Data from previous experiment
@@ -1555,7 +1553,10 @@ class NeuralNetLearner(Learner, mp.Process):
             #Configuration of the fake neural net learner
             self.length_scale = mlu.safe_squeeze(self.training_dict['length_scale'])
             self.noise_level = float(self.training_dict['noise_level'])
-            
+
+            self.cost_scaler_init_index = self.training_dict['cost_scaler_init_index']
+            if not self.cost_scaler_init_index is None:
+                self._init_cost_scaler()
             
             try:
                 self.predicted_best_parameters = mlu.safe_squeeze(self.training_dict['predicted_best_parameters'])
@@ -1599,15 +1600,17 @@ class NeuralNetLearner(Learner, mp.Process):
             self.worst_cost = float('-inf')
             self.worst_index = 0
             self.cost_range = float('inf')
-            self.length_scale_history = []
             self.noise_level_history = []
         
             self.costs_count = 0
-            self.fit_count = 0
             self.params_count = 0
             
             self.has_local_minima = False
             self.has_global_minima = False
+
+            # The scaler will be initialised when we're ready to fit it
+            self.cost_scaler = None
+            self.cost_scaler_init_index = None
                 
         #Multiprocessor controls
         self.new_params_event = mp.Event()
@@ -1624,9 +1627,9 @@ class NeuralNetLearner(Learner, mp.Process):
         self.bad_uncer_frac = 0.1 #Fraction of cost range to set a bad run uncertainty
 
         #Optional user set variables
-        self.update_hyperparameters = bool(update_hyperparameters)
         self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
         self.predict_local_minima_at_end = bool(predict_local_minima_at_end)
+        self.minimum_uncertainty = float(minimum_uncertainty)
         if default_bad_cost is not None:
             self.default_bad_cost = float(default_bad_cost)
         else:
@@ -1642,6 +1645,9 @@ class NeuralNetLearner(Learner, mp.Process):
         else:
             self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
             raise ValueError
+        if self.minimum_uncertainty <= 0:
+            self.log.error('Minimum uncertainty must be larger than zero for the learner.')
+            raise ValueError
         
         self._set_trust_region(trust_region)
 
@@ -1655,13 +1661,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.cost_has_noise = True
         self.noise_level = 1
 
-        # Set up the scaler to do nothing.
-        # TODO: Figure out how to use scaling for the NN (it's a bit difficult because we don't
-        # completely re-train each time, and don't want the scaling changing without doing a complete
-        # re-train).
-        self.cost_scaler = skp.StandardScaler(with_mean=False, with_std=False)
-
-        self.archive_dict.update({'archive_type':'nerual_net_learner',
+        self.archive_dict.update({'archive_type':'neural_net_learner',
                                   'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
@@ -1676,23 +1676,41 @@ class NeuralNetLearner(Learner, mp.Process):
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
 
+    def _construct_net(self):
+        self.neural_net = mlnn.NeuralNet(self.num_params)
+
+    def _init_cost_scaler(self):
+        '''
+        Initialises the cost scaler. cost_scaler_init_index must be set.
+        '''
+        self.cost_scaler = skp.StandardScaler(with_mean=False, with_std=False)
+        self.cost_scaler.fit(self.all_costs[:self.cost_scaler_init_index,np.newaxis])
+
     def create_neural_net(self):
         '''
         Creates the neural net. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array.
         '''
-        import mloop.nnlearner as mlnn
-        self.neural_net_impl = mlnn.NeuralNetImpl(self.num_params)
+        self._construct_net()
+        self.neural_net.init()
+
+    def import_neural_net(self):
+        '''
+        Imports neural net parameters from the training dictionary provided at construction. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array. You must call exactly one of this and create_neural_net before calling other methods.
+        '''
+        if not self.training_dict:
+            raise ValueError
+        self._construct_net()
+        self.neural_net.load(self.training_dict['net'])
 
     def fit_neural_net(self):
         '''
-        Determine the appropriate number of layers for the NN given the data.
+        Fits a neural net to the data.
 
-        Fit the Neural Net with the appropriate topology to the data
-
+        cost_scaler must have been fitted before calling this method.
         '''
-        self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
+        self.scaled_costs = self.cost_scaler.transform(self.all_costs[:,np.newaxis])[:,0]
 
-        self.neural_net_impl.fit_neural_net(self.all_params, self.scaled_costs)
+        self.neural_net.fit_neural_net(self.all_params, self.scaled_costs)
 
     def predict_cost(self,params):
         '''
@@ -1701,7 +1719,7 @@ class NeuralNetLearner(Learner, mp.Process):
         Returns:
             float : Predicted cost at paramters
         '''
-        return self.neural_net_impl.predict_cost(params)
+        return self.neural_net.predict_cost(params)
 
     def predict_cost_gradient(self,params):
         '''
@@ -1711,7 +1729,7 @@ class NeuralNetLearner(Learner, mp.Process):
             float : Predicted gradient at paramters
         '''
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net_impl.predict_cost_gradient(params).astype(np.float64)
+        return self.neural_net.predict_cost_gradient(params).astype(np.float64)
 
 
     def predict_costs_from_param_array(self,params):
@@ -1744,18 +1762,28 @@ class NeuralNetLearner(Learner, mp.Process):
         '''
         Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region.
         '''
-        if self.costs_in_queue.empty():
-            self.log.error('Neural network asked for new parameters but no new costs were provided.')
-            raise ValueError
-
         new_params = []
         new_costs = []
         new_uncers = []
         new_bads = []
         update_bads_flag = False
 
-        while not self.costs_in_queue.empty():
-            (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
+        first_dequeue = True
+        while True:
+            if first_dequeue:
+                try:
+                    # Block for 1s, because there might be a race with the event being set.
+                    (param, cost, uncer, bad) = self.costs_in_queue.get(block=True, timeout=1)
+                    first_dequeue = False
+                except queue.Empty:
+                    self.log.error('Neural network asked for new parameters but no new costs were provided after 1s.')
+                    raise ValueError
+            else:
+                try:
+                    (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
+                except queue.Empty:
+                    break
+
             self.costs_count +=1
 
             if bad:
@@ -1861,12 +1889,13 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'worst_cost':self.worst_cost,
                                   'worst_index':self.worst_index,
                                   'cost_range':self.cost_range,
-                                  'fit_count':self.fit_count,
                                   'costs_count':self.costs_count,
                                   'params_count':self.params_count,
-                                  'update_hyperparameters':self.update_hyperparameters,
                                   'length_scale':self.length_scale,
-                                  'noise_level':self.noise_level})    
+                                  'noise_level':self.noise_level,
+                                  'cost_scaler_init_index':self.cost_scaler_init_index})
+        if self.neural_net:
+            self.archive_dict.update({'net':self.neural_net.save()})
 
     def find_next_parameters(self):
         '''
@@ -1879,6 +1908,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
+        self.neural_net.start_opt()
         for start_params in self.search_params:
             result = so.minimize(fun = self.predict_cost,
                                  x0 = start_params,
@@ -1888,6 +1918,7 @@ class NeuralNetLearner(Learner, mp.Process):
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
+        self.neural_net.stop_opt()
         # Now tweak the selected parameters to make sure we don't just keep on looking in the same
         # place (the actual minimum might be a short distance away).
         # TODO: Rather than using [-0.1, 0.1] we should pick the fuzziness based on what we know
@@ -1897,7 +1928,9 @@ class NeuralNetLearner(Learner, mp.Process):
         # minimum and there's another one a long way away that appears slightly higher. To do this
         # cleverly would probably correspond to introducing some kind of uncertainty-based biasing
         # (like the GP).
-        next_params = next_params + nr.uniform(-0.1, 0.1, size=next_params.shape)
+        #next_params = next_params + nr.uniform(-0.1, 0.1, size=next_params.shape)
+        self.log.debug("Suggesting params " + str(next_params) + " with predicted cost: "
+                + str(next_cost))
         return next_params
 
     def run(self):
@@ -1914,10 +1947,14 @@ class NeuralNetLearner(Learner, mp.Process):
         try:
             while not self.end_event.is_set():
                 self.log.debug('Learner waiting for new params event')
-                self.save_archive()
+                # TODO: Not doing this because it's slow. Is it necessary?
+                #self.save_archive()
                 self.wait_for_new_params_event()
                 self.log.debug('NN learner reading costs')
                 self.get_params_and_costs()
+                if self.cost_scaler_init_index is None:
+                    self.cost_scaler_init_index = len(self.all_costs)
+                    self._init_cost_scaler()
                 self.fit_neural_net()
                 for _ in range(self.generation_num):
                     self.log.debug('Neural network learner generating parameter:'+ str(self.params_count+1))
@@ -1976,7 +2013,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self.predicted_best_parameters = curr_best_params
                 self.predicted_best_scaled_cost = curr_best_cost
 
-        self.predicted_best_cost = float(self.cost_scaler.inverse_transform(self.predicted_best_scaled_cost))
+        self.predicted_best_cost = float(self.cost_scaler.inverse_transform([self.predicted_best_scaled_cost]))
         self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                                   'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
                                   'predicted_best_cost':self.predicted_best_cost})
@@ -2023,9 +2060,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.has_local_minima = True
         self.log.info('Search completed')
 
+    # Methods for debugging/analysis.
 
-
-
-
-
-
+    def get_losses(self):
+        return self.neural_net.get_losses()
