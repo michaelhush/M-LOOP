@@ -14,7 +14,6 @@ import scipy.optimize as so
 import logging
 import datetime
 import os
-import queue
 import mloop.utilities as mlu
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
@@ -1775,13 +1774,13 @@ class NeuralNetLearner(Learner, mp.Process):
                     # Block for 1s, because there might be a race with the event being set.
                     (param, cost, uncer, bad) = self.costs_in_queue.get(block=True, timeout=1)
                     first_dequeue = False
-                except queue.Empty:
+                except mlu.empty_exception:
                     self.log.error('Neural network asked for new parameters but no new costs were provided after 1s.')
                     raise ValueError
             else:
                 try:
                     (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
-                except queue.Empty:
+                except mlu.empty_exception:
                     break
 
             self.costs_count +=1
