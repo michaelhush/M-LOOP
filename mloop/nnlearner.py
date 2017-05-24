@@ -71,7 +71,7 @@ class SingleNeuralNet():
 
             # Input + internal nodes
             prev_layer_dim = self.num_params
-            bias_stddev=0.1
+            bias_stddev=0.5
             for (i, dim) in enumerate(layer_dims):
                 weights.append(tf.Variable(
                     tf.random_normal([prev_layer_dim, dim], stddev=1.4/np.sqrt(prev_layer_dim)),
