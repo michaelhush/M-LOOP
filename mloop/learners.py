@@ -1674,7 +1674,7 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'predict_local_minima_at_end':self.predict_local_minima_at_end})
 
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
-        #self.log = None
+        self.log = None
 
     def _construct_net(self):
         self.neural_net = mlnn.NeuralNet(self.num_params)
@@ -1939,7 +1939,7 @@ class NeuralNetLearner(Learner, mp.Process):
         '''
         #logging to the main log file from a process (as apposed to a thread) in cpython is currently buggy on windows and/or python 2.7
         #current solution is to only log to the console for warning and above from a process
-        #self.log = mp.log_to_stderr(logging.WARNING)
+        self.log = mp.log_to_stderr(logging.WARNING)
 
         # The network needs to be created in the same process in which it runs
         self.create_neural_net()
