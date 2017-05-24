@@ -1,7 +1,9 @@
+import datetime
 import logging
 import math
 import time
 
+import mloop.utilities as mlu
 import numpy as np
 import sklearn.preprocessing as skp
 import tensorflow as tf
@@ -40,6 +42,14 @@ class SingleNeuralNet():
                  losses_list):
         self.log = logging.getLogger(__name__)
         start = time.time()
+
+        # TODO: Use a filename specific to this object?
+        self.save_archive_filename = (
+                mlu.archive_foldername
+                + "neural_net_archive_"
+                + mlu.datetime_to_string(datetime.datetime.now())
+                + ".ckpt")
+
         self.log.info("Constructing net")
         self.graph = tf.Graph()
         self.tf_session = tf.Session(graph=self.graph)
@@ -148,8 +158,7 @@ class SingleNeuralNet():
         '''
         Exports the net to an archive dictionary.
         '''
-        # TODO: Use a proper timestamped filename, maybe?
-        path = self.saver.save(self.tf_session, "net.ckpt")
+        path = self.saver.save(self.tf_session, self.save_archive_filename)
         self.log.info("Saving neural network to: " + path)
         return {'saver_path': path}
 
