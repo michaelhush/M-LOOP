@@ -523,6 +523,13 @@ class NeuralNet():
                 'net': self.net.save(),
                 }
 
+    def destroy(self):
+        '''
+        Destroys the net.
+        '''
+        if not self.net is None:
+            self.net.destroy()
+
     def fit_neural_net(self, all_params, all_costs):
         '''
         Fits the neural net to the data.

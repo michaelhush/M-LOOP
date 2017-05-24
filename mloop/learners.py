@@ -1980,6 +1980,7 @@ class NeuralNetLearner(Learner, mp.Process):
                              'local_minima_costs':self.local_minima_costs})
         self.params_out_queue.put(end_dict)
         self._shut_down()
+        self.neural_net.destroy()
         self.log.debug('Ended neural network learner')
 
     def find_global_minima(self):
