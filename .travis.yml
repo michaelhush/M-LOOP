@@ -11,5 +11,5 @@ install:
 script: python setup.py test
 os:
   - linux
-  
-  
+# Need trusty+ for tensorflow
+dist: trusty
