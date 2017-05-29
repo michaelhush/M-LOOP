@@ -690,7 +690,7 @@ class MachineLearnerController(Controller):
         
         if self.check_end_conditions():
             #Start last training run
-            self.log.info('Run:' + str(self.num_in_costs +1))
+            self.log.info('Run:' + str(self.num_in_costs +1) + ' (training)')
             next_params = self._next_params()
             self._put_params_and_out_dict(next_params)
 
@@ -706,12 +706,14 @@ class MachineLearnerController(Controller):
             ml_count = 0
 
         while self.check_end_conditions():
-            self.log.info('Run:' + str(self.num_in_costs +1))
+            run_num = self.num_in_costs + 1
             if ml_consec==self.generation_num or (self.no_delay and self.ml_learner_params_queue.empty()):
+                self.log.info('Run:' + str(run_num) + ' (trainer)')
                 next_params = self._next_params()
                 self._put_params_and_out_dict(next_params)
                 ml_consec = 0
             else:
+                self.log.info('Run:' + str(run_num) + ' (machine learner)')
                 next_params = self.ml_learner_params_queue.get()
                 super(MachineLearnerController,self)._put_params_and_out_dict(next_params, param_type=self.machine_learner_type)
                 ml_consec += 1
