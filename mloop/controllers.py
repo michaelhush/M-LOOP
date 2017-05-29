@@ -675,14 +675,14 @@ class MachineLearnerController(Controller):
         '''
         #Run the training runs using the standard optimization routine.
         self.log.debug('Starting training optimization.')
-        self.log.info('Run:' + str(self.num_in_costs +1))
+        self.log.info('Run:' + str(self.num_in_costs +1) + ' (training)')
         next_params = self._first_params()
         self._put_params_and_out_dict(next_params)
         self.save_archive()
         self._get_cost_and_in_dict()
         
         while (self.num_in_costs < self.num_training_runs) and self.check_end_conditions():
-            self.log.info('Run:' + str(self.num_in_costs +1))
+            self.log.info('Run:' + str(self.num_in_costs +1) + ' (training)')
             next_params = self._next_params()
             self._put_params_and_out_dict(next_params)
             self.save_archive()
