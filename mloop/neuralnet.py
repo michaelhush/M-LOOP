@@ -208,7 +208,7 @@ class SingleNeuralNet():
             for i in range(epochs):
                 # Split the data into random batches, and train on each batch
                 indices = np.random.permutation(len(params))
-                for j in range(math.ceil(len(params) / self.batch_size)):
+                for j in range(int(math.ceil(len(params) / self.batch_size))):
                     batch_indices = indices[j * self.batch_size : (j + 1) * self.batch_size]
                     batch_input = lparams[batch_indices]
                     batch_output = lcosts[batch_indices]
