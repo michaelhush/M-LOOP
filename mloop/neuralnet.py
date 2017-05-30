@@ -617,14 +617,6 @@ class NeuralNet():
         '''
         return self._unscale_gradient(self.net.predict_cost_gradient(self._scale_params(params)))
 
-    # Public mmethods to be used only for debugging/analysis.
-
-    def get_losses(self):
-        '''
-        Returns a list of training losses experienced by the network.
-        '''
-        return self.losses_list
-
     def start_opt(self):
         '''
         Starts an optimisation run. Until stop_opt() is called, predict_cost() and
@@ -637,3 +629,11 @@ class NeuralNet():
         Stops an optimisation run.
         '''
         self.net.stop_opt()
+
+    # Public mmethods to be used only for debugging/analysis.
+
+    def get_losses(self):
+        '''
+        Returns a list of training losses experienced by the network.
+        '''
+        return self.losses_list
