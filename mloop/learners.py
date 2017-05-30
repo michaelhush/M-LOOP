@@ -1619,8 +1619,8 @@ class NeuralNetLearner(Learner, mp.Process):
         self.scaled_costs = None
  
         #Constants, limits and tolerances
-        self.generation_num = 1
-        self.num_nets = 1
+        self.num_nets = 3
+        self.generation_num = 3
         self.search_precision = 1.0e-6
         self.parameter_searches = max(10,self.num_params)
         self.hyperparameter_searches = max(10,self.num_params)
