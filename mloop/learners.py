@@ -1701,7 +1701,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self._construct_net()
         self.neural_net.load(self.training_dict['net'])
 
-    def fit_neural_net(self):
+    def _fit_neural_net(self):
         '''
         Fits a neural net to the data.
 
@@ -1954,7 +1954,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 if self.cost_scaler_init_index is None:
                     self.cost_scaler_init_index = len(self.all_costs)
                     self._init_cost_scaler()
-                self.fit_neural_net()
+                self._fit_neural_net()
                 for _ in range(self.generation_num):
                     self.log.debug('Neural network learner generating parameter:'+ str(self.params_count+1))
                     next_params = self.find_next_parameters()
