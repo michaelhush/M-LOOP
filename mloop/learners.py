@@ -2089,5 +2089,7 @@ class NeuralNetLearner(Learner, mp.Process):
     # Methods for debugging/analysis.
 
     def get_losses(self):
-        # TODO
-        return self.neural_net[0].get_losses()
+        all_losses = []
+        for n in self.neural_nets:
+            all_losses += n.get_losses()
+        return all_losses
