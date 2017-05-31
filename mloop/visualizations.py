@@ -671,46 +671,49 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 self.log.error('cross_section_center not in boundaries:' + repr(cross_section_center))
                 raise ValueError
         
-        cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
-        cost_arrays = []
-        for ind in range(self.num_params):
-            sample_parameters = np.array([cross_section_center for _ in range(points)])
-            sample_parameters[:, ind] = cross_parameter_arrays[ind]
-            costs = self.predict_costs_from_param_array(sample_parameters)
-            cost_arrays.append(costs)
-        if self.cost_scaler.scale_:
-            cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
-        else:
-            cross_parameter_arrays = np.array(cross_parameter_arrays)
-        cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
-        return (cross_parameter_arrays,cost_arrays) 
+        res = []
+        for net_index in range(self.num_nets):
+            cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
+            cost_arrays = []
+            for ind in range(self.num_params):
+                sample_parameters = np.array([cross_section_center for _ in range(points)])
+                sample_parameters[:, ind] = cross_parameter_arrays[ind]
+                costs = self.predict_costs_from_param_array(sample_parameters, net_index)
+                cost_arrays.append(costs)
+            if self.cost_scaler.scale_:
+                cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
+            else:
+                cross_parameter_arrays = np.array(cross_parameter_arrays)
+            cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
+            res.append((cross_parameter_arrays, cost_arrays))
+        return res
 
     def plot_cross_sections(self):
         '''
         Produce a figure of the cross section about best cost and parameters
         '''
         global figure_counter, legend_loc
-        figure_counter += 1
-        plt.figure(figure_counter)
         points = 100
-        (_,cost_arrays) = self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters())
         rel_params = np.linspace(0,1,points)
-        for ind in range(self.num_params):
-            plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
-        if self.has_trust_region:
-            axes = plt.gca()
-            ymin, ymax = axes.get_ylim()
-            ytrust = ymin + 0.1*(ymax - ymin)
+        for (_,cost_arrays) in self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters()):
+            figure_counter += 1
+            plt.figure(figure_counter)
             for ind in range(self.num_params):
-                plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
-        plt.xlabel(scale_param_label)
-        plt.xlim((0,1))
-        plt.ylabel(cost_label)
-        plt.title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
-        artists = []
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)    
+                plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
+            if self.has_trust_region:
+                axes = plt.gca()
+                ymin, ymax = axes.get_ylim()
+                ytrust = ymin + 0.1*(ymax - ymin)
+                for ind in range(self.num_params):
+                    plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
+            plt.xlabel(scale_param_label)
+            plt.xlim((0,1))
+            plt.ylabel(cost_label)
+            plt.title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
+            artists = []
+            for ind in range(self.num_params):
+                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
+            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
 
     def plot_surface(self):
         '''
