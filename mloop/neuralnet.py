@@ -2,9 +2,11 @@ import datetime
 import logging
 import math
 import time
+import base64
 
 import mloop.utilities as mlu
 import numpy as np
+import numpy.random as nr
 import sklearn.preprocessing as skp
 import tensorflow as tf
 
@@ -43,11 +45,14 @@ class SingleNeuralNet():
         self.log = logging.getLogger(__name__)
         start = time.time()
 
-        # TODO: Use a filename specific to this object?
         self.save_archive_filename = (
                 mlu.archive_foldername
                 + "neural_net_archive_"
                 + mlu.datetime_to_string(datetime.datetime.now())
+                + "_"
+                # We include 6 random bytes for deduplication in case multiple nets
+                # are created at the same time.
+                + base64.urlsafe_b64encode(nr.bytes(6)).decode()
                 + ".ckpt")
 
         self.log.info("Constructing net")
