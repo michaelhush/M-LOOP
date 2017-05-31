@@ -64,6 +64,27 @@ def show_all_default_visualizations(controller, show_plots=True):
     if show_plots:
         plt.show()
 
+def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True):
+    log = logging.getLogger(__name__)
+    configure_plots()
+    log.debug('Creating controller visualizations.')
+    controller_file_type = controller_filename.split(".")[-1]
+    learner_file_type = learner_filename.split(".")[-1]
+    create_controller_visualizations(controller_filename, file_type=controller_file_type)
+
+    if controller_type == 'neural_net':
+        log.debug('Creating neural net visualizations.')
+        create_neural_net_learner_visualizations(
+            learner_filename,
+            file_type=learner_file_type)
+    else:
+        log.error('show_all_default_visualizations not implemented for type: ' + controller_type)
+        raise ValueError
+
+    log.info('Showing visualizations, close all to end MLOOP.')
+    if show_plots:
+        plt.show()
+
 def _color_from_controller_name(controller_name):
     '''
     Gives a color (as a number betweeen zero an one) corresponding to each controller name string.
