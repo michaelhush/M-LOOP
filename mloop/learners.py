@@ -1521,7 +1521,7 @@ class NeuralNetLearner(Learner, mp.Process):
             nn_training_filename = str(nn_training_filename)
             nn_training_file_type = str(nn_training_file_type)
             if not mlu.check_file_type_supported(nn_training_file_type):
-                self.log.error('GP training file type not supported' + repr(nn_training_file_type))
+                self.log.error('NN training file type not supported' + repr(nn_training_file_type))
             
             self.training_dict = mlu.get_dict_from_file(nn_training_filename, nn_training_file_type)
             
