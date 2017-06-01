@@ -1472,7 +1472,7 @@ class NeuralNetLearner(Learner, mp.Process):
 
     Args:
         params_out_queue (queue): Queue for parameters sent to controller.
-        costs_in_queue (queue): Queue for costs for gaussian process. This must be tuple
+        costs_in_queue (queue): Queue for costs.
         end_event (event): Event to trigger end of learner.
 
     Keyword Args:
@@ -1521,7 +1521,7 @@ class NeuralNetLearner(Learner, mp.Process):
             nn_training_filename = str(nn_training_filename)
             nn_training_file_type = str(nn_training_file_type)
             if not mlu.check_file_type_supported(nn_training_file_type):
-                self.log.error('GP training file type not supported' + repr(nn_training_file_type))
+                self.log.error('NN training file type not supported' + repr(nn_training_file_type))
             
             self.training_dict = mlu.get_dict_from_file(nn_training_filename, nn_training_file_type)
             
@@ -1619,7 +1619,8 @@ class NeuralNetLearner(Learner, mp.Process):
         self.scaled_costs = None
  
         #Constants, limits and tolerances
-        self.generation_num = 1
+        self.num_nets = 3
+        self.generation_num = 3
         self.search_precision = 1.0e-6
         self.parameter_searches = max(10,self.num_params)
         self.hyperparameter_searches = max(10,self.num_params)
@@ -1672,11 +1673,11 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'predict_global_minima_at_end':self.predict_global_minima_at_end,
                                   'predict_local_minima_at_end':self.predict_local_minima_at_end})
 
-        #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
+        #Remove logger so neural net can be safely picked for multiprocessing on Windows
         self.log = None
 
     def _construct_net(self):
-        self.neural_net = mlnn.NeuralNet(self.num_params)
+        self.neural_net = [mlnn.NeuralNet(self.num_params) for _ in range(self.num_nets)]
 
     def _init_cost_scaler(self):
         '''
@@ -1690,7 +1691,8 @@ class NeuralNetLearner(Learner, mp.Process):
         Creates the neural net. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array.
         '''
         self._construct_net()
-        self.neural_net.init()
+        for n in self.neural_net:
+            n.init()
 
     def import_neural_net(self):
         '''
@@ -1699,9 +1701,10 @@ class NeuralNetLearner(Learner, mp.Process):
         if not self.training_dict:
             raise ValueError
         self._construct_net()
-        self.neural_net.load(self.training_dict['net'])
+        for i, n in enumerate(self.neural_net):
+            n.load(self.training_dict['net_' + str(i)])
 
-    def fit_neural_net(self):
+    def _fit_neural_net(self,index):
         '''
         Fits a neural net to the data.
 
@@ -1709,29 +1712,33 @@ class NeuralNetLearner(Learner, mp.Process):
         '''
         self.scaled_costs = self.cost_scaler.transform(self.all_costs[:,np.newaxis])[:,0]
 
-        self.neural_net.fit_neural_net(self.all_params, self.scaled_costs)
+        self.neural_net[index].fit_neural_net(self.all_params, self.scaled_costs)
 
-    def predict_cost(self,params):
+    def predict_cost(self,params,net_index=None):
         '''
-        Produces a prediction of cost from the gaussian process at params.
+        Produces a prediction of cost from the neural net at params.
 
         Returns:
             float : Predicted cost at paramters
         '''
-        return self.neural_net.predict_cost(params)
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
+        return self.neural_net[net_index].predict_cost(params)
 
-    def predict_cost_gradient(self,params):
+    def predict_cost_gradient(self,params,net_index=None):
         '''
         Produces a prediction of the gradient of the cost function at params.
 
         Returns:
             float : Predicted gradient at paramters
         '''
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net.predict_cost_gradient(params).astype(np.float64)
+        return self.neural_net[net_index].predict_cost_gradient(params).astype(np.float64)
 
 
-    def predict_costs_from_param_array(self,params):
+    def predict_costs_from_param_array(self,params,net_index=None):
         '''
         Produces a prediction of costs from an array of params.
          
@@ -1739,7 +1746,7 @@ class NeuralNetLearner(Learner, mp.Process):
             float : Predicted cost at paramters
         '''
         # TODO: Can do this more efficiently.
-        return [self.predict_cost(param) for param in params]
+        return [self.predict_cost(param,net_index) for param in params]
  
 
     def wait_for_new_params_event(self):
@@ -1894,40 +1901,34 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'noise_level':self.noise_level,
                                   'cost_scaler_init_index':self.cost_scaler_init_index})
         if self.neural_net:
-            self.archive_dict.update({'net':self.neural_net.save()})
+            for i,n in enumerate(self.neural_net):
+                self.archive_dict.update({'net_'+str(i):n.save()})
 
-    def find_next_parameters(self):
+    def find_next_parameters(self, net_index=None):
         '''
         Returns next parameters to find. Increments counters appropriately.
 
         Return:
             next_params (array): Returns next parameters from cost search.
         '''
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
+
         self.params_count += 1
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
-        self.neural_net.start_opt()
+        self.neural_net[net_index].start_opt()
         for start_params in self.search_params:
-            result = so.minimize(fun = self.predict_cost,
+            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
                                  x0 = start_params,
-                                 jac = self.predict_cost_gradient,
+                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
                                  bounds = self.search_region,
                                  tol = self.search_precision)
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
-        self.neural_net.stop_opt()
-        # Now tweak the selected parameters to make sure we don't just keep on looking in the same
-        # place (the actual minimum might be a short distance away).
-        # TODO: Rather than using [-0.1, 0.1] we should pick the fuzziness based on what we know
-        # about length scales.
-        # TODO: It would be nice to deal with uncertainty more cleverly. Even though the current
-        # method will help find the true local minimum, it doesn't help if we get stuck in a local
-        # minimum and there's another one a long way away that appears slightly higher. To do this
-        # cleverly would probably correspond to introducing some kind of uncertainty-based biasing
-        # (like the GP).
-        #next_params = next_params + nr.uniform(-0.1, 0.1, size=next_params.shape)
+        self.neural_net[net_index].stop_opt()
         self.log.debug("Suggesting params " + str(next_params) + " with predicted cost: "
                 + str(next_cost))
         return next_params
@@ -1943,6 +1944,10 @@ class NeuralNetLearner(Learner, mp.Process):
         # The network needs to be created in the same process in which it runs
         self.create_neural_net()
 
+        # We cycle through our different nets to generate each new set of params. This keeps track
+        # of the current net.
+        net_index = 0
+
         try:
             while not self.end_event.is_set():
                 self.log.debug('Learner waiting for new params event')
@@ -1954,13 +1959,27 @@ class NeuralNetLearner(Learner, mp.Process):
                 if self.cost_scaler_init_index is None:
                     self.cost_scaler_init_index = len(self.all_costs)
                     self._init_cost_scaler()
-                self.fit_neural_net()
+                # Now we need to generate generation_num new param sets, by iterating over our
+                # nets. We want to fire off new params as quickly as possible, so we don't train a
+                # net until we actually need to use it. But we need to make sure that each net gets
+                # trained exactly once, regardless of how many times it's used to generate new
+                # params.
+                num_nets_trained = 0
                 for _ in range(self.generation_num):
+                    if num_nets_trained < self.num_nets:
+                        self._fit_neural_net(net_index)
+                        num_nets_trained += 1
+
                     self.log.debug('Neural network learner generating parameter:'+ str(self.params_count+1))
-                    next_params = self.find_next_parameters()
+                    next_params = self.find_next_parameters(net_index)
+                    net_index = (net_index + 1) % self.num_nets
                     self.params_out_queue.put(next_params)
                     if self.end_event.is_set():
                         raise LearnerInterrupt()
+                # Train any nets that haven't been trained yet.
+                for i in range(self.num_nets - num_nets_trained):
+                    self._fit_neural_net((net_index + i) % self.num_nets)
+
         except LearnerInterrupt:
             pass
         # TODO: Fix this. We can't just do what's here because the costs queue might be empty, but
@@ -1979,6 +1998,8 @@ class NeuralNetLearner(Learner, mp.Process):
                              'local_minima_costs':self.local_minima_costs})
         self.params_out_queue.put(end_dict)
         self._shut_down()
+        for n in self.neural_net:
+            n.destroy()
         self.log.debug('Ended neural network learner')
 
     def find_global_minima(self):
@@ -2062,4 +2083,7 @@ class NeuralNetLearner(Learner, mp.Process):
     # Methods for debugging/analysis.
 
     def get_losses(self):
-        return self.neural_net.get_losses()
+        all_losses = []
+        for n in self.neural_net:
+            all_losses += n.get_losses()
+        return all_losses
