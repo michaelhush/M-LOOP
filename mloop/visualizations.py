@@ -699,7 +699,8 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         '''
         points = 100
         rel_params = np.linspace(0,1,points)
-        for net_index, (_,cost_arrays) in enumerate(self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters())):
+        all_cost_arrays = [a for _,a in self.return_cross_sections(points=points)]
+        for net_index, cost_arrays in enumerate(all_cost_arrays):
             def prepare_plot():
                 global figure_counter
                 figure_counter += 1
