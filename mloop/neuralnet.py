@@ -2,9 +2,11 @@ import datetime
 import logging
 import math
 import time
+import base64
 
 import mloop.utilities as mlu
 import numpy as np
+import numpy.random as nr
 import sklearn.preprocessing as skp
 import tensorflow as tf
 
@@ -43,11 +45,14 @@ class SingleNeuralNet():
         self.log = logging.getLogger(__name__)
         start = time.time()
 
-        # TODO: Use a filename specific to this object?
         self.save_archive_filename = (
                 mlu.archive_foldername
                 + "neural_net_archive_"
                 + mlu.datetime_to_string(datetime.datetime.now())
+                + "_"
+                # We include 6 random bytes for deduplication in case multiple nets
+                # are created at the same time.
+                + base64.urlsafe_b64encode(nr.bytes(6)).decode()
                 + ".ckpt")
 
         self.log.info("Constructing net")
@@ -523,6 +528,13 @@ class NeuralNet():
                 'net': self.net.save(),
                 }
 
+    def destroy(self):
+        '''
+        Destroys the net.
+        '''
+        if not self.net is None:
+            self.net.destroy()
+
     def fit_neural_net(self, all_params, all_costs):
         '''
         Fits the neural net to the data.
@@ -610,14 +622,6 @@ class NeuralNet():
         '''
         return self._unscale_gradient(self.net.predict_cost_gradient(self._scale_params(params)))
 
-    # Public mmethods to be used only for debugging/analysis.
-
-    def get_losses(self):
-        '''
-        Returns a list of training losses experienced by the network.
-        '''
-        return self.losses_list
-
     def start_opt(self):
         '''
         Starts an optimisation run. Until stop_opt() is called, predict_cost() and
@@ -630,3 +634,11 @@ class NeuralNet():
         Stops an optimisation run.
         '''
         self.net.stop_opt()
+
+    # Public mmethods to be used only for debugging/analysis.
+
+    def get_losses(self):
+        '''
+        Returns a list of training losses experienced by the network.
+        '''
+        return self.losses_list

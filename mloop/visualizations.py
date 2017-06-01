@@ -11,6 +11,9 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import plotly.plotly as py
+import plotly.tools as tls
+import plotly.exceptions as pye
 
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -60,6 +63,28 @@ def show_all_default_visualizations(controller, show_plots=True):
                                                        plot_all_minima_vs_cost=plot_all_minima_vs_cost_flag)
         
         
+    log.info('Showing visualizations, close all to end MLOOP.')
+    if show_plots:
+        plt.show()
+
+def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True, upload_cross_sections=False):
+    log = logging.getLogger(__name__)
+    configure_plots()
+    log.debug('Creating controller visualizations.')
+    controller_file_type = controller_filename.split(".")[-1]
+    learner_file_type = learner_filename.split(".")[-1]
+    create_controller_visualizations(controller_filename, file_type=controller_file_type)
+
+    if controller_type == 'neural_net':
+        log.debug('Creating neural net visualizations.')
+        create_neural_net_learner_visualizations(
+            learner_filename,
+            file_type=learner_file_type,
+            upload_cross_sections=upload_cross_sections)
+    else:
+        log.error('show_all_default_visualizations not implemented for type: ' + controller_type)
+        raise ValueError
+
     log.info('Showing visualizations, close all to end MLOOP.')
     if show_plots:
         plt.show()
@@ -557,7 +582,8 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             
 def create_neural_net_learner_visualizations(filename,
                                              file_type='pkl',
-                                             plot_cross_sections=True):
+                                             plot_cross_sections=True,
+                                             upload_cross_sections=False):
     '''
     Creates plots from a neural nets learner file.
     
@@ -571,7 +597,7 @@ def create_neural_net_learner_visualizations(filename,
     '''
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
-        visualization.plot_cross_sections()
+        visualization.do_cross_sections(upload=upload_cross_sections)
     visualization.plot_surface()
     visualization.plot_density_surface()
     visualization.plot_losses()
@@ -650,46 +676,61 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 self.log.error('cross_section_center not in boundaries:' + repr(cross_section_center))
                 raise ValueError
         
-        cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
-        cost_arrays = []
-        for ind in range(self.num_params):
-            sample_parameters = np.array([cross_section_center for _ in range(points)])
-            sample_parameters[:, ind] = cross_parameter_arrays[ind]
-            costs = self.predict_costs_from_param_array(sample_parameters)
-            cost_arrays.append(costs)
-        if self.cost_scaler.scale_:
-            cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
-        else:
-            cross_parameter_arrays = np.array(cross_parameter_arrays)
-        cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
-        return (cross_parameter_arrays,cost_arrays) 
+        res = []
+        for net_index in range(self.num_nets):
+            cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
+            cost_arrays = []
+            for ind in range(self.num_params):
+                sample_parameters = np.array([cross_section_center for _ in range(points)])
+                sample_parameters[:, ind] = cross_parameter_arrays[ind]
+                costs = self.predict_costs_from_param_array(sample_parameters, net_index)
+                cost_arrays.append(costs)
+            if self.cost_scaler.scale_:
+                cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
+            else:
+                cross_parameter_arrays = np.array(cross_parameter_arrays)
+            cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
+            res.append((cross_parameter_arrays, cost_arrays))
+        return res
 
-    def plot_cross_sections(self):
+    def do_cross_sections(self, upload):
         '''
         Produce a figure of the cross section about best cost and parameters
         '''
-        global figure_counter, legend_loc
-        figure_counter += 1
-        plt.figure(figure_counter)
         points = 100
-        (_,cost_arrays) = self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters())
         rel_params = np.linspace(0,1,points)
-        for ind in range(self.num_params):
-            plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
-        if self.has_trust_region:
-            axes = plt.gca()
-            ymin, ymax = axes.get_ylim()
-            ytrust = ymin + 0.1*(ymax - ymin)
+        for net_index, (_,cost_arrays) in enumerate(self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters())):
+            def prepare_plot():
+                global figure_counter
+                figure_counter += 1
+                fig = plt.figure(figure_counter)
+                axes = plt.gca()
+                for ind in range(self.num_params):
+                    axes.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind],label=str(ind))
+                if self.has_trust_region:
+                    ymin, ymax = axes.get_ylim()
+                    ytrust = ymin + 0.1*(ymax - ymin)
+                    for ind in range(self.num_params):
+                        axes.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
+                axes.set_xlabel(scale_param_label)
+                axes.set_xlim((0,1))
+                axes.set_ylabel(cost_label)
+                axes.set_title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
+                return fig
+            if upload:
+                plf = tls.mpl_to_plotly(prepare_plot())
+                plf['layout']['showlegend'] = True
+                try:
+                    url = py.plot(plf,auto_open=False)
+                    print(url)
+                except pye.PlotlyRequestError:
+                    print("Failed to upload due to quota restrictions")
+            prepare_plot()
+            artists = []
             for ind in range(self.num_params):
-                plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
-        plt.xlabel(scale_param_label)
-        plt.xlim((0,1))
-        plt.ylabel(cost_label)
-        plt.title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
-        artists = []
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)    
+                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
+            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+
 
     def plot_surface(self):
         '''
