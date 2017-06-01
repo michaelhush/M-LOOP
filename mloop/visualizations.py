@@ -11,6 +11,9 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import plotly.plotly as py
+import plotly.tools as tls
+import plotly.exceptions as pye
 
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -64,7 +67,7 @@ def show_all_default_visualizations(controller, show_plots=True):
     if show_plots:
         plt.show()
 
-def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True):
+def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True, upload_cross_sections=False):
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
@@ -76,7 +79,8 @@ def show_all_default_visualizations_from_archive(controller_filename, learner_fi
         log.debug('Creating neural net visualizations.')
         create_neural_net_learner_visualizations(
             learner_filename,
-            file_type=learner_file_type)
+            file_type=learner_file_type,
+            upload_cross_sections=upload_cross_sections)
     else:
         log.error('show_all_default_visualizations not implemented for type: ' + controller_type)
         raise ValueError
@@ -578,7 +582,8 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             
 def create_neural_net_learner_visualizations(filename,
                                              file_type='pkl',
-                                             plot_cross_sections=True):
+                                             plot_cross_sections=True,
+                                             upload_cross_sections=False):
     '''
     Creates plots from a neural nets learner file.
     
@@ -592,7 +597,7 @@ def create_neural_net_learner_visualizations(filename,
     '''
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
-        visualization.plot_cross_sections()
+        visualization.do_cross_sections(upload=upload_cross_sections)
     visualization.plot_surface()
     visualization.plot_density_surface()
     visualization.plot_losses()
@@ -688,32 +693,44 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             res.append((cross_parameter_arrays, cost_arrays))
         return res
 
-    def plot_cross_sections(self):
+    def do_cross_sections(self, upload):
         '''
         Produce a figure of the cross section about best cost and parameters
         '''
-        global figure_counter, legend_loc
         points = 100
         rel_params = np.linspace(0,1,points)
-        for (_,cost_arrays) in self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters()):
-            figure_counter += 1
-            plt.figure(figure_counter)
-            for ind in range(self.num_params):
-                plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
-            if self.has_trust_region:
+        for net_index, (_,cost_arrays) in enumerate(self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters())):
+            def prepare_plot():
+                global figure_counter
+                figure_counter += 1
+                fig = plt.figure(figure_counter)
                 axes = plt.gca()
-                ymin, ymax = axes.get_ylim()
-                ytrust = ymin + 0.1*(ymax - ymin)
                 for ind in range(self.num_params):
-                    plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
-            plt.xlabel(scale_param_label)
-            plt.xlim((0,1))
-            plt.ylabel(cost_label)
-            plt.title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
+                    axes.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind],label=str(ind))
+                if self.has_trust_region:
+                    ymin, ymax = axes.get_ylim()
+                    ytrust = ymin + 0.1*(ymax - ymin)
+                    for ind in range(self.num_params):
+                        axes.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
+                axes.set_xlabel(scale_param_label)
+                axes.set_xlim((0,1))
+                axes.set_ylabel(cost_label)
+                axes.set_title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
+                return fig
+            if upload:
+                plf = tls.mpl_to_plotly(prepare_plot())
+                plf['layout']['showlegend'] = True
+                try:
+                    url = py.plot(plf,auto_open=False)
+                    print(url)
+                except pye.PlotlyRequestError:
+                    print("Failed to upload due to quota restrictions")
+            prepare_plot()
             artists = []
             for ind in range(self.num_params):
                 artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
             plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+
 
     def plot_surface(self):
         '''
