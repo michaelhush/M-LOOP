@@ -1976,6 +1976,10 @@ class NeuralNetLearner(Learner, mp.Process):
                     self.params_out_queue.put(next_params)
                     if self.end_event.is_set():
                         raise LearnerInterrupt()
+                # Train any nets that haven't been trained yet.
+                for i in range(self.num_nets - num_nets_trained):
+                    self._fit_neural_net((net_index + i) % self.num_nets)
+
         except LearnerInterrupt:
             pass
         # TODO: Fix this. We can't just do what's here because the costs queue might be empty, but
