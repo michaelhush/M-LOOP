@@ -1472,7 +1472,7 @@ class NeuralNetLearner(Learner, mp.Process):
 
     Args:
         params_out_queue (queue): Queue for parameters sent to controller.
-        costs_in_queue (queue): Queue for costs for gaussian process. This must be tuple
+        costs_in_queue (queue): Queue for costs.
         end_event (event): Event to trigger end of learner.
 
     Keyword Args:
@@ -1673,7 +1673,7 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'predict_global_minima_at_end':self.predict_global_minima_at_end,
                                   'predict_local_minima_at_end':self.predict_local_minima_at_end})
 
-        #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
+        #Remove logger so neural net can be safely picked for multiprocessing on Windows
         self.log = None
 
     def _construct_net(self):
@@ -1929,16 +1929,6 @@ class NeuralNetLearner(Learner, mp.Process):
                 next_params = result.x
                 next_cost = result.fun
         self.neural_net[net_index].stop_opt()
-        # Now tweak the selected parameters to make sure we don't just keep on looking in the same
-        # place (the actual minimum might be a short distance away).
-        # TODO: Rather than using [-0.1, 0.1] we should pick the fuzziness based on what we know
-        # about length scales.
-        # TODO: It would be nice to deal with uncertainty more cleverly. Even though the current
-        # method will help find the true local minimum, it doesn't help if we get stuck in a local
-        # minimum and there's another one a long way away that appears slightly higher. To do this
-        # cleverly would probably correspond to introducing some kind of uncertainty-based biasing
-        # (like the GP).
-        #next_params = next_params + nr.uniform(-0.1, 0.1, size=next_params.shape)
         self.log.debug("Suggesting params " + str(next_params) + " with predicted cost: "
                 + str(next_cost))
         return next_params
