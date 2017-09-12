@@ -374,7 +374,7 @@ class DifferentialEvolutionVisualizer():
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type='pkl',
                                                    plot_cross_sections=True,
-                                                   plot_all_minima_vs_cost=True,
+                                                   plot_all_minima_vs_cost=False,
                                                    plot_hyperparameters_vs_run=True):
     '''
     Runs the plots from a gaussian process learner file.
