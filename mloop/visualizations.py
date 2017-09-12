@@ -699,7 +699,8 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         '''
         points = 100
         rel_params = np.linspace(0,1,points)
-        for net_index, (_,cost_arrays) in enumerate(self.return_cross_sections(points=points, cross_section_center=self.find_next_parameters())):
+        all_cost_arrays = [a for _,a in self.return_cross_sections(points=points)]
+        for net_index, cost_arrays in enumerate(all_cost_arrays):
             def prepare_plot():
                 global figure_counter
                 figure_counter += 1
@@ -730,7 +731,44 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             for ind in range(self.num_params):
                 artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
             plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
-
+        if self.num_nets > 1:
+            # And now create a plot showing the average, max and min for each cross section.
+            def prepare_plot():
+                global figure_counter
+                figure_counter += 1
+                fig = plt.figure(figure_counter)
+                axes = plt.gca()
+                for ind in range(self.num_params):
+                    this_param_cost_array = np.array(all_cost_arrays)[:,ind,:]
+                    mn = np.mean(this_param_cost_array, axis=0)
+                    m = np.min(this_param_cost_array, axis=0)
+                    M = np.max(this_param_cost_array, axis=0)
+                    axes.plot(rel_params,mn,'-',color=self.param_colors[ind],label=str(ind))
+                    axes.plot(rel_params,m,'--',color=self.param_colors[ind],label=str(ind))
+                    axes.plot(rel_params,M,'--',color=self.param_colors[ind],label=str(ind))
+                axes.set_xlabel(scale_param_label)
+                axes.set_xlim((0,1))
+                axes.set_ylabel(cost_label)
+                axes.set_title('NN Learner: Average predicted landscape')
+                return fig
+            if upload:
+                plf = tls.mpl_to_plotly(prepare_plot())
+                plf['layout']['showlegend'] = True
+                for i,d in enumerate(plf['data']):
+                    d['legendgroup'] = str(int(i/3))
+                    if not i % 3 == 0:
+                        d['showlegend'] = False
+                        # Pretty sure this shouldn't be necessary, but it seems to be anyway.
+                        d['line']['dash'] = 'dash'
+                try:
+                    url = py.plot(plf,auto_open=False)
+                    print(url)
+                except pye.PlotlyRequestError:
+                    print("Failed to upload due to quota restrictions")
+            prepare_plot()
+            for ind in range(self.num_params):
+                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
+            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
 
     def plot_surface(self):
         '''
