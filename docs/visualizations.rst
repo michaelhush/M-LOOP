@@ -36,7 +36,7 @@ If you have a controller and learner archive and would like to examine the visua
    import matplotlib.pyplot as plt
    
    mlv.configure_plots()
-   mlv.create_contoller_visualizations('controller_archive_2016-08-23_13-59.mat',file_type='mat')
+   mlv.create_controller_visualizations('controller_archive_2016-08-23_13-59.mat',file_type='mat')
    mlv.create_gaussian_process_learner_visualizations('learner_archive_2016-08-18_12-18.pkl',file_type='pkl')
    
    plt.show()
