@@ -15,11 +15,14 @@ import logging
 import datetime
 import os
 import mloop.utilities as mlu
+import multiprocessing as mp
+
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
-import multiprocessing as mp
+        
 import mloop.neuralnet as mlnn
+#Lazy import of scikit-learn and tensorflow
 
 learner_thread_count = 0
 default_learner_archive_filename = 'learner_archive'
@@ -869,8 +872,7 @@ class GaussianProcessLearner(Learner, mp.Process):
         default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
         minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
         predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
-        predict_local_minima_at_end (Optional [bool]): If True finds the all minima when the learner is ended. Does not if False. Default False.
-
+        
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
@@ -906,9 +908,8 @@ class GaussianProcessLearner(Learner, mp.Process):
                  gp_training_filename =None,
                  gp_training_file_type ='txt',
                  predict_global_minima_at_end = True,
-                 predict_local_minima_at_end = False,
                  **kwargs):
-
+        
         if gp_training_filename is not None:
 
             gp_training_filename = str(gp_training_filename)
@@ -956,22 +957,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.has_global_minima = True
             except KeyError:
                 self.has_global_minima = False
-            try:
-                self.local_minima_parameters = list(self.training_dict['local_minima_parameters'])
-
-                if isinstance(self.training_dict['local_minima_costs'], np.ndarray):
-                    self.local_minima_costs = list(np.squeeze(self.training_dict['local_minima_costs']))
-                else:
-                    self.local_minima_costs = list(self.training_dict['local_minima_costs'])
-                if isinstance(self.training_dict['local_minima_uncers'], np.ndarray):
-                    self.local_minima_uncers = list(np.squeeze(self.training_dict['local_minima_uncers']))
-                else:
-                    self.local_minima_uncers = list(self.training_dict['local_minima_uncers'])
-
-                self.has_local_minima = True
-            except KeyError:
-                self.has_local_minima = False
-
+            
             super(GaussianProcessLearner,self).__init__(num_params=num_params,
                              min_boundary=min_boundary,
                              max_boundary=max_boundary,
@@ -999,7 +985,6 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.fit_count = 0
             self.params_count = 0
 
-            self.has_local_minima = False
             self.has_global_minima = False
 
             #Optional user set variables
@@ -1035,7 +1020,6 @@ class GaussianProcessLearner(Learner, mp.Process):
         #Optional user set variables
         self.update_hyperparameters = bool(update_hyperparameters)
         self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
-        self.predict_local_minima_at_end = bool(predict_local_minima_at_end)
         if default_bad_cost is not None:
             self.default_bad_cost = float(default_bad_cost)
         else:
@@ -1099,8 +1083,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                                   'bad_uncer_frac':self.bad_uncer_frac,
                                   'trust_region':self.trust_region,
                                   'has_trust_region':self.has_trust_region,
-                                  'predict_global_minima_at_end':self.predict_global_minima_at_end,
-                                  'predict_local_minima_at_end':self.predict_local_minima_at_end})
+                                  'predict_global_minima_at_end':self.predict_global_minima_at_end})
 
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
@@ -1140,8 +1123,11 @@ class GaussianProcessLearner(Learner, mp.Process):
         Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region.
         '''
         if self.costs_in_queue.empty():
-            self.log.error('Gaussian process asked for new parameters but no new costs were provided.')
-            raise ValueError
+            if self.end_event.is_set():
+                return
+            else:
+                self.log.error('Gaussian process asked for new parameters but no new costs were provided.')
+                raise ValueError
 
         new_params = []
         new_costs = []
@@ -1357,20 +1343,15 @@ class GaussianProcessLearner(Learner, mp.Process):
                         raise LearnerInterrupt()
         except LearnerInterrupt:
             pass
-        if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
-            self.get_params_and_costs()
-            self.fit_gaussian_process()
+            
         end_dict = {}
         if self.predict_global_minima_at_end:
+            self.get_params_and_costs()
+            self.fit_gaussian_process()
             self.find_global_minima()
             end_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                              'predicted_best_cost':self.predicted_best_cost,
                              'predicted_best_uncertainty':self.predicted_best_uncertainty})
-        if self.predict_local_minima_at_end:
-            self.find_local_minima()
-            end_dict.update({'local_minima_parameters':self.local_minima_parameters,
-                             'local_minima_costs':self.local_minima_costs,
-                             'local_minima_uncers':self.local_minima_uncers})
         self.params_out_queue.put(end_dict)
         self._shut_down()
         self.log.debug('Ended Gaussian Process Learner')
@@ -1426,45 +1407,6 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.has_global_minima = True
         self.log.debug('Predicted global minima found.')
 
-    def find_local_minima(self):
-        '''
-        Performs a comprehensive search of the learner for all predicted local minima (and hence the global as well) in the landscape. Note, this can take a very long time.
-
-        Attributes:
-            local_minima_parameters (list): list of all the parameters for local minima.
-            local_minima_costs (list): list of all the costs at local minima.
-            local_minima_uncers (list): list of all the uncertainties at local minima.
-
-        '''
-        self.log.info('Searching for all minima.')
-
-        self.minima_tolerance = 10*self.search_precision
-
-        self.number_of_local_minima = 0
-        self.local_minima_parameters = []
-        self.local_minima_costs = []
-        self.local_minima_uncers = []
-
-        search_bounds = list(zip(self.min_boundary, self.max_boundary))
-        for start_params in self.all_params:
-            result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
-            curr_minima_params = result.x
-            (curr_minima_cost,curr_minima_uncer) = self.gaussian_process.predict(curr_minima_params[np.newaxis,:],return_std=True)
-            if all( not np.all( np.abs(params - curr_minima_params) < self.minima_tolerance ) for params in self.local_minima_parameters):
-                #Non duplicate point so add to the list
-                self.number_of_local_minima += 1
-                self.local_minima_parameters.append(curr_minima_params)
-                self.local_minima_costs.append(curr_minima_cost)
-                self.local_minima_uncers.append(curr_minima_uncer)
-
-        self.archive_dict.update({'number_of_local_minima':self.number_of_local_minima,
-                                  'local_minima_parameters':self.local_minima_parameters,
-                                  'local_minima_costs':self.local_minima_costs,
-                                  'local_minima_uncers':self.local_minima_uncers})
-
-        self.has_local_minima = True
-        self.log.info('Search completed')
-
 
 class NeuralNetLearner(Learner, mp.Process):
     '''
@@ -1481,8 +1423,7 @@ class NeuralNetLearner(Learner, mp.Process):
         default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
         minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
         predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
-        predict_local_minima_at_end (Optional [bool]): If True finds all minima when the learner is ended. Does not if False. Default False.
-
+        
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
@@ -1513,7 +1454,6 @@ class NeuralNetLearner(Learner, mp.Process):
                  nn_training_file_type ='txt',
                  minimum_uncertainty = 1e-8,
                  predict_global_minima_at_end = True,
-                 predict_local_minima_at_end = False,
                  **kwargs):
         
         if nn_training_filename is not None:
@@ -1564,21 +1504,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self.has_global_minima = True
             except KeyError:
                 self.has_global_minima = False
-            try:
-                self.local_minima_parameters = list(self.training_dict['local_minima_parameters'])
                 
-                if isinstance(self.training_dict['local_minima_costs'], np.ndarray):
-                    self.local_minima_costs = list(np.squeeze(self.training_dict['local_minima_costs']))
-                else:
-                    self.local_minima_costs = list(self.training_dict['local_minima_costs'])
-                if isinstance(self.training_dict['local_minima_uncers'], np.ndarray):
-                    self.local_minima_uncers = list(np.squeeze(self.training_dict['local_minima_uncers']))
-                else:
-                    self.local_minima_uncers = list(self.training_dict['local_minima_uncers'])
-                
-                self.has_local_minima = True
-            except KeyError:
-                self.has_local_minima = False
         
             super(NeuralNetLearner,self).__init__(num_params=num_params,
                              min_boundary=min_boundary, 
@@ -1604,7 +1530,6 @@ class NeuralNetLearner(Learner, mp.Process):
             self.costs_count = 0
             self.params_count = 0
             
-            self.has_local_minima = False
             self.has_global_minima = False
 
             # The scaler will be initialised when we're ready to fit it
@@ -1628,7 +1553,6 @@ class NeuralNetLearner(Learner, mp.Process):
 
         #Optional user set variables
         self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
-        self.predict_local_minima_at_end = bool(predict_local_minima_at_end)
         self.minimum_uncertainty = float(minimum_uncertainty)
         if default_bad_cost is not None:
             self.default_bad_cost = float(default_bad_cost)
@@ -1670,8 +1594,7 @@ class NeuralNetLearner(Learner, mp.Process):
                                   'bad_uncer_frac':self.bad_uncer_frac,
                                   'trust_region':self.trust_region,
                                   'has_trust_region':self.has_trust_region,
-                                  'predict_global_minima_at_end':self.predict_global_minima_at_end,
-                                  'predict_local_minima_at_end':self.predict_local_minima_at_end})
+                                  'predict_global_minima_at_end':self.predict_global_minima_at_end})
 
         #Remove logger so neural net can be safely picked for multiprocessing on Windows
         self.log = None
@@ -1983,19 +1906,14 @@ class NeuralNetLearner(Learner, mp.Process):
         except LearnerInterrupt:
             pass
         # TODO: Fix this. We can't just do what's here because the costs queue might be empty, but
-        # we should get anything left in it and do one last train.
-        #if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
-        #    self.get_params_and_costs()
-        #    self.fit_neural_net()
+        # we should get anything left in it and do one last train.   
         end_dict = {}
         if self.predict_global_minima_at_end:
+            self.get_params_and_costs()
+            self.fit_neural_net()
             self.find_global_minima()
             end_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                              'predicted_best_cost':self.predicted_best_cost})
-        if self.predict_local_minima_at_end:
-            self.find_local_minima()
-            end_dict.update({'local_minima_parameters':self.local_minima_parameters,
-                             'local_minima_costs':self.local_minima_costs})
         self.params_out_queue.put(end_dict)
         self._shut_down()
         for n in self.neural_net:
@@ -2041,44 +1959,6 @@ class NeuralNetLearner(Learner, mp.Process):
         self.has_global_minima = True
         self.log.debug('Predicted global minima found.')
 
-    def find_local_minima(self):
-        '''
-        Performs a comprehensive search of the learner for all predicted local minima (and hence the global as well) in the landscape. Note, this can take a very long time.
-
-        Attributes:
-            local_minima_parameters (list): list of all the parameters for local minima.
-            local_minima_costs (list): list of all the costs at local minima.
-
-        '''
-        self.log.info('Searching for all minima.')
-
-        self.minima_tolerance = 10*self.search_precision
-
-        self.number_of_local_minima = 0
-        self.local_minima_parameters = []
-        self.local_minima_costs = []
-
-        search_bounds = list(zip(self.min_boundary, self.max_boundary))
-        for start_params in self.all_params:
-            result = so.minimize(fun = self.predict_cost,
-                                 x0 = start_params,
-                                 jac = self.predict_cost_gradient,
-                                 bounds = search_bounds,
-                                 tol = self.search_precision)
-            curr_minima_params = result.x
-            curr_minima_cost = result.fun
-            if all( not np.all( np.abs(params - curr_minima_params) < self.minima_tolerance ) for params in self.local_minima_parameters):
-                #Non duplicate point so add to the list
-                self.number_of_local_minima += 1
-                self.local_minima_parameters.append(curr_minima_params)
-                self.local_minima_costs.append(curr_minima_cost)
-
-        self.archive_dict.update({'number_of_local_minima':self.number_of_local_minima,
-                                  'local_minima_parameters':self.local_minima_parameters,
-                                  'local_minima_costs':self.local_minima_costs})
-
-        self.has_local_minima = True
-        self.log.info('Search completed')
 
     # Methods for debugging/analysis.
 

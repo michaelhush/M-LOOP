@@ -11,9 +11,6 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import plotly.plotly as py
-import plotly.tools as tls
-import plotly.exceptions as pye
 
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -57,10 +54,8 @@ def show_all_default_visualizations(controller, show_plots=True):
         
     if isinstance(controller, mlc.GaussianProcessController):
         log.debug('Creating gaussian process visualizations.')
-        plot_all_minima_vs_cost_flag = bool(controller.ml_learner.has_local_minima)
         create_gaussian_process_learner_visualizations(controller.ml_learner.total_archive_filename, 
-                                                       file_type=controller.ml_learner.learner_archive_file_type,
-                                                       plot_all_minima_vs_cost=plot_all_minima_vs_cost_flag)
+                                                       file_type=controller.ml_learner.learner_archive_file_type)
         
         
     log.info('Showing visualizations, close all to end MLOOP.')
@@ -374,7 +369,6 @@ class DifferentialEvolutionVisualizer():
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type='pkl',
                                                    plot_cross_sections=True,
-                                                   plot_all_minima_vs_cost=False,
                                                    plot_hyperparameters_vs_run=True):
     '''
     Runs the plots from a gaussian process learner file.
@@ -385,13 +379,10 @@ def create_gaussian_process_learner_visualizations(filename,
     Keyword Args:
         file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
         plot_cross_sections (Optional [bool]): If True plot predict landscape cross sections, else do not. Default True. 
-        plot_all_minima_vs_cost (Optional [bool]): If True plot all minima parameters versus cost number, False does not. If None it will only make the plots if all minima were previously calculated. Default None. 
     '''
     visualization = GaussianProcessVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
         visualization.plot_cross_sections()
-    if plot_all_minima_vs_cost:
-        visualization.plot_all_minima_vs_cost()
     if plot_hyperparameters_vs_run:
         visualization.plot_hyperparameters_vs_run()
     
@@ -515,11 +506,14 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
         plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)    
+    
+    '''
+    Method is currently not supported. Of questionable usefulness. Not yet deleted.
         
     def plot_all_minima_vs_cost(self):
-        '''
-        Produce figure of the all the local minima versus cost.
-        '''
+        
+        #Produce figure of the all the local minima versus cost.
+        
         if not self.has_all_minima:
             self.find_all_minima()
         global figure_counter, legend_loc
@@ -548,6 +542,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
         plt.legend(artists, [str(x) for x in range(1,self.num_params+1)], loc=legend_loc)
+    '''
     
     def plot_hyperparameters_vs_run(self):
         global figure_counter, run_label, legend_loc, log_length_scale_label, noise_label
@@ -593,7 +588,6 @@ def create_neural_net_learner_visualizations(filename,
     Keyword Args:
         file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
         plot_cross_sections (Optional [bool]): If True plot predict landscape cross sections, else do not. Default True. 
-        plot_all_minima_vs_cost (Optional [bool]): If True plot all minima parameters versus cost number, False does not. If None it will only make the plots if all minima were previously calculated. Default None. 
     '''
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
@@ -617,10 +611,16 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
     
     def __init__(self, filename, file_type = 'pkl', **kwargs):
         
+        
+        
         super(NeuralNetVisualizer, self).__init__(nn_training_filename = filename,
                                                   nn_training_file_type = file_type,
                                                   update_hyperparameters = False,
                                                   **kwargs)
+        
+        import plotly.plotly as py
+        import plotly.tools as tls
+        import plotly.exceptions as pye
         
         self.log = logging.getLogger(__name__)
         
