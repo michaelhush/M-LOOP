@@ -15,10 +15,14 @@ import logging
 import datetime
 import os
 import mloop.utilities as mlu
+import multiprocessing as mp
+
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
-import multiprocessing as mp
+        
+import mloop.neuralnet as mlnn
+#Lazy import of scikit-learn and tensorflow
 
 learner_thread_count = 0
 default_learner_archive_filename = 'learner_archive' 
@@ -868,7 +872,6 @@ class GaussianProcessLearner(Learner, mp.Process):
         default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
         minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
         predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
-        predict_local_minima_at_end (Optional [bool]): If True finds the all minima when the learner is ended. Does not if False. Default False.
         
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
@@ -905,7 +908,6 @@ class GaussianProcessLearner(Learner, mp.Process):
                  gp_training_filename =None,
                  gp_training_file_type ='txt',
                  predict_global_minima_at_end = True,
-                 predict_local_minima_at_end = False,
                  **kwargs):
         
         if gp_training_filename is not None:
@@ -955,21 +957,10 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.has_global_minima = True
             except KeyError:
                 self.has_global_minima = False
-            try:
-                self.local_minima_parameters = mlu.safe_cast_to_list(self.training_dict['local_minima_parameters'])
-                self.local_minima_costs = mlu.safe_cast_to_list(self.training_dict['local_minima_costs'])
-                self.local_minima_uncers = mlu.safe_cast_to_list(self.training_dict['local_minima_uncers'])
-                
-                self.has_local_minima = True
-            except KeyError:
-                self.has_local_minima = False
             
-            if 'num_params' in kwargs:
-                super(GaussianProcessLearner,self).__init__(**kwargs)
-            else:
-                super(GaussianProcessLearner,self).__init__(num_params=num_params,
-                             min_boundary=min_boundary, 
-                             max_boundary=max_boundary, 
+            super(GaussianProcessLearner,self).__init__(num_params=num_params,
+                             min_boundary=min_boundary,
+                             max_boundary=max_boundary,
                              **kwargs)
             
         else:
@@ -993,8 +984,6 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.costs_count = 0
             self.fit_count = 0
             self.params_count = 0
-            
-            self.has_local_minima = False
             self.has_global_minima = False
             
             #Optional user set variables
@@ -1033,7 +1022,6 @@ class GaussianProcessLearner(Learner, mp.Process):
         #Optional user set variables
         self.update_hyperparameters = bool(update_hyperparameters)
         self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
-        self.predict_local_minima_at_end = bool(predict_local_minima_at_end)
         if default_bad_cost is not None:
             self.default_bad_cost = float(default_bad_cost)
         else:
@@ -1097,9 +1085,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                                   'bad_uncer_frac':self.bad_uncer_frac,
                                   'trust_region':self.trust_region,
                                   'has_trust_region':self.has_trust_region,
-                                  'predict_global_minima_at_end':self.predict_global_minima_at_end,
-                                  'predict_local_minima_at_end':self.predict_local_minima_at_end})
-        
+                                  'predict_global_minima_at_end':self.predict_global_minima_at_end})
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
             
@@ -1137,9 +1123,12 @@ class GaussianProcessLearner(Learner, mp.Process):
         Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region. 
         '''
         if self.costs_in_queue.empty():
-            self.log.error('Gaussian process asked for new parameters but no new costs were provided.')
-            raise ValueError
-        
+            if self.end_event.is_set():
+                return
+            else:
+                self.log.error('Gaussian process asked for new parameters but no new costs were provided.')
+                raise ValueError
+
         new_params = []
         new_costs = []
         new_uncers = []
@@ -1355,20 +1344,15 @@ class GaussianProcessLearner(Learner, mp.Process):
                         raise LearnerInterrupt()
         except LearnerInterrupt:
             pass
-        if self.predict_global_minima_at_end or self.predict_local_minima_at_end:
-            self.get_params_and_costs()
-            self.fit_gaussian_process()
+            
         end_dict = {}
         if self.predict_global_minima_at_end:
+            self.get_params_and_costs()
+            self.fit_gaussian_process()
             self.find_global_minima()
             end_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                              'predicted_best_cost':self.predicted_best_cost,
                              'predicted_best_uncertainty':self.predicted_best_uncertainty})
-        if self.predict_local_minima_at_end:
-            self.find_local_minima()
-            end_dict.update({'local_minima_parameters':self.local_minima_parameters,
-                             'local_minima_costs':self.local_minima_costs,
-                             'local_minima_uncers':self.local_minima_uncers})
         self.params_out_queue.put(end_dict)
         self._shut_down()
         self.log.debug('Ended Gaussian Process Learner')
@@ -1422,51 +1406,566 @@ class GaussianProcessLearner(Learner, mp.Process):
                                   'predicted_best_uncertainty':self.predicted_best_uncertainty})
         
         self.has_global_minima = True
-        self.log.debug('Predicted global minima found.')   
-    
-    def find_local_minima(self):
-        '''
-        Performs a comprehensive search of the learner for all predicted local minima (and hence the global as well) in the landscape. Note, this can take a very long time. 
+        self.log.debug('Predicted global minima found.')
+
+
+class NeuralNetLearner(Learner, mp.Process):
+    '''
+    Learner that uses a neural network for function approximation.
+
+    Args:
+        params_out_queue (queue): Queue for parameters sent to controller.
+        costs_in_queue (queue): Queue for costs.
+        end_event (event): Event to trigger end of learner.
+
+    Keyword Args:
+        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction.
+        default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
+        default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
+        minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
+        predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
         
+    Attributes:
+        all_params (array): Array containing all parameters sent to learner.
+        all_costs (array): Array containing all costs sent to learner.
+        all_uncers (array): Array containing all uncertainties sent to learner.
+        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1.
+        bad_run_indexs (list): list of indexes to all runs that were marked as bad.
+        best_cost (float): Minimum received cost, updated during execution.
+        best_params (array): Parameters of best run. (reference to element in params array).
+        best_index (int): index of the best cost and params.
+        worst_cost (float): Maximum received cost, updated during execution.
+        worst_index (int): index to run with worst cost.
+        cost_range (float): Difference between worst_cost and best_cost
+        generation_num (int): Number of sets of parameters to generate each generation. Set to 5.
+        noise_level_history (list): List of noise levels found after each fit.
+        cost_count (int): Counter for the number of costs, parameters and uncertainties added to learner.
+        params_count (int): Counter for the number of parameters asked to be evaluated by the learner.
+        neural_net (NeuralNet): Neural net that is fitted to data and used to make predictions.
+        cost_scaler (StandardScaler): Scaler used to normalize the provided costs.
+        cost_scaler_init_index (int): The number of params to use to initialise cost_scaler.
+        has_trust_region (bool): Whether the learner has a trust region.
+    '''
+
+    def __init__(self,
+                 trust_region=None,
+                 default_bad_cost = None,
+                 default_bad_uncertainty = None,
+                 nn_training_filename =None,
+                 nn_training_file_type ='txt',
+                 minimum_uncertainty = 1e-8,
+                 predict_global_minima_at_end = True,
+                 **kwargs):
+        
+        if nn_training_filename is not None:
+            
+            nn_training_filename = str(nn_training_filename)
+            nn_training_file_type = str(nn_training_file_type)
+            if not mlu.check_file_type_supported(nn_training_file_type):
+                self.log.error('NN training file type not supported' + repr(nn_training_file_type))
+            
+            self.training_dict = mlu.get_dict_from_file(nn_training_filename, nn_training_file_type)
+            
+            #Basic optimization settings
+            num_params = int(self.training_dict['num_params'])
+            min_boundary = mlu.safe_cast_to_list(self.training_dict['min_boundary'])
+            max_boundary = mlu.safe_cast_to_list(self.training_dict['max_boundary'])
+            
+            #Counters
+            self.costs_count = int(self.training_dict['costs_count'])
+            self.params_count = int(self.training_dict['params_count'])
+            
+            #Data from previous experiment
+            self.all_params = np.array(self.training_dict['all_params'], dtype=float)
+            self.all_costs = mlu.safe_squeeze(self.training_dict['all_costs'])
+            self.all_uncers = mlu.safe_squeeze(self.training_dict['all_uncers'])
+            
+            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
+            
+            #Derived properties
+            self.best_cost = float(self.training_dict['best_cost'])
+            self.best_params = mlu.safe_squeeze(self.training_dict['best_params'])
+            self.best_index = int(self.training_dict['best_index'])
+            self.worst_cost = float(self.training_dict['worst_cost'])
+            self.worst_index = int(self.training_dict['worst_index'])
+            self.cost_range = float(self.training_dict['cost_range'])
+            
+            #Configuration of the fake neural net learner
+            self.length_scale = mlu.safe_squeeze(self.training_dict['length_scale'])
+            self.noise_level = float(self.training_dict['noise_level'])
+
+            self.cost_scaler_init_index = self.training_dict['cost_scaler_init_index']
+            if not self.cost_scaler_init_index is None:
+                self._init_cost_scaler()
+            
+            try:
+                self.predicted_best_parameters = mlu.safe_squeeze(self.training_dict['predicted_best_parameters'])
+                self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
+                self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
+                self.has_global_minima = True
+            except KeyError:
+                self.has_global_minima = False
+                
+        
+            super(NeuralNetLearner,self).__init__(num_params=num_params,
+                             min_boundary=min_boundary, 
+                             max_boundary=max_boundary, 
+                             **kwargs)
+        else:
+            
+            super(NeuralNetLearner,self).__init__(**kwargs)
+        
+            #Storage variables, archived
+            self.all_params = np.array([], dtype=float)
+            self.all_costs = np.array([], dtype=float)
+            self.all_uncers = np.array([], dtype=float)
+            self.bad_run_indexs = []
+            self.best_cost = float('inf')
+            self.best_params = float('nan')
+            self.best_index = 0
+            self.worst_cost = float('-inf')
+            self.worst_index = 0
+            self.cost_range = float('inf')
+            self.noise_level_history = []
+        
+            self.costs_count = 0
+            self.params_count = 0
+            
+            self.has_global_minima = False
+
+            # The scaler will be initialised when we're ready to fit it
+            self.cost_scaler = None
+            self.cost_scaler_init_index = None
+                
+        #Multiprocessor controls
+        self.new_params_event = mp.Event()
+
+        #Storage variables and counters
+        self.search_params = []
+        self.scaled_costs = None
+ 
+        #Constants, limits and tolerances
+        self.num_nets = 3
+        self.generation_num = 3
+        self.search_precision = 1.0e-6
+        self.parameter_searches = max(10,self.num_params)
+        self.hyperparameter_searches = max(10,self.num_params)
+        self.bad_uncer_frac = 0.1 #Fraction of cost range to set a bad run uncertainty
+
+        #Optional user set variables
+        self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
+        self.minimum_uncertainty = float(minimum_uncertainty)
+        if default_bad_cost is not None:
+            self.default_bad_cost = float(default_bad_cost)
+        else:
+            self.default_bad_cost = None
+        if default_bad_uncertainty is not None:
+            self.default_bad_uncertainty = float(default_bad_uncertainty)
+        else:
+            self.default_bad_uncertainty = None
+        if (self.default_bad_cost is None) and (self.default_bad_uncertainty is None):
+            self.bad_defaults_set = False
+        elif (self.default_bad_cost is not None) and (self.default_bad_uncertainty is not None):
+            self.bad_defaults_set = True
+        else:
+            self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
+            raise ValueError
+        if self.minimum_uncertainty <= 0:
+            self.log.error('Minimum uncertainty must be larger than zero for the learner.')
+            raise ValueError
+        
+        self._set_trust_region(trust_region)
+
+        #Search bounds
+        self.search_min = self.min_boundary
+        self.search_max = self.max_boundary
+        self.search_diff = self.search_max - self.search_min
+        self.search_region = list(zip(self.search_min, self.search_max))
+
+        self.length_scale = 1
+        self.cost_has_noise = True
+        self.noise_level = 1
+
+        self.archive_dict.update({'archive_type':'neural_net_learner',
+                                  'bad_run_indexs':self.bad_run_indexs,
+                                  'generation_num':self.generation_num,
+                                  'search_precision':self.search_precision,
+                                  'parameter_searches':self.parameter_searches,
+                                  'hyperparameter_searches':self.hyperparameter_searches,
+                                  'bad_uncer_frac':self.bad_uncer_frac,
+                                  'trust_region':self.trust_region,
+                                  'has_trust_region':self.has_trust_region,
+                                  'predict_global_minima_at_end':self.predict_global_minima_at_end})
+
+        #Remove logger so neural net can be safely picked for multiprocessing on Windows
+        self.log = None
+
+    def _construct_net(self):
+        self.neural_net = [mlnn.NeuralNet(self.num_params) for _ in range(self.num_nets)]
+
+    def _init_cost_scaler(self):
+        '''
+        Initialises the cost scaler. cost_scaler_init_index must be set.
+        '''
+        self.cost_scaler = skp.StandardScaler(with_mean=False, with_std=False)
+        self.cost_scaler.fit(self.all_costs[:self.cost_scaler_init_index,np.newaxis])
+
+    def create_neural_net(self):
+        '''
+        Creates the neural net. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array.
+        '''
+        self._construct_net()
+        for n in self.neural_net:
+            n.init()
+
+    def import_neural_net(self):
+        '''
+        Imports neural net parameters from the training dictionary provided at construction. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array. You must call exactly one of this and create_neural_net before calling other methods.
+        '''
+        if not self.training_dict:
+            raise ValueError
+        self._construct_net()
+        for i, n in enumerate(self.neural_net):
+            n.load(self.training_dict['net_' + str(i)])
+
+    def _fit_neural_net(self,index):
+        '''
+        Fits a neural net to the data.
+
+        cost_scaler must have been fitted before calling this method.
+        '''
+        self.scaled_costs = self.cost_scaler.transform(self.all_costs[:,np.newaxis])[:,0]
+
+        self.neural_net[index].fit_neural_net(self.all_params, self.scaled_costs)
+
+    def predict_cost(self,params,net_index=None):
+        '''
+        Produces a prediction of cost from the neural net at params.
+
+        Returns:
+            float : Predicted cost at paramters
+        '''
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
+        return self.neural_net[net_index].predict_cost(params)
+
+    def predict_cost_gradient(self,params,net_index=None):
+        '''
+        Produces a prediction of the gradient of the cost function at params.
+
+        Returns:
+            float : Predicted gradient at paramters
+        '''
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
+        # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
+        return self.neural_net[net_index].predict_cost_gradient(params).astype(np.float64)
+
+
+    def predict_costs_from_param_array(self,params,net_index=None):
+        '''
+        Produces a prediction of costs from an array of params.
+         
+        Returns:
+            float : Predicted cost at paramters
+        '''
+        # TODO: Can do this more efficiently.
+        return [self.predict_cost(param,net_index) for param in params]
+ 
+
+    def wait_for_new_params_event(self):
+        '''
+        Waits for a new parameters event and starts a new parameter generation cycle. Also checks end event and will break if it is triggered.
+        '''
+        while not self.end_event.is_set():
+            if self.new_params_event.wait(timeout=self.learner_wait):
+                self.new_params_event.clear()
+                break
+            else:
+                continue
+        else:
+            self.log.debug('NeuralNetLearner end signal received. Ending')
+            raise LearnerInterrupt
+
+
+    def get_params_and_costs(self):
+        '''
+        Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region.
+        '''
+        new_params = []
+        new_costs = []
+        new_uncers = []
+        new_bads = []
+        update_bads_flag = False
+
+        first_dequeue = True
+        while True:
+            if first_dequeue:
+                try:
+                    # Block for 1s, because there might be a race with the event being set.
+                    (param, cost, uncer, bad) = self.costs_in_queue.get(block=True, timeout=1)
+                    first_dequeue = False
+                except mlu.empty_exception:
+                    self.log.error('Neural network asked for new parameters but no new costs were provided after 1s.')
+                    raise ValueError
+            else:
+                try:
+                    (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
+                except mlu.empty_exception:
+                    break
+
+            self.costs_count +=1
+
+            if bad:
+                new_bads.append(self.costs_count-1)
+                if self.bad_defaults_set:
+                    cost = self.default_bad_cost
+                    uncer = self.default_bad_uncertainty
+                else:
+                    cost = self.worst_cost
+                    uncer = self.cost_range*self.bad_uncer_frac
+
+            param = np.array(param, dtype=float)
+            if not self.check_num_params(param):
+                self.log.error('Incorrect number of parameters provided to neural network learner:' + repr(param) + '. Number of parameters:' + str(self.num_params))
+                raise ValueError
+            if not self.check_in_boundary(param):
+                self.log.warning('Parameters provided to neural network learner not in boundaries:' + repr(param))
+            cost = float(cost)
+            if uncer < 0:
+                self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
+                uncer = max(float(uncer), self.minimum_uncertainty)
+
+            cost_change_flag = False
+            if cost > self.worst_cost:
+                self.worst_cost = cost
+                self.worst_index = self.costs_count-1
+                cost_change_flag = True
+            if cost < self.best_cost:
+                self.best_cost = cost
+                self.best_params = param
+                self.best_index =  self.costs_count-1
+                cost_change_flag = True
+            if cost_change_flag:
+                self.cost_range = self.worst_cost - self.best_cost
+                if not self.bad_defaults_set:
+                    update_bads_flag = True
+
+            new_params.append(param)
+            new_costs.append(cost)
+            new_uncers.append(uncer)
+
+
+        if self.all_params.size==0:
+            self.all_params = np.array(new_params, dtype=float)
+            self.all_costs = np.array(new_costs, dtype=float)
+            self.all_uncers = np.array(new_uncers, dtype=float)
+        else:
+            self.all_params = np.concatenate((self.all_params, np.array(new_params, dtype=float)))
+            self.all_costs = np.concatenate((self.all_costs, np.array(new_costs, dtype=float)))
+            self.all_uncers = np.concatenate((self.all_uncers, np.array(new_uncers, dtype=float)))
+
+        self.bad_run_indexs.append(new_bads)
+
+        if self.all_params.shape != (self.costs_count,self.num_params):
+            self.log('Saved NN params are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_params))
+        if self.all_costs.shape != (self.costs_count,):
+            self.log('Saved NN costs are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_costs))
+        if self.all_uncers.shape != (self.costs_count,):
+            self.log('Saved NN uncertainties are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_uncers))
+
+        if update_bads_flag:
+            self.update_bads()
+
+        self.update_search_region()
+
+    def update_bads(self):
+        '''
+        Best and/or worst costs have changed, update the values associated with bad runs accordingly.
+        '''
+        for index in self.bad_run_indexs:
+            self.all_costs[index] = self.worst_cost
+            self.all_uncers[index] = self.cost_range*self.bad_uncer_frac
+
+    def update_search_region(self):
+        '''
+        If trust boundaries is not none, updates the search boundaries based on the defined trust region.
+        '''
+        if self.has_trust_region:
+            self.search_min = np.maximum(self.best_params - self.trust_region, self.min_boundary)
+            self.search_max = np.minimum(self.best_params + self.trust_region, self.max_boundary)
+            self.search_diff = self.search_max - self.search_min
+            self.search_region = list(zip(self.search_min, self.search_max))
+
+    def update_search_params(self):
+        '''
+        Update the list of parameters to use for the next search.
+        '''
+        self.search_params = []
+        self.search_params.append(self.best_params)
+        for _ in range(self.parameter_searches):
+            self.search_params.append(self.search_min + nr.uniform(size=self.num_params) * self.search_diff)
+
+    def update_archive(self):
+        '''
+        Update the archive.
+        '''
+        self.archive_dict.update({'all_params':self.all_params,
+                                  'all_costs':self.all_costs,
+                                  'all_uncers':self.all_uncers,
+                                  'best_cost':self.best_cost,
+                                  'best_params':self.best_params,
+                                  'best_index':self.best_index,
+                                  'worst_cost':self.worst_cost,
+                                  'worst_index':self.worst_index,
+                                  'cost_range':self.cost_range,
+                                  'costs_count':self.costs_count,
+                                  'params_count':self.params_count,
+                                  'length_scale':self.length_scale,
+                                  'noise_level':self.noise_level,
+                                  'cost_scaler_init_index':self.cost_scaler_init_index})
+        if self.neural_net:
+            for i,n in enumerate(self.neural_net):
+                self.archive_dict.update({'net_'+str(i):n.save()})
+
+    def find_next_parameters(self, net_index=None):
+        '''
+        Returns next parameters to find. Increments counters appropriately.
+
+        Return:
+            next_params (array): Returns next parameters from cost search.
+        '''
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
+
+        self.params_count += 1
+        self.update_search_params()
+        next_params = None
+        next_cost = float('inf')
+        self.neural_net[net_index].start_opt()
+        for start_params in self.search_params:
+            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
+                                 x0 = start_params,
+                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
+                                 bounds = self.search_region,
+                                 tol = self.search_precision)
+            if result.fun < next_cost:
+                next_params = result.x
+                next_cost = result.fun
+        self.neural_net[net_index].stop_opt()
+        self.log.debug("Suggesting params " + str(next_params) + " with predicted cost: "
+                + str(next_cost))
+        return next_params
+
+    def run(self):
+        '''
+        Starts running the neural network learner. When the new parameters event is triggered, reads the cost information provided and updates the neural network with the information. Then searches the neural network for new optimal parameters to test based on the biased cost. Parameters to test next are put on the output parameters queue.
+        '''
+        #logging to the main log file from a process (as apposed to a thread) in cpython is currently buggy on windows and/or python 2.7
+        #current solution is to only log to the console for warning and above from a process
+        self.log = mp.log_to_stderr(logging.WARNING)
+
+        # The network needs to be created in the same process in which it runs
+        self.create_neural_net()
+
+        # We cycle through our different nets to generate each new set of params. This keeps track
+        # of the current net.
+        net_index = 0
+
+        try:
+            while not self.end_event.is_set():
+                self.log.debug('Learner waiting for new params event')
+                # TODO: Not doing this because it's slow. Is it necessary?
+                #self.save_archive()
+                self.wait_for_new_params_event()
+                self.log.debug('NN learner reading costs')
+                self.get_params_and_costs()
+                if self.cost_scaler_init_index is None:
+                    self.cost_scaler_init_index = len(self.all_costs)
+                    self._init_cost_scaler()
+                # Now we need to generate generation_num new param sets, by iterating over our
+                # nets. We want to fire off new params as quickly as possible, so we don't train a
+                # net until we actually need to use it. But we need to make sure that each net gets
+                # trained exactly once, regardless of how many times it's used to generate new
+                # params.
+                num_nets_trained = 0
+                for _ in range(self.generation_num):
+                    if num_nets_trained < self.num_nets:
+                        self._fit_neural_net(net_index)
+                        num_nets_trained += 1
+
+                    self.log.debug('Neural network learner generating parameter:'+ str(self.params_count+1))
+                    next_params = self.find_next_parameters(net_index)
+                    net_index = (net_index + 1) % self.num_nets
+                    self.params_out_queue.put(next_params)
+                    if self.end_event.is_set():
+                        raise LearnerInterrupt()
+                # Train any nets that haven't been trained yet.
+                for i in range(self.num_nets - num_nets_trained):
+                    self._fit_neural_net((net_index + i) % self.num_nets)
+
+        except LearnerInterrupt:
+            pass
+        # TODO: Fix this. We can't just do what's here because the costs queue might be empty, but
+        # we should get anything left in it and do one last train.   
+        end_dict = {}
+        if self.predict_global_minima_at_end:
+            self.get_params_and_costs()
+            self.fit_neural_net()
+            self.find_global_minima()
+            end_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
+                             'predicted_best_cost':self.predicted_best_cost})
+        self.params_out_queue.put(end_dict)
+        self._shut_down()
+        for n in self.neural_net:
+            n.destroy()
+        self.log.debug('Ended neural network learner')
+
+    def find_global_minima(self):
+        '''
+        Performs a quick search for the predicted global minima from the learner. Does not return any values, but creates the following attributes.
+
         Attributes:
-            local_minima_parameters (list): list of all the parameters for local minima.
-            local_minima_costs (list): list of all the costs at local minima.
-            local_minima_uncers (list): list of all the uncertainties at local minima.
-             
+            predicted_best_parameters (array): the parameters for the predicted global minima
+            predicted_best_cost (float): the cost at the predicted global minima
         '''
-        self.log.info('Searching for all minima.')
-        
-        self.minima_tolerance = 10*self.search_precision
-        
-        self.number_of_local_minima = 0
-        self.local_minima_parameters = []
-        self.local_minima_costs = []
-        self.local_minima_uncers = []
-        
+        self.log.debug('Started search for predicted global minima.')
+
+        self.predicted_best_parameters = None
+        self.predicted_best_scaled_cost = float('inf')
+
+        search_params = []
+        search_params.append(self.best_params)
+        for _ in range(self.parameter_searches):
+            search_params.append(self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary)
+
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
-        for start_params in self.all_params:
-            result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
-            curr_minima_params = result.x
-            (curr_minima_cost,curr_minima_uncer) = self.gaussian_process.predict(curr_minima_params[np.newaxis,:],return_std=True)
-            if all( not np.all( np.abs(params - curr_minima_params) < self.minima_tolerance ) for params in self.local_minima_parameters):    
-                #Non duplicate point so add to the list
-                self.number_of_local_minima += 1
-                self.local_minima_parameters.append(curr_minima_params)
-                self.local_minima_costs.append(curr_minima_cost)
-                self.local_minima_uncers.append(curr_minima_uncer)
-        
-        self.archive_dict.update({'number_of_local_minima':self.number_of_local_minima,
-                                  'local_minima_parameters':self.local_minima_parameters,
-                                  'local_minima_costs':self.local_minima_costs,
-                                  'local_minima_uncers':self.local_minima_uncers})
-        
-        self.has_local_minima = True
-        self.log.info('Search completed')
+        for start_params in search_params:
+            result = so.minimize(fun = self.predict_cost,
+                                 x0 = start_params,
+                                 jac = self.predict_cost_gradient,
+                                 bounds = search_bounds,
+                                 tol = self.search_precision)
+            curr_best_params = result.x
+            curr_best_cost = result.fun
+            if curr_best_cost<self.predicted_best_scaled_cost:
+                self.predicted_best_parameters = curr_best_params
+                self.predicted_best_scaled_cost = curr_best_cost
 
-    
+        self.predicted_best_cost = float(self.cost_scaler.inverse_transform([self.predicted_best_scaled_cost]))
+        self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
+                                  'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
+                                  'predicted_best_cost':self.predicted_best_cost})
 
+        self.has_global_minima = True
+        self.log.debug('Predicted global minima found.')
 
 
 
+    # Methods for debugging/analysis.
 
-
+    def get_losses(self):
+        all_losses = []
+        for n in self.neural_net:
+            all_losses += n.get_losses()
+        return all_losses

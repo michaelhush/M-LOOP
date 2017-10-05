@@ -25,8 +25,10 @@ def main():
                             'numpy>=1.11',
                             'scipy>=0.17',
                             'matplotlib>=1.5',
+                            'plotly>=2.0.8',
                             'pytest>=2.9',
-                            'scikit-learn>=0.18'],
+                            'scikit-learn>=0.18',
+                            'tensorflow>=1.2.0'],
         tests_require=['pytest','setuptools>=26'],
         
         package_data = {
@@ -39,7 +41,7 @@ def main():
         license = 'MIT',
         keywords = 'automated machine learning optimization optimisation science experiment quantum',
         url = 'https://github.com/michaelhush/M-LOOP/', 
-        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v2.1.1',
+        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v2.2.0',
     
         classifiers = ['Development Status :: 2 - Pre-Alpha',
                       'Intended Audience :: Science/Research',
@@ -60,4 +62,4 @@ def main():
 
 if __name__=='__main__':
     mp.freeze_support()
-    main()  
+    main()
