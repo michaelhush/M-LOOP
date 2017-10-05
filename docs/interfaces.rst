@@ -54,7 +54,7 @@ Shell interface
 
 The shell interface is used when experiments can be run from a command in a shell. M-LOOP will still need to be configured and executed in the same manner described for a file interface as describe in :ref:`tutorial <sec-standard-experiment>`. The only difference is how M-LOOP starts the experiment and reads data. To use this interface you must include the following options::
 
-	interface='shell'
+	interface_type='shell'
 	command='./run_exp'
 	params_args_type='direct'
 	

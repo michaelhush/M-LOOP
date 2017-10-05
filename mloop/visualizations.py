@@ -12,8 +12,6 @@ import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-from mpl_toolkits.mplot3d import Axes3D
-
 figure_counter = 0
 cmap = plt.get_cmap('hsv')
 run_label = 'Run number'
@@ -45,18 +43,11 @@ def show_all_default_visualizations(controller, show_plots=True):
         log.debug('Creating differential evolution visualizations.')
         create_differential_evolution_learner_visualizations(controller.learner.total_archive_filename, 
                                                              file_type=controller.learner.learner_archive_file_type)
-    
-    if isinstance(controller, mlc.NeuralNetController):
-        log.debug('Creating neural net visualizations.')
-        create_neural_net_learner_visualizations(controller.ml_learner.total_archive_filename, 
-                                                file_type=controller.learner.learner_archive_file_type)
-    
         
     if isinstance(controller, mlc.GaussianProcessController):
         log.debug('Creating gaussian process visualizations.')
         create_gaussian_process_learner_visualizations(controller.ml_learner.total_archive_filename, 
                                                        file_type=controller.ml_learner.learner_archive_file_type)
-        
         
     log.info('Showing visualizations, close all to end MLOOP.')
     if show_plots:

@@ -175,6 +175,25 @@ def check_file_type_supported(file_type):
     '''
     return file_type == 'mat' or 'txt' or 'pkl'
 
+def safe_cast_to_array(in_array):
+    '''
+    Attempts to safely cast the input to an array. Takes care of border cases
+    
+    Args:
+        in_array (array or equivalent): The array (or otherwise) to be converted to a list.
+    
+    Returns:
+        array : array that has been squeezed and 0-D cases change to 1-D cases
+    
+    '''
+    
+    out_array = np.squeeze(np.array(in_array))
+    
+    if out_array.shape == ():
+        out_array = np.array([out_array[()]]) 
+    
+    return out_array
+    
 def safe_cast_to_list(in_array):
     '''
     Attempts to safely cast a numpy array to a list, if not a numpy array just casts to list on the object.
@@ -197,23 +216,7 @@ def safe_cast_to_list(in_array):
         out_list = list(in_array)
     
     return out_list
-
-def safe_squeeze(in_array, set_dtype = float):
-    '''
-    Attempts to squeeze an array, but has a different behavior for arrays with only a single value. 
     
-    Args:
-        in_array (array): The array to be squeezed
-    
-    Returns:
-        array: Array.
-    '''
-    
-    out_array = np.squeeze(np.array(in_array, dtype=set_dtype))
-    if out_array.shape == ():
-        out_array = np.array([out_array[()]])
-    
-    return out_array
     
 class NullQueueListener():
     '''
