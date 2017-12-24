@@ -1906,13 +1906,14 @@ class NeuralNetLearner(Learner, mp.Process):
 
         except LearnerInterrupt:
             pass
-        # TODO: Fix this. We can't just do what's here because the costs queue might be empty, but
-        # we should get anything left in it and do one last train.   
         end_dict = {}
         if self.predict_global_minima_at_end:
-            self.get_params_and_costs()
-            self.fit_neural_net()
-            self.find_global_minima()
+            if not self.costs_in_queue.empty():
+                # There are new parameters, get them.
+                self.get_params_and_costs()
+            # TODO: Somehow support predicting minima from all nets, rather than just net 0.
+            self._fit_neural_net(0)
+            self.find_global_minima(0)
             end_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                              'predicted_best_cost':self.predicted_best_cost})
         self.params_out_queue.put(end_dict)
@@ -1921,7 +1922,7 @@ class NeuralNetLearner(Learner, mp.Process):
             n.destroy()
         self.log.debug('Ended neural network learner')
 
-    def find_global_minima(self):
+    def find_global_minima(self,net_index=None):
         '''
         Performs a quick search for the predicted global minima from the learner. Does not return any values, but creates the following attributes.
 
@@ -1929,6 +1930,8 @@ class NeuralNetLearner(Learner, mp.Process):
             predicted_best_parameters (array): the parameters for the predicted global minima
             predicted_best_cost (float): the cost at the predicted global minima
         '''
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
         self.log.debug('Started search for predicted global minima.')
 
         self.predicted_best_parameters = None
@@ -1941,9 +1944,9 @@ class NeuralNetLearner(Learner, mp.Process):
 
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         for start_params in search_params:
-            result = so.minimize(fun = self.predict_cost,
+            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
                                  x0 = start_params,
-                                 jac = self.predict_cost_gradient,
+                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
                                  bounds = search_bounds,
                                  tol = self.search_precision)
             curr_best_params = result.x
