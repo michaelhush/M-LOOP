@@ -3,12 +3,19 @@ import logging
 import math
 import time
 import base64
+from distutils.version import LooseVersion
 
 import mloop.utilities as mlu
 import numpy as np
 import numpy.random as nr
 import sklearn.preprocessing as skp
-import tensorflow as tf
+# Import tensorflow with backwards compatability if version is 2.0.0 or newer.
+from tensorflow import __version__ as tf_version
+if LooseVersion(tf_version) < LooseVersion('2.0.0'):
+    import tensorflow as tf
+else:
+    import tensorflow.compat.v1 as tf
+    tf.disable_v2_behavior()
 
 class SingleNeuralNet():
     '''
