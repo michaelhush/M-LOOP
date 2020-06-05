@@ -1477,21 +1477,21 @@ class NeuralNetLearner(Learner, mp.Process):
             
             #Data from previous experiment
             self.all_params = np.array(self.training_dict['all_params'], dtype=float)
-            self.all_costs = mlu.safe_squeeze(self.training_dict['all_costs'])
-            self.all_uncers = mlu.safe_squeeze(self.training_dict['all_uncers'])
+            self.all_costs = mlu.safe_cast_to_array(self.training_dict['all_costs'])
+            self.all_uncers = mlu.safe_cast_to_array(self.training_dict['all_uncers'])
             
             self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
             
             #Derived properties
             self.best_cost = float(self.training_dict['best_cost'])
-            self.best_params = mlu.safe_squeeze(self.training_dict['best_params'])
+            self.best_params = mlu.safe_cast_to_array(self.training_dict['best_params'])
             self.best_index = int(self.training_dict['best_index'])
             self.worst_cost = float(self.training_dict['worst_cost'])
             self.worst_index = int(self.training_dict['worst_index'])
             self.cost_range = float(self.training_dict['cost_range'])
             
             #Configuration of the fake neural net learner
-            self.length_scale = mlu.safe_squeeze(self.training_dict['length_scale'])
+            self.length_scale = mlu.safe_cast_to_array(self.training_dict['length_scale'])
             self.noise_level = float(self.training_dict['noise_level'])
 
             self.cost_scaler_init_index = self.training_dict['cost_scaler_init_index']
@@ -1499,7 +1499,7 @@ class NeuralNetLearner(Learner, mp.Process):
                 self._init_cost_scaler()
             
             try:
-                self.predicted_best_parameters = mlu.safe_squeeze(self.training_dict['predicted_best_parameters'])
+                self.predicted_best_parameters = mlu.safe_cast_to_array(self.training_dict['predicted_best_parameters'])
                 self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
                 self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
                 self.has_global_minima = True
