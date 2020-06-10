@@ -53,7 +53,7 @@ def show_all_default_visualizations(controller, show_plots=True):
     if show_plots:
         plt.show()
 
-def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True, upload_cross_sections=False):
+def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True):
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
@@ -65,8 +65,7 @@ def show_all_default_visualizations_from_archive(controller_filename, learner_fi
         log.debug('Creating neural net visualizations.')
         create_neural_net_learner_visualizations(
             learner_filename,
-            file_type=learner_file_type,
-            upload_cross_sections=upload_cross_sections)
+            file_type=learner_file_type)
     else:
         log.error('show_all_default_visualizations not implemented for type: ' + controller_type)
         raise ValueError
@@ -568,8 +567,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             
 def create_neural_net_learner_visualizations(filename,
                                              file_type='pkl',
-                                             plot_cross_sections=True,
-                                             upload_cross_sections=False):
+                                             plot_cross_sections=True):
     '''
     Creates plots from a neural nets learner file.
     
@@ -582,7 +580,7 @@ def create_neural_net_learner_visualizations(filename,
     '''
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
-        visualization.do_cross_sections(upload=upload_cross_sections)
+        visualization.do_cross_sections()
     visualization.plot_surface()
     visualization.plot_density_surface()
     visualization.plot_losses()
@@ -608,10 +606,6 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                                                   nn_training_file_type = file_type,
                                                   update_hyperparameters = False,
                                                   **kwargs)
-        
-        import plotly.plotly as py
-        import plotly.tools as tls
-        import plotly.exceptions as pye
         
         self.log = logging.getLogger(__name__)
         
@@ -684,7 +678,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             res.append((cross_parameter_arrays, cost_arrays))
         return res
 
-    def do_cross_sections(self, upload):
+    def do_cross_sections(self):
         '''
         Produce a figure of the cross section about best cost and parameters
         '''
@@ -709,14 +703,6 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 axes.set_ylabel(cost_label)
                 axes.set_title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
                 return fig
-            if upload:
-                plf = tls.mpl_to_plotly(prepare_plot())
-                plf['layout']['showlegend'] = True
-                try:
-                    url = py.plot(plf,auto_open=False)
-                    print(url)
-                except pye.PlotlyRequestError:
-                    print("Failed to upload due to quota restrictions")
             prepare_plot()
             artists = []
             for ind in range(self.num_params):
@@ -742,20 +728,6 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 axes.set_ylabel(cost_label)
                 axes.set_title('NN Learner: Average predicted landscape')
                 return fig
-            if upload:
-                plf = tls.mpl_to_plotly(prepare_plot())
-                plf['layout']['showlegend'] = True
-                for i,d in enumerate(plf['data']):
-                    d['legendgroup'] = str(int(i/3))
-                    if not i % 3 == 0:
-                        d['showlegend'] = False
-                        # Pretty sure this shouldn't be necessary, but it seems to be anyway.
-                        d['line']['dash'] = 'dash'
-                try:
-                    url = py.plot(plf,auto_open=False)
-                    print(url)
-                except pye.PlotlyRequestError:
-                    print("Failed to upload due to quota restrictions")
             prepare_plot()
             for ind in range(self.num_params):
                 artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
