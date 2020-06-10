@@ -25,7 +25,6 @@ def main():
                             'numpy>=1.11',
                             'scipy>=0.17',
                             'matplotlib>=1.5',
-                            'plotly>=2.0.8',
                             'pytest>=2.9',
                             'scikit-learn>=0.18',
                             'tensorflow>=1.2.0'],
