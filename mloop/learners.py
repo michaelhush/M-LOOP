@@ -572,7 +572,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
     Keyword Args:
         first_params (Optional [array]): The first parameters to test. If None will just randomly sample the initial condition. Default None.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
-        evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best1', 'rand1' and 'rand2'. The default is 'best2'.
+        evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best2', 'rand1' and 'rand2'. The default is 'best1'.
         population_size (Optional [int]): multiplier proportional to the number of parameters in a generation. The generation population is set to population_size * parameter_num. Default 15.
         mutation_scale (Optional [tuple]): The mutation scale when picking new points. Otherwise known as differential weight. When provided as a tuple (min,max) a mutation constant is picked randomly in the interval. Default (0.5,1.0).
         cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
