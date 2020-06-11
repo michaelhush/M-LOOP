@@ -178,6 +178,7 @@ class ControllerVisualizer():
         self.cost_colors = [_color_from_controller_name(x) for x in self.out_type]
         self.in_numbers = np.arange(1,self.num_in_costs+1)
         self.out_numbers = np.arange(1,self.num_out_params+1)
+        self.param_numbers = np.arange(1,self.num_params+1)
         self.param_colors = _color_list_from_num_of_params(self.num_params)
         
     def plot_cost_vs_run(self):
@@ -197,30 +198,64 @@ class ControllerVisualizer():
         for ut in self.unique_types:
             artists.append(plt.Line2D((0,1),(0,0), color=_color_from_controller_name(ut), marker='o', linestyle=''))
         plt.legend(artists,self.unique_types,loc=legend_loc)
+    
+    def _ensure_parameter_subset_valid(self, parameter_subset):
+        # Make sure that parameter_subset is iterable.
+        if not hasattr(parameter_subset, '__iter__'):
+            message = 'parameter_subset should be a list, or list-like.'
+            self.log.error(message)
+            raise ValueError(message)
+            
+        # Ensure all indices are valid.
+        for ind in parameter_subset:
+            if ind not in self.param_numbers:
+                message = '{ind} is not a valid parameter index.'.format(ind=ind)
+                self.log.error(message)
+                raise ValueError(message)
         
-    def plot_parameters_vs_run(self):
+        
+    def plot_parameters_vs_run(self, parameter_subset=None):
         '''
         Create a plot of the parameters versus run number.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 1-based, i.e. the first parameter is
+                identified with index 1, not index 0. Generally the values of
+                the indices in parameter_subset should be between 1 and the
+                number of parameters, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+            
+        # Account for 1-indexing. This is a little inelegant but it makes the
+        # provided indices correspond to the indices in the legend.
+        parameter_subset_0 = np.array(parameter_subset) - 1
+            
         global figure_counter, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
         if self.finite_flag:
-            for ind in range(self.num_params):
+            for ind in parameter_subset_0:
                 plt.plot(self.out_numbers,self.scaled_params[:,ind],'o',color=self.param_colors[ind])
                 plt.ylabel(scale_param_label)
                 plt.ylim((0,1))
         else:
-            for ind in range(self.num_params):
+            for ind in parameter_subset_0:
                 plt.plot(self.out_numbers,self.out_params[:,ind],'o',color=self.param_colors[ind])
                 plt.ylabel(run_label)
         plt.xlabel(run_label)
         
         plt.title('Controller: Parameters vs run number.')
         artists=[]
-        for ind in range(self.num_params):
+        for ind in parameter_subset_0:
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
     def plot_parameters_vs_cost(self):
         '''
