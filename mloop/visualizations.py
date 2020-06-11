@@ -124,8 +124,8 @@ def create_controller_visualizations(filename,
         visualization.plot_cost_vs_run()
     if plot_parameters_vs_run:
         visualization.plot_parameters_vs_run()
-    #if plot_parameters_vs_cost:
-    #    visualization.plot_parameters_vs_cost()
+    if plot_parameters_vs_cost:
+       visualization.plot_parameters_vs_cost()
 
 class ControllerVisualizer():
     '''
@@ -187,9 +187,18 @@ class ControllerVisualizer():
         global figure_counter, run_label, cost_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
-        plt.scatter(self.in_numbers,self.in_costs+self.in_uncers,marker='_',color='k')
-        plt.scatter(self.in_numbers,self.in_costs-self.in_uncers,marker='_',color='k')
-        plt.scatter(self.in_numbers,self.in_costs,marker='o',c=self.cost_colors,s=5*mpl.rcParams['lines.markersize'])
+        
+        # Only plot points for which a cost was actually measured. This may not
+        # be the case for all parameter sets if the optimization is still in
+        # progress, or ended by a keyboard interupt, etc..
+        in_numbers = self.in_numbers[:self.num_in_costs]
+        in_costs = self.in_costs[:self.num_in_costs]
+        in_uncers = self.in_uncers[:self.num_in_costs]
+        cost_colors = self.cost_colors[:self.num_in_costs]
+        
+        plt.scatter(in_numbers, in_costs+in_uncers, marker='_', color='k')
+        plt.scatter(in_numbers, in_costs-in_uncers, marker='_', color='k')
+        plt.scatter(in_numbers, in_costs,marker='o', c=cost_colors, s=5*mpl.rcParams['lines.markersize'])
         plt.xlabel(run_label)
         plt.ylabel(cost_label)
         plt.title('Controller: Cost vs run number.')
@@ -226,24 +235,33 @@ class ControllerVisualizer():
         '''
         Create a plot of the parameters versus run number.
         '''
-        if self.num_in_costs != self.num_out_params:
-            self.log.warning('Unable to plot parameters vs costs, unequal number. in_costs:' + repr(self.num_in_costs) + ' out_params:' + repr(self.num_out_params))
-            return
+        # Only plot points for which a cost was actually measured. This may not
+        # be the case for all parameter sets if the optimization is still in
+        # progress, or ended by a keyboard interupt, etc..
+        in_costs = self.in_costs[:self.num_in_costs]
+        in_uncers = self.in_uncers[:self.num_in_costs]
+        
+        # if self.num_in_costs != self.num_out_params:
+        #     self.log.warning('Unable to plot parameters vs costs, unequal number. in_costs:' + repr(self.num_in_costs) + ' out_params:' + repr(self.num_out_params))
+        #     return
         global figure_counter, run_label, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
+        
         if self.finite_flag:
+            scaled_params = self.scaled_params[:self.num_in_costs,:]
             for ind in range(self.num_params):
-                plt.plot(self.scaled_params[:,ind],self.in_costs + self.in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(self.scaled_params[:,ind],self.in_costs - self.in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(self.scaled_params[:,ind],self.in_costs,'o',color=self.param_colors[ind])
+                plt.plot(scaled_params[:,ind], in_costs + in_uncers,'_',color=self.param_colors[ind])
+                plt.plot(scaled_params[:,ind], in_costs - in_uncers,'_',color=self.param_colors[ind])
+                plt.plot(scaled_params[:,ind], in_costs,'o',color=self.param_colors[ind])
                 plt.xlabel(scale_param_label)
                 plt.xlim((0,1))
         else:
+            out_params = self.out_params[:self.num_in_costs, :]
             for ind in range(self.num_params):
-                plt.plot(self.out_params[:,ind],self.in_costs + self.in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(self.out_params[:,ind],self.in_costs - self.in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(self.out_params[:,ind],self.in_costs,'o',color=self.param_colors[ind])
+                plt.plot(out_params[:,ind], in_costs + in_uncers,'_',color=self.param_colors[ind])
+                plt.plot(out_params[:,ind], in_costs - in_uncers,'_',color=self.param_colors[ind])
+                plt.plot(out_params[:,ind], in_costs,'o',color=self.param_colors[ind])
                 plt.xlabel(run_label)
         plt.ylabel(cost_label)
         plt.title('Controller: Cost vs parameters.')
