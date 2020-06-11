@@ -241,9 +241,6 @@ class ControllerVisualizer():
         in_costs = self.in_costs[:self.num_in_costs]
         in_uncers = self.in_uncers[:self.num_in_costs]
         
-        # if self.num_in_costs != self.num_out_params:
-        #     self.log.warning('Unable to plot parameters vs costs, unequal number. in_costs:' + repr(self.num_in_costs) + ' out_params:' + repr(self.num_out_params))
-        #     return
         global figure_counter, run_label, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
