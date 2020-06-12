@@ -380,7 +380,7 @@ class DifferentialEvolutionVisualizer():
         artists=[]
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+        plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)
         
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type='pkl',
