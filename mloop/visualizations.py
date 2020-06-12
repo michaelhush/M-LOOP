@@ -178,7 +178,7 @@ class ControllerVisualizer():
         self.cost_colors = [_color_from_controller_name(x) for x in self.out_type]
         self.in_numbers = np.arange(1,self.num_in_costs+1)
         self.out_numbers = np.arange(1,self.num_out_params+1)
-        self.param_numbers = np.arange(1,self.num_params+1)
+        self.param_numbers = np.arange(self.num_params)
         self.param_colors = _color_list_from_num_of_params(self.num_params)
         
     def plot_cost_vs_run(self):
@@ -214,10 +214,10 @@ class ControllerVisualizer():
     
         Args:
             parameter_subset (list-like): The indices of parameters to plot. The
-                indices should be 1-based, i.e. the first parameter is
-                identified with index 1, not index 0. Generally the values of
-                the indices in parameter_subset should be between 1 and the
-                number of parameters, inclusively. If set to `None`, then all
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
                 parameters will be plotted. Default None.
         '''
         # Get default value for parameter_subset if necessary.
@@ -227,27 +227,23 @@ class ControllerVisualizer():
         # Make sure that the provided parameter_subset is acceptable.
         self._ensure_parameter_subset_valid(parameter_subset)
             
-        # Account for 1-indexing. This is a little inelegant but it makes the
-        # provided indices correspond to the indices in the legend.
-        parameter_subset_0 = np.array(parameter_subset) - 1
-            
         global figure_counter, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
         if self.finite_flag:
-            for ind in parameter_subset_0:
+            for ind in parameter_subset:
                 plt.plot(self.out_numbers,self.scaled_params[:,ind],'o',color=self.param_colors[ind])
                 plt.ylabel(scale_param_label)
                 plt.ylim((0,1))
         else:
-            for ind in parameter_subset_0:
+            for ind in parameter_subset:
                 plt.plot(self.out_numbers,self.out_params[:,ind],'o',color=self.param_colors[ind])
                 plt.ylabel(run_label)
         plt.xlabel(run_label)
         
         plt.title('Controller: Parameters vs run number.')
         artists=[]
-        for ind in parameter_subset_0:
+        for ind in parameter_subset:
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
         plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
@@ -279,7 +275,7 @@ class ControllerVisualizer():
         artists=[]
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)], loc=legend_loc)
+        plt.legend(artists,[str(x) for x in range(self.num_params)], loc=legend_loc)
 
 def create_differential_evolution_learner_visualizations(filename,
                                                          file_type='pkl',
