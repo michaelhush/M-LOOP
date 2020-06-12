@@ -707,10 +707,11 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         else:
             self.finite_flag = False
         
-        self.param_colors = _color_list_from_num_of_params(self.num_params)
         if self.has_trust_region:
             self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
             self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
+            
+        self.param_numbers = np.arange(self.num_params)
         
     def run(self):
         '''
@@ -763,11 +764,33 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
             res.append((cross_parameter_arrays, cost_arrays))
         return res
+    
+    def _ensure_parameter_subset_valid(self, parameter_subset):
+        _ensure_parameter_subset_valid(self, parameter_subset)
 
-    def do_cross_sections(self):
+    def do_cross_sections(self, parameter_subset=None):
         '''
-        Produce a figure of the cross section about best cost and parameters
+        Produce a figure of the cross section about best cost and parameters.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         points = 100
         rel_params = np.linspace(0,1,points)
         all_cost_arrays = [a for _,a in self.return_cross_sections(points=points)]
@@ -777,23 +800,28 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 figure_counter += 1
                 fig = plt.figure(figure_counter)
                 axes = plt.gca()
-                for ind in range(self.num_params):
-                    axes.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind],label=str(ind))
+                for ind in range(num_params):
+                    param_index = parameter_subset[ind]
+                    color = param_colors[ind]
+                    axes.plot(rel_params,cost_arrays[param_index,:],'-',color=color,label=str(param_index))
                 if self.has_trust_region:
                     ymin, ymax = axes.get_ylim()
                     ytrust = ymin + 0.1*(ymax - ymin)
-                    for ind in range(self.num_params):
-                        axes.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
+                    for ind in range(num_params):
+                        param_index = parameter_subset[ind]
+                        color = param_colors[ind]
+                        axes.plot([self.scaled_trust_min[param_index],self.scaled_trust_max[param_index]],[ytrust,ytrust],'s', color=color)
                 axes.set_xlabel(scale_param_label)
                 axes.set_xlim((0,1))
                 axes.set_ylabel(cost_label)
-                axes.set_title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
+                axes.set_title('NN Learner: Predicted landscape' + (' with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
                 return fig
             prepare_plot()
             artists = []
-            for ind in range(self.num_params):
-                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-            plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)
+            for ind in range(num_params):
+                color = param_colors[ind]
+                artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
+            plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         if self.num_nets > 1:
             # And now create a plot showing the average, max and min for each cross section.
             def prepare_plot():
@@ -801,23 +829,26 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 figure_counter += 1
                 fig = plt.figure(figure_counter)
                 axes = plt.gca()
-                for ind in range(self.num_params):
-                    this_param_cost_array = np.array(all_cost_arrays)[:,ind,:]
+                for ind in range(num_params):
+                    param_index = parameter_subset[ind]
+                    color = param_colors[ind]
+                    this_param_cost_array = np.array(all_cost_arrays)[:,param_index,:]
                     mn = np.mean(this_param_cost_array, axis=0)
                     m = np.min(this_param_cost_array, axis=0)
                     M = np.max(this_param_cost_array, axis=0)
-                    axes.plot(rel_params,mn,'-',color=self.param_colors[ind],label=str(ind))
-                    axes.plot(rel_params,m,'--',color=self.param_colors[ind],label=str(ind))
-                    axes.plot(rel_params,M,'--',color=self.param_colors[ind],label=str(ind))
+                    axes.plot(rel_params,mn,'-',color=color,label=str(param_index))
+                    axes.plot(rel_params,m,'--',color=color,label=str(param_index))
+                    axes.plot(rel_params,M,'--',color=color,label=str(param_index))
                 axes.set_xlabel(scale_param_label)
                 axes.set_xlim((0,1))
                 axes.set_ylabel(cost_label)
                 axes.set_title('NN Learner: Average predicted landscape')
                 return fig
             prepare_plot()
-            for ind in range(self.num_params):
-                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-            plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)
+            for ind in range(num_params):
+                color = param_colors[ind]
+                artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
+            plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
 
     def plot_surface(self):
         '''
