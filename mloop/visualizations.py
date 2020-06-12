@@ -746,7 +746,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             artists = []
             for ind in range(self.num_params):
                 artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+            plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)
         if self.num_nets > 1:
             # And now create a plot showing the average, max and min for each cross section.
             def prepare_plot():
@@ -784,7 +784,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             prepare_plot()
             for ind in range(self.num_params):
                 artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+            plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)
 
     def plot_surface(self):
         '''
