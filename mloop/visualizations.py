@@ -200,12 +200,6 @@ class ControllerVisualizer():
         plt.legend(artists,self.unique_types,loc=legend_loc)
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
-        # Make sure that parameter_subset is iterable.
-        if not hasattr(parameter_subset, '__iter__'):
-            message = 'parameter_subset should be a list, or list-like.'
-            self.log.error(message)
-            raise ValueError(message)
-            
         # Ensure all indices are valid.
         for ind in parameter_subset:
             if ind not in self.param_numbers:
