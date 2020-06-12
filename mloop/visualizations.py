@@ -88,6 +88,26 @@ def _color_list_from_num_of_params(num_of_params):
     global cmap
     return [cmap(float(x)/num_of_params) for x in range(num_of_params)]
 
+def _ensure_parameter_subset_valid(visualizer, parameter_subset):
+    '''
+    Make sure indices in parameter_subset are acceptable.
+    
+    Args:
+        visualizer (ControllerVisualizer-like): An instance of one of the
+            visualization classes defined in this module, which should have the
+            attributes param_numbers and log.
+        parameter_subset (list-like): The indices corresponding to a subset of
+            the optimization parameters. The indices should be 0-based, i.e. the
+            first parameter is identified with index 0. Generally the values of
+            the indices in parameter_subset should be integers between 0 and the
+            number of parameters minus one, inclusively.
+    '''
+    for ind in parameter_subset:
+        if ind not in visualizer.param_numbers:
+            message = '{ind} is not a valid parameter index.'.format(ind=ind)
+            visualizer.log.error(message)
+            raise ValueError(message)
+
 def configure_plots():
     '''
     Configure the setting for the plots.
@@ -207,13 +227,7 @@ class ControllerVisualizer():
         plt.legend(artists,self.unique_types,loc=legend_loc)
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
-        # Ensure all indices are valid.
-        for ind in parameter_subset:
-            if ind not in self.param_numbers:
-                message = '{ind} is not a valid parameter index.'.format(ind=ind)
-                self.log.error(message)
-                raise ValueError(message)
-        
+        _ensure_parameter_subset_valid(self, parameter_subset)
         
     def plot_parameters_vs_run(self, parameter_subset=None):
         '''
