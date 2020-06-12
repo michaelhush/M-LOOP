@@ -397,6 +397,7 @@ class DifferentialEvolutionVisualizer():
         self.finite_flag = True
         self.param_scaler = lambda p: (p-self.min_boundary)/(self.max_boundary - self.min_boundary)
         self.scaled_params_generations = np.array([[self.param_scaler(self.params_generations[inda,indb,:]) for indb in range(self.num_population_members)] for inda in range(self.num_generations)])
+        self.param_numbers = np.arange(self.num_params)
         
         self.gen_numbers = np.arange(1,self.num_generations+1)
         self.param_colors = _color_list_from_num_of_params(self.num_params)
@@ -417,11 +418,33 @@ class DifferentialEvolutionVisualizer():
         plt.xlabel(generation_label)
         plt.ylabel(cost_label)
         plt.title('Differential evolution: Cost vs generation number.')
+    
+    def _ensure_parameter_subset_valid(self, parameter_subset):
+        _ensure_parameter_subset_valid(self, parameter_subset)
         
-    def plot_params_vs_generations(self):
+    def plot_params_vs_generations(self, parameter_subset=None):
         '''
         Create a plot of the parameters versus run number.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         if self.params_generations.size == 0:
             self.log.warning('Unable to plot DE: params vs generations as the initial generation did not complete.')
             return
@@ -430,17 +453,18 @@ class DifferentialEvolutionVisualizer():
         figure_counter += 1
         plt.figure(figure_counter)
         
-        for ind in range(self.num_params):
-            plt.plot(self.gen_plot,self.params_generations[:,:,ind].flatten(),marker='o',linestyle='',color=self.param_colors[ind])
-            plt.ylim((0,1))
-        plt.xlabel(generation_label)
-        plt.ylabel(scale_param_label)
-        
-        plt.title('Differential evolution: Params vs generation number.')
         artists=[]
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)
+        for ind in range(num_params):
+            param_index = parameter_subset[ind]
+            color = param_colors[ind]
+            plt.plot(self.gen_plot,self.params_generations[:,:,param_index].flatten(),marker='o',linestyle='',color=color)
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
+            plt.ylim((0,1))
+        
+        plt.title('Differential evolution: Params vs generation number.') 
+        plt.xlabel(generation_label)
+        plt.ylabel(scale_param_label)           
+        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type='pkl',
