@@ -53,7 +53,7 @@ def show_all_default_visualizations(controller, show_plots=True):
     if show_plots:
         plt.show()
 
-def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True, upload_cross_sections=False):
+def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True):
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
@@ -65,8 +65,7 @@ def show_all_default_visualizations_from_archive(controller_filename, learner_fi
         log.debug('Creating neural net visualizations.')
         create_neural_net_learner_visualizations(
             learner_filename,
-            file_type=learner_file_type,
-            upload_cross_sections=upload_cross_sections)
+            file_type=learner_file_type)
     else:
         log.error('show_all_default_visualizations not implemented for type: ' + controller_type)
         raise ValueError
@@ -124,8 +123,8 @@ def create_controller_visualizations(filename,
         visualization.plot_cost_vs_run()
     if plot_parameters_vs_run:
         visualization.plot_parameters_vs_run()
-    #if plot_parameters_vs_cost:
-    #    visualization.plot_parameters_vs_cost()
+    if plot_parameters_vs_cost:
+       visualization.plot_parameters_vs_cost()
 
 class ControllerVisualizer():
     '''
@@ -187,9 +186,18 @@ class ControllerVisualizer():
         global figure_counter, run_label, cost_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
-        plt.scatter(self.in_numbers,self.in_costs+self.in_uncers,marker='_',color='k')
-        plt.scatter(self.in_numbers,self.in_costs-self.in_uncers,marker='_',color='k')
-        plt.scatter(self.in_numbers,self.in_costs,marker='o',c=self.cost_colors,s=5*mpl.rcParams['lines.markersize'])
+        
+        # Only plot points for which a cost was actually measured. This may not
+        # be the case for all parameter sets if the optimization is still in
+        # progress, or ended by a keyboard interupt, etc..
+        in_numbers = self.in_numbers[:self.num_in_costs]
+        in_costs = self.in_costs[:self.num_in_costs]
+        in_uncers = self.in_uncers[:self.num_in_costs]
+        cost_colors = self.cost_colors[:self.num_in_costs]
+        
+        plt.scatter(in_numbers, in_costs+in_uncers, marker='_', color='k')
+        plt.scatter(in_numbers, in_costs-in_uncers, marker='_', color='k')
+        plt.scatter(in_numbers, in_costs,marker='o', c=cost_colors, s=5*mpl.rcParams['lines.markersize'])
         plt.xlabel(run_label)
         plt.ylabel(cost_label)
         plt.title('Controller: Cost vs run number.')
@@ -259,24 +267,30 @@ class ControllerVisualizer():
         '''
         Create a plot of the parameters versus run number.
         '''
-        if self.num_in_costs != self.num_out_params:
-            self.log.warning('Unable to plot parameters vs costs, unequal number. in_costs:' + repr(self.num_in_costs) + ' out_params:' + repr(self.num_out_params))
-            return
+        # Only plot points for which a cost was actually measured. This may not
+        # be the case for all parameter sets if the optimization is still in
+        # progress, or ended by a keyboard interupt, etc..
+        in_costs = self.in_costs[:self.num_in_costs]
+        in_uncers = self.in_uncers[:self.num_in_costs]
+        
         global figure_counter, run_label, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
+        
         if self.finite_flag:
+            scaled_params = self.scaled_params[:self.num_in_costs,:]
             for ind in range(self.num_params):
-                plt.plot(self.scaled_params[:,ind],self.in_costs + self.in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(self.scaled_params[:,ind],self.in_costs - self.in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(self.scaled_params[:,ind],self.in_costs,'o',color=self.param_colors[ind])
+                plt.plot(scaled_params[:,ind], in_costs + in_uncers,'_',color=self.param_colors[ind])
+                plt.plot(scaled_params[:,ind], in_costs - in_uncers,'_',color=self.param_colors[ind])
+                plt.plot(scaled_params[:,ind], in_costs,'o',color=self.param_colors[ind])
                 plt.xlabel(scale_param_label)
                 plt.xlim((0,1))
         else:
+            out_params = self.out_params[:self.num_in_costs, :]
             for ind in range(self.num_params):
-                plt.plot(self.out_params[:,ind],self.in_costs + self.in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(self.out_params[:,ind],self.in_costs - self.in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(self.out_params[:,ind],self.in_costs,'o',color=self.param_colors[ind])
+                plt.plot(out_params[:,ind], in_costs + in_uncers,'_',color=self.param_colors[ind])
+                plt.plot(out_params[:,ind], in_costs - in_uncers,'_',color=self.param_colors[ind])
+                plt.plot(out_params[:,ind], in_costs,'o',color=self.param_colors[ind])
                 plt.xlabel(run_label)
         plt.ylabel(cost_label)
         plt.title('Controller: Cost vs parameters.')
@@ -601,8 +615,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             
 def create_neural_net_learner_visualizations(filename,
                                              file_type='pkl',
-                                             plot_cross_sections=True,
-                                             upload_cross_sections=False):
+                                             plot_cross_sections=True):
     '''
     Creates plots from a neural nets learner file.
     
@@ -615,7 +628,7 @@ def create_neural_net_learner_visualizations(filename,
     '''
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
-        visualization.do_cross_sections(upload=upload_cross_sections)
+        visualization.do_cross_sections()
     visualization.plot_surface()
     visualization.plot_density_surface()
     visualization.plot_losses()
@@ -641,10 +654,6 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                                                   nn_training_file_type = file_type,
                                                   update_hyperparameters = False,
                                                   **kwargs)
-        
-        import plotly.plotly as py
-        import plotly.tools as tls
-        import plotly.exceptions as pye
         
         self.log = logging.getLogger(__name__)
         
@@ -717,7 +726,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             res.append((cross_parameter_arrays, cost_arrays))
         return res
 
-    def do_cross_sections(self, upload):
+    def do_cross_sections(self):
         '''
         Produce a figure of the cross section about best cost and parameters
         '''
@@ -742,14 +751,6 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 axes.set_ylabel(cost_label)
                 axes.set_title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
                 return fig
-            if upload:
-                plf = tls.mpl_to_plotly(prepare_plot())
-                plf['layout']['showlegend'] = True
-                try:
-                    url = py.plot(plf,auto_open=False)
-                    print(url)
-                except pye.PlotlyRequestError:
-                    print("Failed to upload due to quota restrictions")
             prepare_plot()
             artists = []
             for ind in range(self.num_params):
@@ -775,20 +776,6 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 axes.set_ylabel(cost_label)
                 axes.set_title('NN Learner: Average predicted landscape')
                 return fig
-            if upload:
-                plf = tls.mpl_to_plotly(prepare_plot())
-                plf['layout']['showlegend'] = True
-                for i,d in enumerate(plf['data']):
-                    d['legendgroup'] = str(int(i/3))
-                    if not i % 3 == 0:
-                        d['showlegend'] = False
-                        # Pretty sure this shouldn't be necessary, but it seems to be anyway.
-                        d['line']['dash'] = 'dash'
-                try:
-                    url = py.plot(plf,auto_open=False)
-                    print(url)
-                except pye.PlotlyRequestError:
-                    print("Failed to upload due to quota restrictions")
             prepare_plot()
             for ind in range(self.num_params):
                 artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))

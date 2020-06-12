@@ -61,7 +61,7 @@ class TestLandscape():
         
         with the formula::
         
-            c(x) = \sum_i a_i * (x_i - x_0,i)^2
+            c(x) = \\sum_i a_i * (x_i - x_0,i)^2
         
         where x_i are the parameters, x_0,i is the location of the minimum and a_i are the scaling factors.
         
