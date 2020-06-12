@@ -179,7 +179,6 @@ class ControllerVisualizer():
         self.in_numbers = np.arange(1,self.num_in_costs+1)
         self.out_numbers = np.arange(1,self.num_out_params+1)
         self.param_numbers = np.arange(self.num_params)
-        self.param_colors = _color_list_from_num_of_params(self.num_params)
         
     def plot_cost_vs_run(self):
         '''
@@ -226,25 +225,34 @@ class ControllerVisualizer():
         
         # Make sure that the provided parameter_subset is acceptable.
         self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
             
         global figure_counter, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
         if self.finite_flag:
-            for ind in parameter_subset:
-                plt.plot(self.out_numbers,self.scaled_params[:,ind],'o',color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot(self.out_numbers,self.scaled_params[:,param_index],'o',color=color)
                 plt.ylabel(scale_param_label)
                 plt.ylim((0,1))
         else:
-            for ind in parameter_subset:
-                plt.plot(self.out_numbers,self.out_params[:,ind],'o',color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot(self.out_numbers,self.out_params[:,param_index],'o',color=color)
                 plt.ylabel(run_label)
         plt.xlabel(run_label)
         
         plt.title('Controller: Parameters vs run number.')
         artists=[]
-        for ind in parameter_subset:
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
+        for ind in range(num_params):
+            color = param_colors[ind]
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
         plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
     def plot_parameters_vs_cost(self):
