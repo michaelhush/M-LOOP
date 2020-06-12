@@ -521,7 +521,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         artists = []
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)    
+        plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)    
     
     '''
     Method is currently not supported. Of questionable usefulness. Not yet deleted.
@@ -557,7 +557,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         artists = []
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists, [str(x) for x in range(1,self.num_params+1)], loc=legend_loc)
+        plt.legend(artists, [str(x) for x in range(self.num_params)], loc=legend_loc)
     '''
     
     def plot_hyperparameters_vs_run(self):
@@ -580,7 +580,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             artists=[]
             for ind in range(self.num_params):
                 artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+            plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)
             
         if self.cost_has_noise:
             figure_counter += 1
