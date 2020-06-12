@@ -490,6 +490,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         self.create_gaussian_process()
         self.fit_gaussian_process()
         
+        self.param_numbers = np.arange(self.num_params)
         self.log_length_scale_history = np.log10(np.array(self.length_scale_history, dtype=float))
         self.noise_level_history = np.array(self.noise_level_history) 
         self.fit_numbers = np.arange(1,self.fit_count+1)
@@ -500,7 +501,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         else:
             self.finite_flag = False
         
-        self.param_colors = _color_list_from_num_of_params(self.num_params)
         if self.has_trust_region:
             self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
             self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
@@ -554,34 +554,61 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         uncertainty_arrays = np.array(uncertainty_arrays)
         return (cross_parameter_arrays,cost_arrays,uncertainty_arrays) 
     
-    def plot_cross_sections(self):
+    def _ensure_parameter_subset_valid(self, parameter_subset):
+        _ensure_parameter_subset_valid(self, parameter_subset)
+    
+    def plot_cross_sections(self, parameter_subset=None):
         '''
-        Produce a figure of the cross section about best cost and parameters
+        Produce a figure of the cross section about best cost and parameters.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         global figure_counter, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
         points = 100
         (_,cost_arrays,uncertainty_arrays) = self.return_cross_sections(points=points)
         rel_params = np.linspace(0,1,points)
-        for ind in range(self.num_params):
-            plt.plot(rel_params,cost_arrays[ind,:] + uncertainty_arrays[ind,:],'--',color=self.param_colors[ind])
-            plt.plot(rel_params,cost_arrays[ind,:] - uncertainty_arrays[ind,:],'--',color=self.param_colors[ind])
-            plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
+        for ind in range(num_params):
+            param_index = parameter_subset[ind]
+            color = param_colors[ind]
+            plt.plot(rel_params,cost_arrays[param_index,:] + uncertainty_arrays[param_index,:],'--',color=color)
+            plt.plot(rel_params,cost_arrays[param_index,:] - uncertainty_arrays[param_index,:],'--',color=color)
+            plt.plot(rel_params,cost_arrays[param_index,:],'-',color=color)
         if self.has_trust_region:
             axes = plt.gca()
             ymin, ymax = axes.get_ylim()
             ytrust = ymin + 0.1*(ymax - ymin)
-            for ind in range(self.num_params):
-                plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot([self.scaled_trust_min[param_index],self.scaled_trust_max[param_index]],[ytrust,ytrust],'s', color=color)
         plt.xlabel(scale_param_label)
         plt.xlim((0,1))
         plt.ylabel(cost_label)
         plt.title('GP Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
         artists = []
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-        plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)    
+        for ind in range(num_params):
+            color = param_colors[ind]
+            artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
+        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)    
     
     '''
     Method is currently not supported. Of questionable usefulness. Not yet deleted.
@@ -620,28 +647,52 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         plt.legend(artists, [str(x) for x in range(self.num_params)], loc=legend_loc)
     '''
     
-    def plot_hyperparameters_vs_run(self):
+    def plot_hyperparameters_vs_run(self, parameter_subset=None):
+        '''
+        Produce a figure of the hyperparameters as a function of run number.
+        
+        This method also plots the fitted noise level as a function of run
+        number if the cost has noise.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
+        '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         global figure_counter, run_label, legend_loc, log_length_scale_label, noise_label
         figure_counter += 1
         plt.figure(figure_counter)
-        if isinstance(self.length_scale, float):
-            scale_num = 1
-        else:
-            scale_num = self.length_scale.size
-        for ind in range(scale_num):
-            if scale_num == 1:
-                plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=self.param_colors[ind])
+        
+        artists=[]
+        for ind in range(num_params):
+            param_index = parameter_subset[ind]
+            color = param_colors[ind]
+            if self.num_params == 1:
+                plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=color)
             else:
-                plt.plot(self.fit_numbers,self.log_length_scale_history[:,ind],'o',color=self.param_colors[ind])
+                plt.plot(self.fit_numbers,self.log_length_scale_history[:,param_index],'o',color=color)
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
+            
+        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         plt.xlabel(run_label)
         plt.ylabel(log_length_scale_label)
         plt.title('GP Learner: Log of lengths scales vs fit number.')
-        if scale_num!=1:
-            artists=[]
-            for ind in range(self.num_params):
-                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-            plt.legend(artists,[str(x) for x in range(self.num_params)],loc=legend_loc)
-            
+        
+        # Make plot of noise level vs run number if cost has noise. 
         if self.cost_has_noise:
             figure_counter += 1
             plt.figure(figure_counter)
