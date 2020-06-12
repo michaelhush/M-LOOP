@@ -263,9 +263,17 @@ class ControllerVisualizer():
             artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
         plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
-    def plot_parameters_vs_cost(self):
+    def plot_parameters_vs_cost(self, parameter_subset=None):
         '''
         Create a plot of the parameters versus run number.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
         # Only plot points for which a cost was actually measured. This may not
         # be the case for all parameter sets if the optimization is still in
@@ -273,30 +281,46 @@ class ControllerVisualizer():
         in_costs = self.in_costs[:self.num_in_costs]
         in_uncers = self.in_uncers[:self.num_in_costs]
         
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         global figure_counter, run_label, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
         
         if self.finite_flag:
             scaled_params = self.scaled_params[:self.num_in_costs,:]
-            for ind in range(self.num_params):
-                plt.plot(scaled_params[:,ind], in_costs + in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(scaled_params[:,ind], in_costs - in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(scaled_params[:,ind], in_costs,'o',color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot(scaled_params[:,param_index], in_costs + in_uncers,'_',color=color)
+                plt.plot(scaled_params[:,param_index], in_costs - in_uncers,'_',color=color)
+                plt.plot(scaled_params[:,param_index], in_costs,'o',color=color)
                 plt.xlabel(scale_param_label)
                 plt.xlim((0,1))
         else:
             out_params = self.out_params[:self.num_in_costs, :]
-            for ind in range(self.num_params):
-                plt.plot(out_params[:,ind], in_costs + in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(out_params[:,ind], in_costs - in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(out_params[:,ind], in_costs,'o',color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot(out_params[:,param_index], in_costs + in_uncers,'_',color=color)
+                plt.plot(out_params[:,param_index], in_costs - in_uncers,'_',color=color)
+                plt.plot(out_params[:,param_index], in_costs,'o',color=color)
                 plt.xlabel(run_label)
         plt.ylabel(cost_label)
         plt.title('Controller: Cost vs parameters.')
         artists=[]
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
+        for ind in range(num_params):
+            color = param_colors[ind]
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
         plt.legend(artists,[str(x) for x in range(self.num_params)], loc=legend_loc)
 
 def create_differential_evolution_learner_visualizations(filename,
