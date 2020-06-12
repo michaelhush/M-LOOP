@@ -335,7 +335,7 @@ class ControllerVisualizer():
         for ind in range(num_params):
             color = param_colors[ind]
             artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in range(self.num_params)], loc=legend_loc)
+        plt.legend(artists,[str(x) for x in parameter_subset], loc=legend_loc)
 
 def create_differential_evolution_learner_visualizations(filename,
                                                          file_type='pkl',
