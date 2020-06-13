@@ -135,9 +135,10 @@ class Learner():
             
             # Include any path info from learner_archive_filename when creating
             # directory for archive files.
-            archive_dir = os.path.dirname(self.total_archive_filename)
-            if not os.path.exists(archive_dir):
-                os.makedirs(archive_dir)
+            learner_archive_dir = os.path.dirname(self.total_archive_filename)
+            self.learner_archive_dir = learner_archive_dir
+            if not os.path.exists(learner_archive_dir):
+                os.makedirs(learner_archive_dir)
         
         self.archive_dict = {'archive_type':'learner',
                              'num_params':self.num_params,
@@ -1614,7 +1615,12 @@ class NeuralNetLearner(Learner, mp.Process):
         self.log = None
 
     def _construct_net(self):
-        self.neural_net = [mlnn.NeuralNet(self.num_params) for _ in range(self.num_nets)]
+        neural_net_args = {
+            'num_params': self.num_params,
+            'learner_archive_dir': self.learner_archive_dir,
+            'start_datetime': self.start_datetime,
+        }
+        self.neural_net = [mlnn.NeuralNet(**neural_net_args) for _ in range(self.num_nets)]
 
     def _init_cost_scaler(self):
         '''

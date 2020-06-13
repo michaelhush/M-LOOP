@@ -39,6 +39,13 @@ class SingleNeuralNet():
         keep_prob: The dropoout keep probability.
         regularisation_coefficient: The regularisation coefficient.
         losses_list: A list to which this object will append training losses.
+        learner_archive_dir (Optional str): The path to a directory in which to
+            save the neural net. If set to None, then the default value of
+            archive_foldername in utilities.py will be used. Default None.
+        start_datetime (Optional datetime.datetime): The timestamp to use in the
+            filenames when saving the neural nets. If set to None, then the
+            time at which the neural net is saved will be used as the timestamp.
+            Default KNone.
     '''
 
     def __init__(self,
@@ -49,13 +56,22 @@ class SingleNeuralNet():
                  batch_size,
                  keep_prob,
                  regularisation_coefficient,
-                 losses_list):
+                 losses_list,
+                 learner_archive_dir=None,
+                 start_datetime=None):
         self.log = logging.getLogger(__name__)
         start = time.time()
 
-        filename_suffix = mlu.generate_filename_suffix('ckpt', random_bytes=True)
+        if learner_archive_dir is None:
+            learner_archive_dir = mlu.archive_foldername
+        filename_suffix = mlu.generate_filename_suffix(
+            'ckpt',
+            file_datetime=start_datetime,
+            random_bytes=True)
         filename = 'neural_net_archive' + filename_suffix
-        self.save_archive_filename = os.path.join(mlu.archive_foldername, filename)
+        self.start_datetime = start_datetime
+        self.learner_archive_dir = learner_archive_dir
+        self.save_archive_filename = os.path.join(learner_archive_dir, filename)
 
         self.log.info("Constructing net")
         self.graph = tf.Graph()
@@ -377,11 +393,20 @@ class NeuralNet():
     Args:
         num_params (int): The number of params.
         fit_hyperparameters (bool): Whether to try to fit the hyperparameters to the data.
+        learner_archive_dir (Optional str): The path to a directory in which to
+            save the neural nets. If set to None, then the default value for the
+            SingleNeuralNet class will be used. Default None.
+        start_datetime (Optional datetime.datetime): The timestamp to use in the
+            filenames when saving the neural nets. If set to None, then the
+            default value for the SingleNeuralNet class will be used. Default
+            None.
     '''
 
     def __init__(self,
                  num_params = None,
-                 fit_hyperparameters = False):
+                 fit_hyperparameters = False,
+                 learner_archive_dir = None,
+                 start_datetime = None):
 
         self.log = logging.getLogger(__name__)
         self.log.info('Initialising neural network impl')
@@ -392,6 +417,8 @@ class NeuralNet():
         # Constants.
         self.num_params = num_params
         self.fit_hyperparameters = fit_hyperparameters
+        self.learner_archive_dir = learner_archive_dir
+        self.start_datetime = start_datetime
 
         self.initial_epochs = 100
         self.subsequent_epochs = 20
@@ -429,7 +456,9 @@ class NeuralNet():
                     16, # batch_size
                     1., # keep_prob
                     reg,
-                    self.losses_list)
+                    self.losses_list,
+                    learner_archive_dir=self.learner_archive_dir,
+                    start_datetime=self.start_datetime)
         return SampledNeuralNet(creator, 1)
 
     def _fit_scaler(self):
