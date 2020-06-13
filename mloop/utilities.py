@@ -11,6 +11,8 @@ import datetime
 import sys
 import os
 import numpy as np
+import numpy.random as nr
+import base64
 import mloop
 
 python_version = sys.version_info[0]
@@ -85,6 +87,41 @@ def datetime_to_string(datetime):
     Method for changing a datetime into a standard string format used by all packages.
     '''
     return datetime.strftime('%Y-%m-%d_%H-%M')
+
+def generate_filename_suffix(file_type, file_datetime=None, random_bytes=False):
+    '''
+    Method for generating a string with date and extension for end of file names.
+    
+    This method returns a string such as '_2020-06-13_04-20.txt' where the date
+    and time specify when this function was called.
+    
+    Args:
+        file_type (string): The extension to use at the end of the filename,
+            e.g. 'txt'. Note that the period should NOT be included.
+        file_datetime (Optional datetime.datetime): The date and time to use in
+            the filename suffix, represented as an instance of the datetime
+            class defined in the datetime module. If set to None, then this
+            function will use the result returned by datetime.datetime.now().
+            Default None.
+        random_bytes (Optional bool): If set to True, six random bytes will be
+            added to the filename suffix. This can be useful avoid duplication
+            if multiple filenames are created with the same datetime.
+        
+    Returns:
+        string: A string giving the suffix that can be appended to a filename
+            prefix to give a full filename with timestamp and extension, such as
+            '_2020-06-13_04-20.txt'. The date and time specify when this
+            function was called.
+    '''
+    if file_datetime is None:
+        file_datetime = datetime.datetime.now()
+    date_string = datetime_to_string(file_datetime)
+    filename_suffix = '_' + date_string 
+    if random_bytes:
+        random_string = base64.urlsafe_b64encode(nr.bytes(6)).decode()
+        filename_suffix = filename_suffix + '_' + random_string
+    filename_suffix = filename_suffix + '.' + file_type
+    return filename_suffix
 
 def dict_to_txt_file(tdict,filename):
     '''
