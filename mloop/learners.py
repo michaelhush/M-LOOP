@@ -1477,6 +1477,7 @@ class NeuralNetLearner(Learner, mp.Process):
             nn_training_file_type = str(nn_training_file_type)
             if not mlu.check_file_type_supported(nn_training_file_type):
                 self.log.error('NN training file type not supported' + repr(nn_training_file_type))
+            self.nn_training_file_dir = os.path.dirname(nn_training_filename)
             
             self.training_dict = mlu.get_dict_from_file(nn_training_filename, nn_training_file_type)
             
@@ -1526,6 +1527,7 @@ class NeuralNetLearner(Learner, mp.Process):
                              max_boundary=max_boundary, 
                              **kwargs)
         else:
+            self.nn_training_file_dir = None
             
             super(NeuralNetLearner,self).__init__(**kwargs)
         
@@ -1567,6 +1569,7 @@ class NeuralNetLearner(Learner, mp.Process):
         self.bad_uncer_frac = 0.1 #Fraction of cost range to set a bad run uncertainty
 
         #Optional user set variables
+        self.nn_training_filename = nn_training_filename
         self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
         self.minimum_uncertainty = float(minimum_uncertainty)
         if default_bad_cost is not None:
@@ -1645,7 +1648,8 @@ class NeuralNetLearner(Learner, mp.Process):
             raise ValueError
         self._construct_net()
         for i, n in enumerate(self.neural_net):
-            n.load(self.training_dict['net_' + str(i)])
+            n.load(self.training_dict['net_' + str(i)],
+                   extra_search_dirs=[self.nn_training_file_dir])
 
     def _fit_neural_net(self,index):
         '''
