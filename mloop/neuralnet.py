@@ -1,6 +1,7 @@
 import datetime
 import logging
 import math
+import os
 import time
 import base64
 from distutils.version import LooseVersion
@@ -52,15 +53,9 @@ class SingleNeuralNet():
         self.log = logging.getLogger(__name__)
         start = time.time()
 
-        self.save_archive_filename = (
-                mlu.archive_foldername
-                + "neural_net_archive_"
-                + mlu.datetime_to_string(datetime.datetime.now())
-                + "_"
-                # We include 6 random bytes for deduplication in case multiple nets
-                # are created at the same time.
-                + base64.urlsafe_b64encode(nr.bytes(6)).decode()
-                + ".ckpt")
+        filename_suffix = mlu.generate_filename_suffix('ckpt', random_bytes=True)
+        filename = 'neural_net_archive' + filename_suffix
+        self.save_archive_filename = os.path.join(mlu.archive_foldername, filename)
 
         self.log.info("Constructing net")
         self.graph = tf.Graph()

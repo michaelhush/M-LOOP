@@ -61,16 +61,21 @@ def _config_logger(log_filename = default_log_filename,
     
     Returns:
         dictionary: Dict with extra keywords not used by the logging configuration.
-    '''
-    if not os.path.exists(log_foldername):
-        os.makedirs(log_foldername)
-    
+    '''    
     log = logging.getLogger('mloop')
     
     if len(log.handlers) == 0:
         log.setLevel(min(file_log_level,console_log_level))
         if log_filename is not None:
-            fh = logging.FileHandler(log_foldername + log_filename + datetime_to_string(datetime.datetime.now()) + '.log')
+            date_string = datetime_to_string(datetime.datetime.now())
+            full_filename = log_filename + date_string + '.log'
+            filename_with_path = os.path.join(log_foldername, full_filename)
+            # Create folder if it doesn't exist, accounting for any parts of the
+            # path that may have been included in log_filename.
+            actual_log_foldername = os.path.dirname(filename_with_path)
+            if not os.path.exists(actual_log_foldername):
+                os.makedirs(actual_log_foldername)
+            fh = logging.FileHandler(filename_with_path)
             fh.setLevel(file_log_level)
             fh.setFormatter(logging.Formatter('%(asctime)s %(name)-20s %(levelname)-8s %(message)s'))
             log.addHandler(fh)

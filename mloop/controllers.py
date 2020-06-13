@@ -177,10 +177,23 @@ class Controller():
         if controller_archive_filename is None:
             self.controller_archive_filename = None
         else:
-            if not os.path.exists(mlu.archive_foldername):
-                os.makedirs(mlu.archive_foldername)
-            self.controller_archive_filename =str(controller_archive_filename)
-            self.total_archive_filename = mlu.archive_foldername + self.controller_archive_filename + '_' + mlu.datetime_to_string(self.start_datetime) + '.' + self.controller_archive_file_type
+            # Store self.controller_archive_filename without any path, but
+            # include any path components in controller_archive_filename when
+            # constructing the full path.
+            controller_archive_filename = str(controller_archive_filename)
+            self.controller_archive_filename = os.path.basename(controller_archive_filename)
+            filename_suffix = mlu.generate_filename_suffix(
+                self.controller_archive_file_type,
+                file_datetime=self.start_datetime,
+            )
+            filename = controller_archive_filename + filename_suffix
+            self.total_archive_filename = os.path.join(mlu.archive_foldername, filename)
+            
+            # Include any path info from controller_archive_filename when
+            # creating directory for archive files.]
+            archive_dir = os.path.dirname(self.total_archive_filename)
+            if not os.path.exists(archive_dir):
+                os.makedirs(archive_dir)
 
         self.archive_dict = {'archive_type':'controller',
                              'num_out_params':self.num_out_params,
