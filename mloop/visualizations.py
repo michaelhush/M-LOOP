@@ -166,7 +166,7 @@ class ControllerVisualizer():
         self.min_boundary = np.squeeze(np.array(controller_dict['min_boundary']))
         self.max_boundary = np.squeeze(np.array(controller_dict['max_boundary']))
         
-        if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.min_boundary)):
+        if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.max_boundary)):
             self.finite_flag = True
             self.param_scaler = lambda p: (p-self.min_boundary)/(self.max_boundary - self.min_boundary)
             self.scaled_params = np.array([self.param_scaler(self.out_params[ind,:]) for ind in range(self.num_out_params)])
@@ -423,7 +423,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         self.noise_level_history = np.array(self.noise_level_history) 
         self.fit_numbers = np.arange(1,self.fit_count+1)
         
-        if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.min_boundary)):
+        if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.max_boundary)):
             self.finite_flag = True
             self.param_scaler = lambda p: (p-self.min_boundary)/self.diff_boundary
         else:
@@ -630,7 +630,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         
         self.import_neural_net()
         
-        if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.min_boundary)):
+        if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.max_boundary)):
             self.finite_flag = True
             self.param_scaler = lambda p: (p-self.min_boundary)/self.diff_boundary
         else:
