@@ -1569,7 +1569,6 @@ class NeuralNetLearner(Learner, mp.Process):
         self.bad_uncer_frac = 0.1 #Fraction of cost range to set a bad run uncertainty
 
         #Optional user set variables
-        self.nn_training_filename = nn_training_filename
         self.predict_global_minima_at_end = bool(predict_global_minima_at_end)
         self.minimum_uncertainty = float(minimum_uncertainty)
         if default_bad_cost is not None:
