@@ -1618,12 +1618,13 @@ class NeuralNetLearner(Learner, mp.Process):
         self.log = None
 
     def _construct_net(self):
-        neural_net_args = {
-            'num_params': self.num_params,
-            'learner_archive_dir': self.learner_archive_dir,
-            'start_datetime': self.start_datetime,
-        }
-        self.neural_net = [mlnn.NeuralNet(**neural_net_args) for _ in range(self.num_nets)]
+        self.neural_net = [
+            mlnn.NeuralNet(
+                num_params=self.num_params,
+                learner_archive_dir=self.learner_archive_dir,
+                start_datetime=self.start_datetime)
+            for _ in range(self.num_nets)
+        ]
 
     def _init_cost_scaler(self):
         '''
