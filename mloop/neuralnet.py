@@ -185,35 +185,32 @@ class SingleNeuralNet():
                 be used. If set to None, no other directories will be checked.
                 Default None.
         '''
+        # Set default value of extra_search_dirs if necessary.
+        if extra_search_dirs is None:
+            extra_search_dirs = []
+        
+        # Get the saved filename and construct a list of directories to in which
+        # to look for it.
         self.log.info("Loading neural network")
         saver_path = str(archive['saver_path'])
-        filename = os.path.basename(saver_path)
-        searching = True
-        try:
-            # Check if the neural net archive exists at the location specified
-            # in the passed archive dictionary.
-            self.saver.restore(self.tf_session, os.path.join('.', saver_path))
-            searching = False
-        except ValueError:
-            # Check if a neural net archive with the same name exists in
-            # any other given paths.
-            if extra_search_dirs:
-                j = 0
-                j_max = len(extra_search_dirs)
-                while searching and j < j_max:
-                    search_dir = extra_search_dirs[j]
-                    full_path = os.path.join(search_dir, filename)
-                    try:
-                        self.saver.restore(self.tf_session, full_path)
-                        searching = False
-                    except ValueError:
-                        j += 1
-                    
-        # Throw an error if the file wasn't found.
-        if searching:
-            message = "Could not find neural net archive {filename}.".format(filename=filename)
-            self.log.error(message)
-            raise ValueError(message)
+        saved_dirname, filename = os.path.split(saver_path)
+        saved_dirname = os.path.join('.', saved_dirname)
+        search_dirs = [saved_dirname] + extra_search_dirs
+        
+        # Check each directory for the file.
+        for dirname in search_dirs:
+            try:
+                full_path = os.path.join(dirname, filename)
+                self.saver.restore(self.tf_session, full_path)
+                return
+            except ValueError:
+                pass
+        
+        # If the method hasn't returned by now then it's run out of places to
+        # look.
+        message = "Could not find neural net archive {filename}.".format(filename=filename)
+        self.log.error(message)
+        raise ValueError(message)
 
     def save(self):
         '''
