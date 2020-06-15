@@ -32,7 +32,7 @@ default_interface_file_type = 'txt'
 
 archive_foldername = './M-LOOP_archives/'
 log_foldername = './M-LOOP_logs/'
-default_log_filename = 'M-LOOP_'
+default_log_filename = 'M-LOOP'
 
 filewrite_wait = 0.1
 
@@ -67,8 +67,8 @@ def _config_logger(log_filename = default_log_filename,
     if len(log.handlers) == 0:
         log.setLevel(min(file_log_level,console_log_level))
         if log_filename is not None:
-            date_string = datetime_to_string(datetime.datetime.now())
-            full_filename = log_filename + date_string + '.log'
+            filename_suffix = generate_filename_suffix('log')
+            full_filename = log_filename + filename_suffix
             filename_with_path = os.path.join(log_foldername, full_filename)
             # Create folder if it doesn't exist, accounting for any parts of the
             # path that may have been included in log_filename.
