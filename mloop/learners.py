@@ -121,10 +121,24 @@ class Learner():
         if learner_archive_filename is None:
             self.learner_archive_filename = None
         else:
-            if not os.path.exists(mlu.archive_foldername):
-                os.makedirs(mlu.archive_foldername)
-            self.learner_archive_filename =str(learner_archive_filename)
-            self.total_archive_filename = mlu.archive_foldername + self.learner_archive_filename + '_' + mlu.datetime_to_string(self.start_datetime) + '.' + self.learner_archive_file_type
+            # Store self.learner_archive_filename without any path, but include
+            # any path components in learner_archive_filename when constructing
+            # the full path.
+            learner_archive_filename = str(learner_archive_filename)
+            self.learner_archive_filename = os.path.basename(learner_archive_filename)
+            filename_suffix = mlu.generate_filename_suffix(
+                self.learner_archive_file_type,
+                file_datetime=self.start_datetime,
+            )
+            filename = learner_archive_filename + filename_suffix
+            self.total_archive_filename = os.path.join(mlu.archive_foldername, filename)
+            
+            # Include any path info from learner_archive_filename when creating
+            # directory for archive files.
+            learner_archive_dir = os.path.dirname(self.total_archive_filename)
+            self.learner_archive_dir = learner_archive_dir
+            if not os.path.exists(learner_archive_dir):
+                os.makedirs(learner_archive_dir)
         
         self.archive_dict = {'archive_type':'learner',
                              'num_params':self.num_params,
@@ -1463,6 +1477,7 @@ class NeuralNetLearner(Learner, mp.Process):
             nn_training_file_type = str(nn_training_file_type)
             if not mlu.check_file_type_supported(nn_training_file_type):
                 self.log.error('NN training file type not supported' + repr(nn_training_file_type))
+            self.nn_training_file_dir = os.path.dirname(nn_training_filename)
             
             self.training_dict = mlu.get_dict_from_file(nn_training_filename, nn_training_file_type)
             
@@ -1512,6 +1527,7 @@ class NeuralNetLearner(Learner, mp.Process):
                              max_boundary=max_boundary, 
                              **kwargs)
         else:
+            self.nn_training_file_dir = None
             
             super(NeuralNetLearner,self).__init__(**kwargs)
         
@@ -1601,7 +1617,13 @@ class NeuralNetLearner(Learner, mp.Process):
         self.log = None
 
     def _construct_net(self):
-        self.neural_net = [mlnn.NeuralNet(self.num_params) for _ in range(self.num_nets)]
+        self.neural_net = [
+            mlnn.NeuralNet(
+                num_params=self.num_params,
+                learner_archive_dir=self.learner_archive_dir,
+                start_datetime=self.start_datetime)
+            for _ in range(self.num_nets)
+        ]
 
     def _init_cost_scaler(self):
         '''
@@ -1626,7 +1648,8 @@ class NeuralNetLearner(Learner, mp.Process):
             raise ValueError
         self._construct_net()
         for i, n in enumerate(self.neural_net):
-            n.load(self.training_dict['net_' + str(i)])
+            n.load(self.training_dict['net_' + str(i)],
+                   extra_search_dirs=[self.nn_training_file_dir])
 
     def _fit_neural_net(self,index):
         '''
