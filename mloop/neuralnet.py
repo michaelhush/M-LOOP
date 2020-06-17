@@ -645,11 +645,12 @@ class NeuralNet():
                 # Fit regularisation
 
                 # Split the data into training and cross validation
-                cv_size = int(len(all_params) / 10)
-                train_params = all_params[:-cv_size]
-                train_costs = all_costs[:-cv_size]
-                cv_params = all_params[-cv_size:]
-                cv_costs = all_costs[-cv_size:]
+                training_fraction = 0.9
+                split_index = int(training_fraction * len(all_params))
+                train_params = all_params[:split_index]
+                train_costs = all_costs[:split_index]
+                cv_params = all_params[split_index:]
+                cv_costs = all_costs[split_index:]
 
                 orig_cv_loss = self.net.cross_validation_loss(cv_params, cv_costs)
                 best_cv_loss = orig_cv_loss
