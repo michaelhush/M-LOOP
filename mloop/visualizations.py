@@ -88,6 +88,26 @@ def _color_list_from_num_of_params(num_of_params):
     global cmap
     return [cmap(float(x)/num_of_params) for x in range(num_of_params)]
 
+def _ensure_parameter_subset_valid(visualizer, parameter_subset):
+    '''
+    Make sure indices in parameter_subset are acceptable.
+    
+    Args:
+        visualizer (ControllerVisualizer-like): An instance of one of the
+            visualization classes defined in this module, which should have the
+            attributes param_numbers and log.
+        parameter_subset (list-like): The indices corresponding to a subset of
+            the optimization parameters. The indices should be 0-based, i.e. the
+            first parameter is identified with index 0. Generally the values of
+            the indices in parameter_subset should be integers between 0 and the
+            number of parameters minus one, inclusively.
+    '''
+    for ind in parameter_subset:
+        if ind not in visualizer.param_numbers:
+            message = '{ind} is not a valid parameter index.'.format(ind=ind)
+            visualizer.log.error(message)
+            raise ValueError(message)
+
 def configure_plots():
     '''
     Configure the setting for the plots.
@@ -177,7 +197,7 @@ class ControllerVisualizer():
         self.cost_colors = [_color_from_controller_name(x) for x in self.out_type]
         self.in_numbers = np.arange(1,self.num_in_costs+1)
         self.out_numbers = np.arange(1,self.num_out_params+1)
-        self.param_colors = _color_list_from_num_of_params(self.num_params)
+        self.param_numbers = np.arange(self.num_params)
         
     def plot_cost_vs_run(self):
         '''
@@ -205,34 +225,69 @@ class ControllerVisualizer():
         for ut in self.unique_types:
             artists.append(plt.Line2D((0,1),(0,0), color=_color_from_controller_name(ut), marker='o', linestyle=''))
         plt.legend(artists,self.unique_types,loc=legend_loc)
+    
+    def _ensure_parameter_subset_valid(self, parameter_subset):
+        _ensure_parameter_subset_valid(self, parameter_subset)
         
-    def plot_parameters_vs_run(self):
+    def plot_parameters_vs_run(self, parameter_subset=None):
         '''
         Create a plot of the parameters versus run number.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+            
         global figure_counter, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
         if self.finite_flag:
-            for ind in range(self.num_params):
-                plt.plot(self.out_numbers,self.scaled_params[:,ind],'o',color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot(self.out_numbers,self.scaled_params[:,param_index],'o',color=color)
                 plt.ylabel(scale_param_label)
                 plt.ylim((0,1))
         else:
-            for ind in range(self.num_params):
-                plt.plot(self.out_numbers,self.out_params[:,ind],'o',color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot(self.out_numbers,self.out_params[:,param_index],'o',color=color)
                 plt.ylabel(run_label)
         plt.xlabel(run_label)
         
         plt.title('Controller: Parameters vs run number.')
         artists=[]
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+        for ind in range(num_params):
+            color = param_colors[ind]
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
+        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
-    def plot_parameters_vs_cost(self):
+    def plot_parameters_vs_cost(self, parameter_subset=None):
         '''
         Create a plot of the parameters versus run number.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
         # Only plot points for which a cost was actually measured. This may not
         # be the case for all parameter sets if the optimization is still in
@@ -240,31 +295,47 @@ class ControllerVisualizer():
         in_costs = self.in_costs[:self.num_in_costs]
         in_uncers = self.in_uncers[:self.num_in_costs]
         
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         global figure_counter, run_label, run_label, scale_param_label, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
         
         if self.finite_flag:
             scaled_params = self.scaled_params[:self.num_in_costs,:]
-            for ind in range(self.num_params):
-                plt.plot(scaled_params[:,ind], in_costs + in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(scaled_params[:,ind], in_costs - in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(scaled_params[:,ind], in_costs,'o',color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot(scaled_params[:,param_index], in_costs + in_uncers,'_',color=color)
+                plt.plot(scaled_params[:,param_index], in_costs - in_uncers,'_',color=color)
+                plt.plot(scaled_params[:,param_index], in_costs,'o',color=color)
                 plt.xlabel(scale_param_label)
                 plt.xlim((0,1))
         else:
             out_params = self.out_params[:self.num_in_costs, :]
-            for ind in range(self.num_params):
-                plt.plot(out_params[:,ind], in_costs + in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(out_params[:,ind], in_costs - in_uncers,'_',color=self.param_colors[ind])
-                plt.plot(out_params[:,ind], in_costs,'o',color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot(out_params[:,param_index], in_costs + in_uncers,'_',color=color)
+                plt.plot(out_params[:,param_index], in_costs - in_uncers,'_',color=color)
+                plt.plot(out_params[:,param_index], in_costs,'o',color=color)
                 plt.xlabel(run_label)
         plt.ylabel(cost_label)
         plt.title('Controller: Cost vs parameters.')
         artists=[]
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)], loc=legend_loc)
+        for ind in range(num_params):
+            color = param_colors[ind]
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
+        plt.legend(artists,[str(x) for x in parameter_subset], loc=legend_loc)
 
 def create_differential_evolution_learner_visualizations(filename,
                                                          file_type='pkl',
@@ -326,6 +397,7 @@ class DifferentialEvolutionVisualizer():
         self.finite_flag = True
         self.param_scaler = lambda p: (p-self.min_boundary)/(self.max_boundary - self.min_boundary)
         self.scaled_params_generations = np.array([[self.param_scaler(self.params_generations[inda,indb,:]) for indb in range(self.num_population_members)] for inda in range(self.num_generations)])
+        self.param_numbers = np.arange(self.num_params)
         
         self.gen_numbers = np.arange(1,self.num_generations+1)
         self.param_colors = _color_list_from_num_of_params(self.num_params)
@@ -346,11 +418,33 @@ class DifferentialEvolutionVisualizer():
         plt.xlabel(generation_label)
         plt.ylabel(cost_label)
         plt.title('Differential evolution: Cost vs generation number.')
+    
+    def _ensure_parameter_subset_valid(self, parameter_subset):
+        _ensure_parameter_subset_valid(self, parameter_subset)
         
-    def plot_params_vs_generations(self):
+    def plot_params_vs_generations(self, parameter_subset=None):
         '''
         Create a plot of the parameters versus run number.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         if self.params_generations.size == 0:
             self.log.warning('Unable to plot DE: params vs generations as the initial generation did not complete.')
             return
@@ -359,17 +453,18 @@ class DifferentialEvolutionVisualizer():
         figure_counter += 1
         plt.figure(figure_counter)
         
-        for ind in range(self.num_params):
-            plt.plot(self.gen_plot,self.params_generations[:,:,ind].flatten(),marker='o',linestyle='',color=self.param_colors[ind])
-            plt.ylim((0,1))
-        plt.xlabel(generation_label)
-        plt.ylabel(scale_param_label)
-        
-        plt.title('Differential evolution: Params vs generation number.')
         artists=[]
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+        for ind in range(num_params):
+            param_index = parameter_subset[ind]
+            color = param_colors[ind]
+            plt.plot(self.gen_plot,self.params_generations[:,:,param_index].flatten(),marker='o',linestyle='',color=color)
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
+            plt.ylim((0,1))
+        
+        plt.title('Differential evolution: Params vs generation number.') 
+        plt.xlabel(generation_label)
+        plt.ylabel(scale_param_label)           
+        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type='pkl',
@@ -419,6 +514,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         self.create_gaussian_process()
         self.fit_gaussian_process()
         
+        self.param_numbers = np.arange(self.num_params)
         self.log_length_scale_history = np.log10(np.array(self.length_scale_history, dtype=float))
         self.noise_level_history = np.array(self.noise_level_history) 
         self.fit_numbers = np.arange(1,self.fit_count+1)
@@ -429,7 +525,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         else:
             self.finite_flag = False
         
-        self.param_colors = _color_list_from_num_of_params(self.num_params)
         if self.has_trust_region:
             self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
             self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
@@ -483,34 +578,61 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         uncertainty_arrays = np.array(uncertainty_arrays)
         return (cross_parameter_arrays,cost_arrays,uncertainty_arrays) 
     
-    def plot_cross_sections(self):
+    def _ensure_parameter_subset_valid(self, parameter_subset):
+        _ensure_parameter_subset_valid(self, parameter_subset)
+    
+    def plot_cross_sections(self, parameter_subset=None):
         '''
-        Produce a figure of the cross section about best cost and parameters
+        Produce a figure of the cross section about best cost and parameters.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         global figure_counter, legend_loc
         figure_counter += 1
         plt.figure(figure_counter)
         points = 100
         (_,cost_arrays,uncertainty_arrays) = self.return_cross_sections(points=points)
         rel_params = np.linspace(0,1,points)
-        for ind in range(self.num_params):
-            plt.plot(rel_params,cost_arrays[ind,:] + uncertainty_arrays[ind,:],'--',color=self.param_colors[ind])
-            plt.plot(rel_params,cost_arrays[ind,:] - uncertainty_arrays[ind,:],'--',color=self.param_colors[ind])
-            plt.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind])
+        for ind in range(num_params):
+            param_index = parameter_subset[ind]
+            color = param_colors[ind]
+            plt.plot(rel_params,cost_arrays[param_index,:] + uncertainty_arrays[param_index,:],'--',color=color)
+            plt.plot(rel_params,cost_arrays[param_index,:] - uncertainty_arrays[param_index,:],'--',color=color)
+            plt.plot(rel_params,cost_arrays[param_index,:],'-',color=color)
         if self.has_trust_region:
             axes = plt.gca()
             ymin, ymax = axes.get_ylim()
             ytrust = ymin + 0.1*(ymax - ymin)
-            for ind in range(self.num_params):
-                plt.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
+                plt.plot([self.scaled_trust_min[param_index],self.scaled_trust_max[param_index]],[ytrust,ytrust],'s', color=color)
         plt.xlabel(scale_param_label)
         plt.xlim((0,1))
         plt.ylabel(cost_label)
         plt.title('GP Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
         artists = []
-        for ind in range(self.num_params):
-            artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-        plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)    
+        for ind in range(num_params):
+            color = param_colors[ind]
+            artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
+        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)    
     
     '''
     Method is currently not supported. Of questionable usefulness. Not yet deleted.
@@ -546,31 +668,55 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         artists = []
         for ind in range(self.num_params):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-        plt.legend(artists, [str(x) for x in range(1,self.num_params+1)], loc=legend_loc)
+        plt.legend(artists, [str(x) for x in range(self.num_params)], loc=legend_loc)
     '''
     
-    def plot_hyperparameters_vs_run(self):
+    def plot_hyperparameters_vs_run(self, parameter_subset=None):
+        '''
+        Produce a figure of the hyperparameters as a function of run number.
+        
+        This method also plots the fitted noise level as a function of run
+        number if the cost has noise.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
+        '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         global figure_counter, run_label, legend_loc, log_length_scale_label, noise_label
         figure_counter += 1
         plt.figure(figure_counter)
-        if isinstance(self.length_scale, float):
-            scale_num = 1
-        else:
-            scale_num = self.length_scale.size
-        for ind in range(scale_num):
-            if scale_num == 1:
-                plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=self.param_colors[ind])
+        
+        artists=[]
+        for ind in range(num_params):
+            param_index = parameter_subset[ind]
+            color = param_colors[ind]
+            if self.num_params == 1:
+                plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=color)
             else:
-                plt.plot(self.fit_numbers,self.log_length_scale_history[:,ind],'o',color=self.param_colors[ind])
+                plt.plot(self.fit_numbers,self.log_length_scale_history[:,param_index],'o',color=color)
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
+            
+        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         plt.xlabel(run_label)
         plt.ylabel(log_length_scale_label)
         plt.title('GP Learner: Log of lengths scales vs fit number.')
-        if scale_num!=1:
-            artists=[]
-            for ind in range(self.num_params):
-                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
-            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
-            
+        
+        # Make plot of noise level vs run number if cost has noise. 
         if self.cost_has_noise:
             figure_counter += 1
             plt.figure(figure_counter)
@@ -636,10 +782,11 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         else:
             self.finite_flag = False
         
-        self.param_colors = _color_list_from_num_of_params(self.num_params)
         if self.has_trust_region:
             self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
             self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
+            
+        self.param_numbers = np.arange(self.num_params)
         
     def run(self):
         '''
@@ -692,11 +839,33 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
             res.append((cross_parameter_arrays, cost_arrays))
         return res
+    
+    def _ensure_parameter_subset_valid(self, parameter_subset):
+        _ensure_parameter_subset_valid(self, parameter_subset)
 
-    def do_cross_sections(self):
+    def do_cross_sections(self, parameter_subset=None):
         '''
-        Produce a figure of the cross section about best cost and parameters
+        Produce a figure of the cross section about best cost and parameters.
+    
+        Args:
+            parameter_subset (list-like): The indices of parameters to plot. The
+                indices should be 0-based, i.e. the first parameter is
+                identified with index 0. Generally the values of the indices in
+                parameter_subset should be between 0 and the number of
+                parameters minus one, inclusively. If set to `None`, then all
+                parameters will be plotted. Default None.
         '''
+        # Get default value for parameter_subset if necessary.
+        if parameter_subset is None:
+            parameter_subset = self.param_numbers
+        
+        # Make sure that the provided parameter_subset is acceptable.
+        self._ensure_parameter_subset_valid(parameter_subset)
+        
+        # Generate set of distinct colors for plotting.
+        num_params = len(parameter_subset)
+        param_colors = _color_list_from_num_of_params(num_params)
+        
         points = 100
         rel_params = np.linspace(0,1,points)
         all_cost_arrays = [a for _,a in self.return_cross_sections(points=points)]
@@ -706,23 +875,28 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 figure_counter += 1
                 fig = plt.figure(figure_counter)
                 axes = plt.gca()
-                for ind in range(self.num_params):
-                    axes.plot(rel_params,cost_arrays[ind,:],'-',color=self.param_colors[ind],label=str(ind))
+                for ind in range(num_params):
+                    param_index = parameter_subset[ind]
+                    color = param_colors[ind]
+                    axes.plot(rel_params,cost_arrays[param_index,:],'-',color=color,label=str(param_index))
                 if self.has_trust_region:
                     ymin, ymax = axes.get_ylim()
                     ytrust = ymin + 0.1*(ymax - ymin)
-                    for ind in range(self.num_params):
-                        axes.plot([self.scaled_trust_min[ind],self.scaled_trust_max[ind]],[ytrust,ytrust],'s', color=self.param_colors[ind])
+                    for ind in range(num_params):
+                        param_index = parameter_subset[ind]
+                        color = param_colors[ind]
+                        axes.plot([self.scaled_trust_min[param_index],self.scaled_trust_max[param_index]],[ytrust,ytrust],'s', color=color)
                 axes.set_xlabel(scale_param_label)
                 axes.set_xlim((0,1))
                 axes.set_ylabel(cost_label)
-                axes.set_title('NN Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
+                axes.set_title('NN Learner: Predicted landscape' + (' with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
                 return fig
             prepare_plot()
             artists = []
-            for ind in range(self.num_params):
-                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+            for ind in range(num_params):
+                color = param_colors[ind]
+                artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
+            plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         if self.num_nets > 1:
             # And now create a plot showing the average, max and min for each cross section.
             def prepare_plot():
@@ -730,23 +904,26 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 figure_counter += 1
                 fig = plt.figure(figure_counter)
                 axes = plt.gca()
-                for ind in range(self.num_params):
-                    this_param_cost_array = np.array(all_cost_arrays)[:,ind,:]
+                for ind in range(num_params):
+                    param_index = parameter_subset[ind]
+                    color = param_colors[ind]
+                    this_param_cost_array = np.array(all_cost_arrays)[:,param_index,:]
                     mn = np.mean(this_param_cost_array, axis=0)
                     m = np.min(this_param_cost_array, axis=0)
                     M = np.max(this_param_cost_array, axis=0)
-                    axes.plot(rel_params,mn,'-',color=self.param_colors[ind],label=str(ind))
-                    axes.plot(rel_params,m,'--',color=self.param_colors[ind],label=str(ind))
-                    axes.plot(rel_params,M,'--',color=self.param_colors[ind],label=str(ind))
+                    axes.plot(rel_params,mn,'-',color=color,label=str(param_index))
+                    axes.plot(rel_params,m,'--',color=color,label=str(param_index))
+                    axes.plot(rel_params,M,'--',color=color,label=str(param_index))
                 axes.set_xlabel(scale_param_label)
                 axes.set_xlim((0,1))
                 axes.set_ylabel(cost_label)
                 axes.set_title('NN Learner: Average predicted landscape')
                 return fig
             prepare_plot()
-            for ind in range(self.num_params):
-                artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind], linestyle='-'))
-            plt.legend(artists,[str(x) for x in range(1,self.num_params+1)],loc=legend_loc)
+            for ind in range(num_params):
+                color = param_colors[ind]
+                artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
+            plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
 
     def plot_surface(self):
         '''
