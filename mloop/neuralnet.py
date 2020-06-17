@@ -638,9 +638,11 @@ class NeuralNet():
         all_params, all_costs = self._scale_params_and_cost_list(all_params, all_costs)
 
         if self.fit_hyperparameters:
-            # Every 20 fits (starting at 5, just because), re-fit the hyperparameters
-            if int(len(all_params + 5) / 20) > self.last_hyperfit:
-                self.last_hyperfit = int(len(all_params + 5) / 20)
+            # Every 20 runs, re-fit the hyperparameters.
+            n_fits = len(all_params)
+            n_hyperfit = int(n_fits / 20.0)  # int() rounds down.
+            if n_hyperfit > self.last_hyperfit:
+                self.last_hyperfit = n_hyperfit
 
                 # Fit regularisation
 
