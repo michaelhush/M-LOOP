@@ -207,7 +207,23 @@ def get_dict_from_file(filename,file_type):
     else:
         raise ValueError
     return dictionary
+
+def get_file_type(filename):
+    '''
+    Get the file type of a file from the extension in its filename.
     
+    Args:
+        filename (String): The filename including extension, and optionally
+            including path, from which to extract the file type.
+
+    Returns:
+        file_type (String): The file's type, inferred from its extension. The
+            type does NOT include a leading period.
+    '''
+    _, file_type = os.path.splitext(filename)
+    file_type = file_type[1:]  # Remove leading '.'.
+    return file_type
+
 def check_file_type_supported(file_type):
     '''
     Checks whether the file type is supported
