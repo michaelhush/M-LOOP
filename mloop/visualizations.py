@@ -53,7 +53,7 @@ def show_all_default_visualizations(controller, show_plots=True):
     if show_plots:
         plt.show()
 
-def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True):
+def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type=None, show_plots=True):
     '''
     Plots all visualizations available for a controller and it's learner from their archives.
     
@@ -62,17 +62,26 @@ def show_all_default_visualizations_from_archive(controller_filename, learner_fi
             controller archive.
         learner_filename (str): The filename, inlcuding path, of the learner
             archive.
-        controller_type (str): The filename, type of the learner, e.g.
-            'gaussian_process', 'neural_net', or 'differential_evolution'.
         
     Keyword Args:
-        show_plots (Controller): Determine whether to run plt.show() at the end or not. For debugging. 
+        controller_type (str): The value of controller_type type used in the
+            optimization corresponding to the learner learner archive, e.g.
+            'gaussian_process', 'neural_net', or 'differential_evolution'. If
+            set to None then controller_type will be determined automatically.
+            Default None.
+        show_plots (Controller): Determine whether to run plt.show() at the end
+            or not. For debugging. 
     '''
+    # Automatically determine controller_type if necessary.
+    if controller_type is None:
+        controller_type = mlu.get_controller_type_from_learner_archive(
+            learner_filename,
+        )
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
-    controller_file_type = controller_filename.split(".")[-1]
-    learner_file_type = learner_filename.split(".")[-1]
+    controller_file_type = mlu.get_file_type(controller_filename)
+    learner_file_type = mlu.get_file_type(learner_filename)
     create_controller_visualizations(controller_filename, file_type=controller_file_type)
 
     if controller_type == 'neural_net':
