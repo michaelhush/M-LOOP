@@ -577,8 +577,7 @@ class DifferentialEvolutionVisualizer():
         
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type=None,
-                                                   plot_cross_sections=True,
-                                                   plot_hyperparameters_vs_run=True):
+                                                   **kwargs):
     '''
     Runs the plots from a gaussian process learner file.
     
@@ -589,17 +588,11 @@ def create_gaussian_process_learner_visualizations(filename,
         file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
             for text. If set to None, then the type will be determined from the
             extension in filename. Default None.
-        plot_cross_sections (Optional [bool]): If True plot predicted landscape
-            cross sections, else do not. Default True. 
-        plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
-            hyperparameters as a function of run number, else do not. Default
-            True.
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            create_visualizations() method.
     '''
     visualization = GaussianProcessVisualizer(filename, file_type=file_type)
-    if plot_cross_sections:
-        visualization.plot_cross_sections()
-    if plot_hyperparameters_vs_run:
-        visualization.plot_hyperparameters_vs_run()
+    visualization.create_visualizations(**kwargs)
     
 class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     '''
@@ -694,6 +687,24 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
         uncertainty_arrays = np.array(uncertainty_arrays)
         return (cross_parameter_arrays,cost_arrays,uncertainty_arrays) 
+    
+    def create_visualizations(self,
+                              plot_cross_sections=True,
+                              plot_hyperparameters_vs_run=True):
+        '''
+        Runs the plots from a gaussian process learner file.
+            
+        Keyword Args:
+            plot_cross_sections (Optional [bool]): If True plot predicted
+                landscape cross sections, else do not. Default True. 
+            plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
+                hyperparameters as a function of run number, else do not.
+                Default True.
+        '''
+        if plot_cross_sections:
+            self.plot_cross_sections()
+        if plot_hyperparameters_vs_run:
+            self.plot_hyperparameters_vs_run()
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
         _ensure_parameter_subset_valid(self, parameter_subset)
