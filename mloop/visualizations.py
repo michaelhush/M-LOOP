@@ -54,6 +54,20 @@ def show_all_default_visualizations(controller, show_plots=True):
         plt.show()
 
 def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True):
+    '''
+    Plots all visualizations available for a controller and it's learner from their archives.
+    
+    Args:
+        controller_filename (str): The filename, inlcuding path, of the
+            controller archive.
+        learner_filename (str): The filename, inlcuding path, of the learner
+            archive.
+        controller_type (str): The filename, type of the learner, e.g.
+            'gaussian_process', 'neural_net', or 'differential_evolution'.
+        
+    Keyword Args:
+        show_plots (Controller): Determine whether to run plt.show() at the end or not. For debugging. 
+    '''
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
@@ -64,6 +78,16 @@ def show_all_default_visualizations_from_archive(controller_filename, learner_fi
     if controller_type == 'neural_net':
         log.debug('Creating neural net visualizations.')
         create_neural_net_learner_visualizations(
+            learner_filename,
+            file_type=learner_file_type)
+    elif controller_type == 'gaussian_process':
+        log.debug('Creating gaussian process visualizations.')
+        create_gaussian_process_learner_visualizations(
+            learner_filename,
+            file_type=learner_file_type)
+    elif controller_type == 'differential_evolution':
+        log.debug('Creating differential evolution visualizations.')
+        create_differential_evolution_learner_visualizations(
             learner_filename,
             file_type=learner_file_type)
     else:
