@@ -53,7 +53,13 @@ def show_all_default_visualizations(controller, show_plots=True):
     if show_plots:
         plt.show()
 
-def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type=None, show_plots=True):
+def show_all_default_visualizations_from_archive(controller_filename,
+                                                 learner_filename,
+                                                 controller_type=None,
+                                                 show_plots=True,
+                                                 controller_visualization_args={},
+                                                 learner_visualization_args={},
+                                                 learner_visualizer_init_args={}):
     '''
     Plots all visualizations available for a controller and it's learner from their archives.
     
@@ -69,31 +75,31 @@ def show_all_default_visualizations_from_archive(controller_filename, learner_fi
             'gaussian_process', 'neural_net', or 'differential_evolution'. If
             set to None then controller_type will be determined automatically.
             Default None.
-        show_plots (Controller): Determine whether to run plt.show() at the end
-            or not. For debugging. 
+        show_plots (bool): Determine whether to run plt.show() at the end or
+            not. For debugging. Default True.
+        controller_visualization_args (dict): Keyword arguments to pass to the
+            controller visualizer's create_visualizations() method. Default {}.
+        learner_visualization_args (dict): Keyword arguments to pass to the
+            learner visualizer's create_visualizations() method. Default {}.
+        learner_visualizer_init_args (dict): Keyword arguments to pass to the
+            learner visualizer's __init__() method. Default {}.
     '''
-    # Automatically determine controller_type if necessary.
-    if controller_type is None:
-        controller_type = mlu.get_controller_type_from_learner_archive(
-            learner_filename,
-        )
     log = logging.getLogger(__name__)
     configure_plots()
+    
+    # Create visualizations for the controller archive.
     log.debug('Creating controller visualizations.')
-    create_controller_visualizations(controller_filename)
-
-    if controller_type == 'neural_net':
-        log.debug('Creating neural net visualizations.')
-        create_neural_net_learner_visualizations(learner_filename)
-    elif controller_type == 'gaussian_process':
-        log.debug('Creating gaussian process visualizations.')
-        create_gaussian_process_learner_visualizations(learner_filename)
-    elif controller_type == 'differential_evolution':
-        log.debug('Creating differential evolution visualizations.')
-        create_differential_evolution_learner_visualizations(learner_filename)
-    else:
-        log.error('show_all_default_visualizations not implemented for type: ' + controller_type)
-        raise ValueError
+    create_controller_visualizations(
+        controller_filename,
+        **controller_visualization_args,
+    )
+    
+    # Create visualizations for the learner archive.
+    create_learner_visualizations(
+        learner_filename,
+        learner_visualization_args=learner_visualization_args,
+        learner_visualizer_init_args=learner_visualizer_init_args,
+    )
 
     log.info('Showing visualizations, close all to end MLOOP.')
     if show_plots:
@@ -141,6 +147,27 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
         raise ValueError(message)
     
     return visualizer
+
+def create_learner_visualizations(filename,
+                                  learner_visualization_args={},
+                                  learner_visualizer_init_args={}):
+    '''
+    Runs the plots for a learner archive file.
+    
+    Args:
+        filename (str): Filename for the learner archive. 
+    
+    Keyword Args:
+        learner_visualization_args (dict): Keyword arguments to pass to the
+            learner visualizer's create_visualizations() method. Default {}.
+        learner_visualizer_init_args (dict): Keyword arguments to pass to the
+            learner visualizer's __init__() method. Default {}.
+    '''
+    visualizer = create_learner_visualizer_from_archive(
+        filename,
+        **learner_visualizer_init_args,
+    )
+    visualizer.create_visualizations(**learner_visualization_args)
 
 def _color_from_controller_name(controller_name):
     '''
