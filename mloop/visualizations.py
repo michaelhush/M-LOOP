@@ -80,25 +80,17 @@ def show_all_default_visualizations_from_archive(controller_filename, learner_fi
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
-    controller_file_type = mlu.get_file_type(controller_filename)
-    learner_file_type = mlu.get_file_type(learner_filename)
-    create_controller_visualizations(controller_filename, file_type=controller_file_type)
+    create_controller_visualizations(controller_filename)
 
     if controller_type == 'neural_net':
         log.debug('Creating neural net visualizations.')
-        create_neural_net_learner_visualizations(
-            learner_filename,
-            file_type=learner_file_type)
+        create_neural_net_learner_visualizations(learner_filename)
     elif controller_type == 'gaussian_process':
         log.debug('Creating gaussian process visualizations.')
-        create_gaussian_process_learner_visualizations(
-            learner_filename,
-            file_type=learner_file_type)
+        create_gaussian_process_learner_visualizations(learner_filename)
     elif controller_type == 'differential_evolution':
         log.debug('Creating differential evolution visualizations.')
-        create_differential_evolution_learner_visualizations(
-            learner_filename,
-            file_type=learner_file_type)
+        create_differential_evolution_learner_visualizations(learner_filename)
     else:
         log.error('show_all_default_visualizations not implemented for type: ' + controller_type)
         raise ValueError
@@ -198,7 +190,7 @@ def configure_plots():
     mpl.rcParams['legend.fontsize']= 'medium'
     
 def create_controller_visualizations(filename,
-                                    file_type='pkl',
+                                    file_type=None,
                                     plot_cost_vs_run=True,
                                     plot_parameters_vs_run=True,
                                     plot_parameters_vs_cost=True):
@@ -209,7 +201,9 @@ def create_controller_visualizations(filename,
         filename (Optional [string]): Filename for the controller archive. 
     
     Keyword Args:
-        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
         plot_cost_vs_run (Optional [bool]): If True plot cost versus run number, else do not. Default True. 
         plot_parameters_vs_run (Optional [bool]): If True plot parameters versus run number, else do not. Default True. 
         plot_parameters_vs_cost (Optional [bool]): If True plot parameters versus cost number, else do not. Default True. 
@@ -419,7 +413,7 @@ class ControllerVisualizer():
         plt.legend(artists,[str(x) for x in parameter_subset], loc=legend_loc)
 
 def create_differential_evolution_learner_visualizations(filename,
-                                                         file_type='pkl',
+                                                         file_type=None,
                                                          plot_params_vs_generations=True,
                                                          plot_costs_vs_generations=True):
     '''
@@ -429,7 +423,9 @@ def create_differential_evolution_learner_visualizations(filename,
         filename (Optional [string]): Filename for the differential evolution archive. Must provide datetime or filename. Default None.
         
     Keyword Args:
-        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
         plot_params_generations (Optional [bool]): If True plot parameters vs generations, else do not. Default True. 
         plot_costs_generations (Optional [bool]): If True plot costs vs generations, else do not. Default True. 
     '''
@@ -553,7 +549,7 @@ class DifferentialEvolutionVisualizer():
         plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
 def create_gaussian_process_learner_visualizations(filename,
-                                                   file_type='pkl',
+                                                   file_type=None,
                                                    plot_cross_sections=True,
                                                    plot_hyperparameters_vs_run=True):
     '''
@@ -563,8 +559,14 @@ def create_gaussian_process_learner_visualizations(filename,
         filename (Optional [string]): Filename for the gaussian process archive. Must provide datetime or filename. Default None.
         
     Keyword Args:
-        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
-        plot_cross_sections (Optional [bool]): If True plot predict landscape cross sections, else do not. Default True. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
+        plot_cross_sections (Optional [bool]): If True plot predicted landscape
+            cross sections, else do not. Default True. 
+        plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
+            hyperparameters as a function of run number, else do not. Default
+            True.
     '''
     visualization = GaussianProcessVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
@@ -815,7 +817,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plt.title('GP Learner: Noise level vs fit number.')
             
 def create_neural_net_learner_visualizations(filename,
-                                             file_type='pkl',
+                                             file_type=None,
                                              plot_cross_sections=True):
     '''
     Creates plots from a neural nets learner file.
@@ -824,8 +826,11 @@ def create_neural_net_learner_visualizations(filename,
         filename (Optional [string]): Filename for the neural net archive. Must provide datetime or filename. Default None.
         
     Keyword Args:
-        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
-        plot_cross_sections (Optional [bool]): If True plot predict landscape cross sections, else do not. Default True. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
+        plot_cross_sections (Optional [bool]): If True plot predicted landscape
+            cross sections, else do not. Default True. 
     '''
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
     if plot_cross_sections:
