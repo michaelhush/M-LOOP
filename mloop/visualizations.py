@@ -428,8 +428,7 @@ class ControllerVisualizer():
 
 def create_differential_evolution_learner_visualizations(filename,
                                                          file_type=None,
-                                                         plot_params_vs_generations=True,
-                                                         plot_costs_vs_generations=True):
+                                                         **kwargs):
     '''
     Runs the plots from a differential evolution learner file.
     
@@ -440,14 +439,11 @@ def create_differential_evolution_learner_visualizations(filename,
         file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
             for text. If set to None, then the type will be determined from the
             extension in filename. Default None.
-        plot_params_generations (Optional [bool]): If True plot parameters vs generations, else do not. Default True. 
-        plot_costs_generations (Optional [bool]): If True plot costs vs generations, else do not. Default True. 
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            create_visualizations() method.
     '''
     visualization = DifferentialEvolutionVisualizer(filename, file_type=file_type)
-    if plot_params_vs_generations:
-        visualization.plot_params_vs_generations()
-    if plot_costs_vs_generations:
-        visualization.plot_costs_vs_generations()
+    visualization.create_visualizations(**kwargs)
 
 class DifferentialEvolutionVisualizer():
     '''
@@ -498,6 +494,23 @@ class DifferentialEvolutionVisualizer():
         self.gen_numbers = np.arange(1,self.num_generations+1)
         self.param_colors = _color_list_from_num_of_params(self.num_params)
         self.gen_plot = np.array([np.full(self.num_population_members, ind, dtype=int) for ind in self.gen_numbers]).flatten()
+        
+    def create_visualizations(self,
+                              plot_params_vs_generations=True,
+                              plot_costs_vs_generations=True):
+        '''
+        Runs the plots from a differential evolution learner file.
+            
+        Keyword Args:
+            plot_params_generations (Optional [bool]): If True plot parameters
+                vs generations, else do not. Default True. 
+            plot_costs_generations (Optional [bool]): If True plot costs vs
+                generations, else do not. Default True. 
+        '''
+        if plot_params_vs_generations:
+            self.plot_params_vs_generations()
+        if plot_costs_vs_generations:
+            self.plot_costs_vs_generations()
         
     def plot_costs_vs_generations(self):
         '''
