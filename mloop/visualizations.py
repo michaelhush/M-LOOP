@@ -121,7 +121,7 @@ def create_learner_visualizer_from_archive(filename, file_type=None, controller_
         visualizer: An instance of the appropriate visualizer class for plotting
             data from filename.
     '''
-    # Autmatically determine file_type if necessary.
+    # Automatically determine file_type if necessary.
     if file_type is None:
         file_type = mlu.get_file_type(filename)
     
@@ -229,22 +229,27 @@ class ControllerVisualizer():
     ControllerVisualizer creates figures from a Controller Archive. 
     
     Args:
-        filename (String): Filename of the GaussianProcessLearner archive.
+        filename (String): Filename of the controller archive.
     
     Keyword Args:
-        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
     
     '''
-    def __init__(self, filename, 
-                 file_type ='pkl', 
+    def __init__(self, filename,
+                 file_type=None,
                  **kwargs):
         
         self.log = logging.getLogger(__name__)
         
         self.filename = str(filename)
+        # Automatically determine file_type if necessary.
+        if file_type is None:
+            file_type = mlu.get_file_type(self.filename)
         self.file_type = str(file_type)
         if not mlu.check_file_type_supported(self.file_type):
-            self.log.error('GP training file type not supported' + repr(self.file_type))
+            self.log.error('File type not supported: ' + repr(self.file_type))
         controller_dict = mlu.get_dict_from_file(self.filename, self.file_type)
             
         self.archive_type = controller_dict['archive_type']
@@ -444,19 +449,24 @@ class DifferentialEvolutionVisualizer():
         filename (String): Filename of the DifferentialEvolutionVisualizer archive.
     
     Keyword Args:
-        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
     
     '''
-    def __init__(self, filename, 
-                 file_type ='pkl', 
+    def __init__(self, filename,
+                 file_type=None,
                  **kwargs):
         
         self.log = logging.getLogger(__name__)
         
         self.filename = str(filename)
+        # Automatically determine file_type if necessary.
+        if file_type is None:
+            file_type = mlu.get_file_type(self.filename)
         self.file_type = str(file_type)
         if not mlu.check_file_type_supported(self.file_type):
-            self.log.error('GP training file type not supported' + repr(self.file_type))
+            self.log.error('File type not supported: ' + repr(self.file_type))
         learner_dict = mlu.get_dict_from_file(self.filename, self.file_type)
         
         if 'archive_type' in learner_dict and not (learner_dict['archive_type'] == 'differential_evolution'):
@@ -572,11 +582,13 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         filename (String): Filename of the GaussianProcessLearner archive.
     
     Keyword Args:
-        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
       
     '''
     
-    def __init__(self, filename, file_type = 'pkl', **kwargs):
+    def __init__(self, filename, file_type=None, **kwargs):
         
         super(GaussianProcessVisualizer, self).__init__(gp_training_filename = filename,
                                                         gp_training_file_type = file_type,
@@ -830,14 +842,15 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
     NeuralNetVisualizer extends of NeuralNetLearner, designed not to be used as a learner, but to instead post process a NeuralNetLearner archive file and produce useful data for visualization of the state of the learner. 
     
     Args:
-        filename (String): Filename of the GaussianProcessLearner archive.
+        filename (String): Filename of the NeuralNetLearner archive.
     
     Keyword Args:
-        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
-      
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
     '''
     
-    def __init__(self, filename, file_type = 'pkl', **kwargs):
+    def __init__(self, filename, file_type = None, **kwargs):
         
         
         
