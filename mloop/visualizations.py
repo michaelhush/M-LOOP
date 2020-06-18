@@ -98,6 +98,60 @@ def show_all_default_visualizations_from_archive(controller_filename, learner_fi
     if show_plots:
         plt.show()
 
+def create_learner_visualizer_from_archive(filename, file_type=None, controller_type=None, **kwargs):
+    '''
+    Create an instance of the appropriate visualizer class for a learner archive.
+    
+    Args:
+        filename (String): Filename of the learner archive.
+    
+    Keyword Args:
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
+        controller_type (String): The type of controller used during the
+            optimization that created the provided learner archive. Options
+            include 'gaussian_process', 'neural_net', and
+            'differential_evolution'. If set to None, then controller_type will
+            be determined automatically from the archive. Default None.
+        **kwargs: Additional keyword arguments are passed to the calll to the
+            visualizer's __init__() method.
+
+    Returns:
+        visualizer: An instance of the appropriate visualizer class for plotting
+            data from filename.
+    '''
+    # Autmatically determine file_type if necessary.
+    if file_type is None:
+        file_type = mlu.get_file_type(filename)
+    
+    # Ensure file_type is supported.
+    log = logging.getLogger(__name__)
+    if not mlu.check_file_type_supported(file_type):
+        log.error('File type not supported: ' + repr(file_type))
+    
+    # Automatically determine controller_type if necessary.
+    if controller_type is None:
+        learner_dict = mlu.get_dict_from_file(filename, file_type)
+        controller_type = learner_dict['archive_type']
+        
+    # Create an instance of the appropriate visualizer class for the archive.
+    if controller_type == 'neural_net':
+        log.debug('Creating neural net visualizer.')
+        visualizer = NeuralNetVisualizer(filename, file_type, **kwargs)
+    elif controller_type == 'gaussian_process':
+        log.debug('Creating gaussian process visualizer.')
+        visualizer = GaussianProcessVisualizer(filename, file_type, **kwargs)
+    elif controller_type == 'differential_evolution':
+        log.debug('Creating differential evolution visualizer.')
+        visualizer = DifferentialEvolutionVisualizer(filename, file_type, **kwargs)
+    else:
+        message = 'create_learner_visualizer_from_archive() not implemented for type: ' + controller_type
+        log.error(message)
+        raise ValueError(message)
+    
+    return visualizer
+
 def _color_from_controller_name(controller_name):
     '''
     Gives a color (as a number betweeen zero an one) corresponding to each controller name string.
