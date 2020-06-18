@@ -856,9 +856,9 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             
 def create_neural_net_learner_visualizations(filename,
                                              file_type=None,
-                                             plot_cross_sections=True):
+                                             **kwargs):
     '''
-    Creates plots from a neural nets learner file.
+    Creates plots from a neural net's learner file.
     
     Args:
         filename (Optional [string]): Filename for the neural net archive. Must provide datetime or filename. Default None.
@@ -867,15 +867,11 @@ def create_neural_net_learner_visualizations(filename,
         file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
             for text. If set to None, then the type will be determined from the
             extension in filename. Default None.
-        plot_cross_sections (Optional [bool]): If True plot predicted landscape
-            cross sections, else do not. Default True. 
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            create_visualizations() method.
     '''
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
-    if plot_cross_sections:
-        visualization.do_cross_sections()
-    visualization.plot_surface()
-    visualization.plot_density_surface()
-    visualization.plot_losses()
+    visualization.create_visualizations(**kwargs)
 
             
 class NeuralNetVisualizer(mll.NeuralNetLearner):
@@ -925,6 +921,20 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         Overides the GaussianProcessLearner multiprocessor run routine. Does nothing but makes a warning.
         '''
         self.log.warning('You should not have executed start() from the GaussianProcessVisualizer. It is not intended to be used as a independent process. Ending.')
+    
+    def create_visualizations(self, plot_cross_sections=True):
+        '''
+        Creates plots from a neural net's learner file.
+            
+        Keyword Args:
+            plot_cross_sections (Optional [bool]): If True plot predicted
+                landscape cross sections, else do not. Default True. 
+        '''
+        if plot_cross_sections:
+            self.do_cross_sections()
+        self.plot_surface()
+        self.plot_density_surface()
+        self.plot_losses()
     
       
     def return_cross_sections(self, points=100, cross_section_center=None):
