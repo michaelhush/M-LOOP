@@ -191,9 +191,7 @@ def configure_plots():
     
 def create_controller_visualizations(filename,
                                     file_type=None,
-                                    plot_cost_vs_run=True,
-                                    plot_parameters_vs_run=True,
-                                    plot_parameters_vs_cost=True):
+                                    **kwargs):
     '''
     Runs the plots for a controller file.
     
@@ -204,17 +202,11 @@ def create_controller_visualizations(filename,
         file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
             for text. If set to None, then the type will be determined from the
             extension in filename. Default None.
-        plot_cost_vs_run (Optional [bool]): If True plot cost versus run number, else do not. Default True. 
-        plot_parameters_vs_run (Optional [bool]): If True plot parameters versus run number, else do not. Default True. 
-        plot_parameters_vs_cost (Optional [bool]): If True plot parameters versus cost number, else do not. Default True. 
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            create_visualizations() method.
     '''
     visualization = ControllerVisualizer(filename,file_type=file_type)
-    if plot_cost_vs_run:
-        visualization.plot_cost_vs_run()
-    if plot_parameters_vs_run:
-        visualization.plot_parameters_vs_run()
-    if plot_parameters_vs_cost:
-       visualization.plot_parameters_vs_cost()
+    visualization.create_visualizations(**kwargs)
 
 class ControllerVisualizer():
     '''
@@ -273,6 +265,28 @@ class ControllerVisualizer():
         self.in_numbers = np.arange(1,self.num_in_costs+1)
         self.out_numbers = np.arange(1,self.num_out_params+1)
         self.param_numbers = np.arange(self.num_params)
+    
+    def create_visualizations(self,
+                              plot_cost_vs_run=True,
+                              plot_parameters_vs_run=True,
+                              plot_parameters_vs_cost=True):
+        '''
+        Runs the plots for a controller file.
+        
+        Keyword Args:
+            plot_cost_vs_run (Optional [bool]): If True plot cost versus run
+                number, else do not. Default True. 
+            plot_parameters_vs_run (Optional [bool]): If True plot parameters
+                versus run number, else do not. Default True. 
+            plot_parameters_vs_cost (Optional [bool]): If True plot parameters
+                versus cost number, else do not. Default True. 
+        '''
+        if plot_cost_vs_run:
+            self.plot_cost_vs_run()
+        if plot_parameters_vs_run:
+            self.plot_parameters_vs_run()
+        if plot_parameters_vs_cost:
+            self.plot_parameters_vs_cost()
         
     def plot_cost_vs_run(self):
         '''
