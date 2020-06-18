@@ -31,7 +31,8 @@ def show_all_default_visualizations(controller, show_plots=True):
         controller (Controller): The controller to extract plots from
         
     Keyword Args:
-        show_plots (Controller): Determine whether to run plt.show() at the end or not. For debugging. 
+        show_plots (bool): Determine whether to run plt.show() at the end or
+            not. For debugging. Default True.
     '''
     log = logging.getLogger(__name__)
     configure_plots()
@@ -223,7 +224,7 @@ def create_controller_visualizations(filename,
     Runs the plots for a controller file.
     
     Args:
-        filename (Optional [string]): Filename for the controller archive. 
+        filename (String): Filename of the controller archive.
     
     Keyword Args:
         file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
@@ -460,7 +461,8 @@ def create_differential_evolution_learner_visualizations(filename,
     Runs the plots from a differential evolution learner file.
     
     Args:
-        filename (Optional [string]): Filename for the differential evolution archive. Must provide datetime or filename. Default None.
+        filename (String): Filename for the differential evolution learner
+            archive.
         
     Keyword Args:
         file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
@@ -609,7 +611,7 @@ def create_gaussian_process_learner_visualizations(filename,
     Runs the plots from a gaussian process learner file.
     
     Args:
-        filename (Optional [string]): Filename for the gaussian process archive. Must provide datetime or filename. Default None.
+        filename (String): Filename for the gaussian process learner archive.
         
     Keyword Args:
         file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
@@ -888,7 +890,7 @@ def create_neural_net_learner_visualizations(filename,
     Creates plots from a neural net's learner file.
     
     Args:
-        filename (Optional [string]): Filename for the neural net archive. Must provide datetime or filename. Default None.
+        filename (String): Filename for the neural net learner archive.
         
     Keyword Args:
         file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
