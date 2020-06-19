@@ -39,7 +39,9 @@ The shell interface is for experiments that can be run through a command execute
 Controllers
 ===========
 
-There are currently three controller types supported: 'gaussian_process', 'random' and 'nelder_mead'. The default is 'gaussian_process'. You can set which interface you want to use with the option::
+There are currently five controller types supported: 'gaussian_process', 'neural_net', 'differential_evolution', 'nelder_mead', and 'random'.
+The default is 'gaussian_process'.
+You can set which interface you want to use with the option::
 
    controller_type = [name]
 
