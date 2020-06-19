@@ -31,7 +31,8 @@ def show_all_default_visualizations(controller, show_plots=True):
         controller (Controller): The controller to extract plots from
         
     Keyword Args:
-        show_plots (Controller): Determine whether to run plt.show() at the end or not. For debugging. 
+        show_plots (bool): Determine whether to run plt.show() at the end or
+            not. For debugging. Default True.
     '''
     log = logging.getLogger(__name__)
     configure_plots()
@@ -53,26 +54,137 @@ def show_all_default_visualizations(controller, show_plots=True):
     if show_plots:
         plt.show()
 
-def show_all_default_visualizations_from_archive(controller_filename, learner_filename, controller_type, show_plots=True):
+def show_all_default_visualizations_from_archive(controller_filename,
+                                                 learner_filename,
+                                                 controller_type=None,
+                                                 show_plots=True,
+                                                 controller_visualization_kwargs=None,
+                                                 learner_visualization_kwargs=None,
+                                                 learner_visualizer_init_kwargs=None):
+    '''
+    Plots all visualizations available for a controller and its learner from their archives.
+    
+    Args:
+        controller_filename (str): The filename, inlcuding path, of the
+            controller archive.
+        learner_filename (str): The filename, inlcuding path, of the learner
+            archive.
+        
+    Keyword Args:
+        controller_type (str): The value of controller_type type used in the
+            optimization corresponding to the learner learner archive, e.g.
+            'gaussian_process', 'neural_net', or 'differential_evolution'. If
+            set to None then controller_type will be determined automatically.
+            Default None.
+        show_plots (bool): Determine whether to run plt.show() at the end or
+            not. For debugging. Default True.
+        controller_visualization_kwargs (dict): Keyword arguments to pass to the
+            controller visualizer's create_visualizations() method. If set to
+            None, no additional keyword arguments will be passed. Default None.
+        learner_visualization_kwargs (dict): Keyword arguments to pass to the
+            learner visualizer's create_visualizations() method.  If set to
+            None, no additional keyword arguments will be passed. Default None.
+        learner_visualizer_init_kwargs (dict): Keyword arguments to pass to the
+            learner visualizer's __init__() method. If set to None, no
+            additional keyword arguments will be passed. Default None.
+    '''
+    # Set default value for controller_visualization_kwargs if necessary
+    if controller_visualization_kwargs is None:
+        controller_visualization_kwargs = {}
+    
     log = logging.getLogger(__name__)
     configure_plots()
+    
+    # Create visualizations for the controller archive.
     log.debug('Creating controller visualizations.')
-    controller_file_type = controller_filename.split(".")[-1]
-    learner_file_type = learner_filename.split(".")[-1]
-    create_controller_visualizations(controller_filename, file_type=controller_file_type)
-
-    if controller_type == 'neural_net':
-        log.debug('Creating neural net visualizations.')
-        create_neural_net_learner_visualizations(
-            learner_filename,
-            file_type=learner_file_type)
-    else:
-        log.error('show_all_default_visualizations not implemented for type: ' + controller_type)
-        raise ValueError
+    create_controller_visualizations(
+        controller_filename,
+        **controller_visualization_kwargs,
+    )
+    
+    # Create visualizations for the learner archive.
+    create_learner_visualizations(
+        learner_filename,
+        learner_visualization_kwargs=learner_visualization_kwargs,
+        learner_visualizer_init_kwargs=learner_visualizer_init_kwargs,
+    )
 
     log.info('Showing visualizations, close all to end MLOOP.')
     if show_plots:
         plt.show()
+
+def create_learner_visualizer_from_archive(filename, controller_type=None, **kwargs):
+    '''
+    Create an instance of the appropriate visualizer class for a learner archive.
+    
+    Args:
+        filename (String): Filename of the learner archive.
+    
+    Keyword Args:
+        controller_type (String): The type of controller used during the
+            optimization that created the provided learner archive. Options
+            include 'gaussian_process', 'neural_net', and
+            'differential_evolution'. If set to None, then controller_type will
+            be determined automatically from the archive. Default None.
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            __init__() method.
+
+    Returns:
+        visualizer: An instance of the appropriate visualizer class for plotting
+            data from filename.
+    '''
+    # Automatically determine controller_type if necessary.
+    if controller_type is None:
+        controller_type = mlu.get_controller_type_from_learner_archive(filename)
+        
+    # Create an instance of the appropriate visualizer class for the archive.
+    log = logging.getLogger(__name__)
+    if controller_type == 'neural_net':
+        log.debug('Creating neural net visualizer.')
+        visualizer = NeuralNetVisualizer(filename, **kwargs)
+    elif controller_type == 'gaussian_process':
+        log.debug('Creating gaussian process visualizer.')
+        visualizer = GaussianProcessVisualizer(filename, **kwargs)
+    elif controller_type == 'differential_evolution':
+        log.debug('Creating differential evolution visualizer.')
+        visualizer = DifferentialEvolutionVisualizer(filename, **kwargs)
+    else:
+        message = ('create_learner_visualizer_from_archive() not implemented '
+                   'for type: {type_}.').format(type_=controller_type)
+        log.error(message)
+        raise ValueError(message)
+    
+    return visualizer
+
+def create_learner_visualizations(filename,
+                                  learner_visualization_kwargs=None,
+                                  learner_visualizer_init_kwargs=None):
+    '''
+    Runs the plots for a learner archive file.
+    
+    Args:
+        filename (str): Filename for the learner archive. 
+    
+    Keyword Args:
+        learner_visualization_kwargs (dict): Keyword arguments to pass to the
+            learner visualizer's create_visualizations() method.  If set to
+            None, no additional keyword arguments will be passed. Default None.
+        learner_visualizer_init_kwargs (dict): Keyword arguments to pass to the
+            learner visualizer's __init__() method. If set to None, no
+            additional keyword arguments will be passed. Default None.
+    '''
+    # Set default values as necessary.
+    if learner_visualization_kwargs is None:
+        learner_visualization_kwargs = {}
+    if learner_visualizer_init_kwargs is None:
+        learner_visualizer_init_kwargs = {}
+    
+    # Create a visualizer and have it make the plots.
+    visualizer = create_learner_visualizer_from_archive(
+        filename,
+        **learner_visualizer_init_kwargs,
+    )
+    visualizer.create_visualizations(**learner_visualization_kwargs)
 
 def _color_from_controller_name(controller_name):
     '''
@@ -122,51 +234,50 @@ def configure_plots():
     mpl.rcParams['legend.fontsize']= 'medium'
     
 def create_controller_visualizations(filename,
-                                    file_type='pkl',
-                                    plot_cost_vs_run=True,
-                                    plot_parameters_vs_run=True,
-                                    plot_parameters_vs_cost=True):
+                                    file_type=None,
+                                    **kwargs):
     '''
     Runs the plots for a controller file.
     
     Args:
-        filename (Optional [string]): Filename for the controller archive. 
+        filename (String): Filename of the controller archive.
     
     Keyword Args:
-        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
-        plot_cost_vs_run (Optional [bool]): If True plot cost versus run number, else do not. Default True. 
-        plot_parameters_vs_run (Optional [bool]): If True plot parameters versus run number, else do not. Default True. 
-        plot_parameters_vs_cost (Optional [bool]): If True plot parameters versus cost number, else do not. Default True. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            create_visualizations() method.
     '''
     visualization = ControllerVisualizer(filename,file_type=file_type)
-    if plot_cost_vs_run:
-        visualization.plot_cost_vs_run()
-    if plot_parameters_vs_run:
-        visualization.plot_parameters_vs_run()
-    if plot_parameters_vs_cost:
-       visualization.plot_parameters_vs_cost()
+    visualization.create_visualizations(**kwargs)
 
 class ControllerVisualizer():
     '''
     ControllerVisualizer creates figures from a Controller Archive. 
     
     Args:
-        filename (String): Filename of the GaussianProcessLearner archive.
+        filename (String): Filename of the controller archive.
     
     Keyword Args:
-        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
     
     '''
-    def __init__(self, filename, 
-                 file_type ='pkl', 
+    def __init__(self, filename,
+                 file_type=None,
                  **kwargs):
         
         self.log = logging.getLogger(__name__)
         
         self.filename = str(filename)
+        # Automatically determine file_type if necessary.
+        if file_type is None:
+            file_type = mlu.get_file_type(self.filename)
         self.file_type = str(file_type)
         if not mlu.check_file_type_supported(self.file_type):
-            self.log.error('GP training file type not supported' + repr(self.file_type))
+            self.log.error('File type not supported: ' + repr(self.file_type))
         controller_dict = mlu.get_dict_from_file(self.filename, self.file_type)
             
         self.archive_type = controller_dict['archive_type']
@@ -198,6 +309,28 @@ class ControllerVisualizer():
         self.in_numbers = np.arange(1,self.num_in_costs+1)
         self.out_numbers = np.arange(1,self.num_out_params+1)
         self.param_numbers = np.arange(self.num_params)
+    
+    def create_visualizations(self,
+                              plot_cost_vs_run=True,
+                              plot_parameters_vs_run=True,
+                              plot_parameters_vs_cost=True):
+        '''
+        Runs the plots for a controller file.
+        
+        Keyword Args:
+            plot_cost_vs_run (Optional [bool]): If True plot cost versus run
+                number, else do not. Default True. 
+            plot_parameters_vs_run (Optional [bool]): If True plot parameters
+                versus run number, else do not. Default True. 
+            plot_parameters_vs_cost (Optional [bool]): If True plot parameters
+                versus cost number, else do not. Default True. 
+        '''
+        if plot_cost_vs_run:
+            self.plot_cost_vs_run()
+        if plot_parameters_vs_run:
+            self.plot_parameters_vs_run()
+        if plot_parameters_vs_cost:
+            self.plot_parameters_vs_cost()
         
     def plot_cost_vs_run(self):
         '''
@@ -338,25 +471,24 @@ class ControllerVisualizer():
         plt.legend(artists,[str(x) for x in parameter_subset], loc=legend_loc)
 
 def create_differential_evolution_learner_visualizations(filename,
-                                                         file_type='pkl',
-                                                         plot_params_vs_generations=True,
-                                                         plot_costs_vs_generations=True):
+                                                         file_type=None,
+                                                         **kwargs):
     '''
     Runs the plots from a differential evolution learner file.
     
     Args:
-        filename (Optional [string]): Filename for the differential evolution archive. Must provide datetime or filename. Default None.
+        filename (String): Filename for the differential evolution learner
+            archive.
         
     Keyword Args:
-        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
-        plot_params_generations (Optional [bool]): If True plot parameters vs generations, else do not. Default True. 
-        plot_costs_generations (Optional [bool]): If True plot costs vs generations, else do not. Default True. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            create_visualizations() method.
     '''
     visualization = DifferentialEvolutionVisualizer(filename, file_type=file_type)
-    if plot_params_vs_generations:
-        visualization.plot_params_vs_generations()
-    if plot_costs_vs_generations:
-        visualization.plot_costs_vs_generations()
+    visualization.create_visualizations(**kwargs)
 
 class DifferentialEvolutionVisualizer():
     '''
@@ -366,19 +498,24 @@ class DifferentialEvolutionVisualizer():
         filename (String): Filename of the DifferentialEvolutionVisualizer archive.
     
     Keyword Args:
-        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
     
     '''
-    def __init__(self, filename, 
-                 file_type ='pkl', 
+    def __init__(self, filename,
+                 file_type=None,
                  **kwargs):
         
         self.log = logging.getLogger(__name__)
         
         self.filename = str(filename)
+        # Automatically determine file_type if necessary.
+        if file_type is None:
+            file_type = mlu.get_file_type(self.filename)
         self.file_type = str(file_type)
         if not mlu.check_file_type_supported(self.file_type):
-            self.log.error('GP training file type not supported' + repr(self.file_type))
+            self.log.error('File type not supported: ' + repr(self.file_type))
         learner_dict = mlu.get_dict_from_file(self.filename, self.file_type)
         
         if 'archive_type' in learner_dict and not (learner_dict['archive_type'] == 'differential_evolution'):
@@ -402,6 +539,23 @@ class DifferentialEvolutionVisualizer():
         self.gen_numbers = np.arange(1,self.num_generations+1)
         self.param_colors = _color_list_from_num_of_params(self.num_params)
         self.gen_plot = np.array([np.full(self.num_population_members, ind, dtype=int) for ind in self.gen_numbers]).flatten()
+        
+    def create_visualizations(self,
+                              plot_params_vs_generations=True,
+                              plot_costs_vs_generations=True):
+        '''
+        Runs the plots from a differential evolution learner file.
+            
+        Keyword Args:
+            plot_params_generations (Optional [bool]): If True plot parameters
+                vs generations, else do not. Default True. 
+            plot_costs_generations (Optional [bool]): If True plot costs vs
+                generations, else do not. Default True. 
+        '''
+        if plot_params_vs_generations:
+            self.plot_params_vs_generations()
+        if plot_costs_vs_generations:
+            self.plot_costs_vs_generations()
         
     def plot_costs_vs_generations(self):
         '''
@@ -467,24 +621,23 @@ class DifferentialEvolutionVisualizer():
         plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
         
 def create_gaussian_process_learner_visualizations(filename,
-                                                   file_type='pkl',
-                                                   plot_cross_sections=True,
-                                                   plot_hyperparameters_vs_run=True):
+                                                   file_type=None,
+                                                   **kwargs):
     '''
     Runs the plots from a gaussian process learner file.
     
     Args:
-        filename (Optional [string]): Filename for the gaussian process archive. Must provide datetime or filename. Default None.
+        filename (String): Filename for the gaussian process learner archive.
         
     Keyword Args:
-        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
-        plot_cross_sections (Optional [bool]): If True plot predict landscape cross sections, else do not. Default True. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            create_visualizations() method.
     '''
     visualization = GaussianProcessVisualizer(filename, file_type=file_type)
-    if plot_cross_sections:
-        visualization.plot_cross_sections()
-    if plot_hyperparameters_vs_run:
-        visualization.plot_hyperparameters_vs_run()
+    visualization.create_visualizations(**kwargs)
     
 class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     '''
@@ -494,11 +647,13 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         filename (String): Filename of the GaussianProcessLearner archive.
     
     Keyword Args:
-        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
       
     '''
     
-    def __init__(self, filename, file_type = 'pkl', **kwargs):
+    def __init__(self, filename, file_type=None, **kwargs):
         
         super(GaussianProcessVisualizer, self).__init__(gp_training_filename = filename,
                                                         gp_training_file_type = file_type,
@@ -577,6 +732,24 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
         uncertainty_arrays = np.array(uncertainty_arrays)
         return (cross_parameter_arrays,cost_arrays,uncertainty_arrays) 
+    
+    def create_visualizations(self,
+                              plot_cross_sections=True,
+                              plot_hyperparameters_vs_run=True):
+        '''
+        Runs the plots from a gaussian process learner file.
+            
+        Keyword Args:
+            plot_cross_sections (Optional [bool]): If True plot predicted
+                landscape cross sections, else do not. Default True. 
+            plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
+                hyperparameters as a function of run number, else do not.
+                Default True.
+        '''
+        if plot_cross_sections:
+            self.plot_cross_sections()
+        if plot_hyperparameters_vs_run:
+            self.plot_hyperparameters_vs_run()
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
         _ensure_parameter_subset_valid(self, parameter_subset)
@@ -727,24 +900,23 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plt.title('GP Learner: Noise level vs fit number.')
             
 def create_neural_net_learner_visualizations(filename,
-                                             file_type='pkl',
-                                             plot_cross_sections=True):
+                                             file_type=None,
+                                             **kwargs):
     '''
-    Creates plots from a neural nets learner file.
+    Creates plots from a neural net's learner file.
     
     Args:
-        filename (Optional [string]): Filename for the neural net archive. Must provide datetime or filename. Default None.
+        filename (String): Filename for the neural net learner archive.
         
     Keyword Args:
-        file_type (Optional [string]): File type 'pkl' pickle, 'mat' matlab or 'txt' text.
-        plot_cross_sections (Optional [bool]): If True plot predict landscape cross sections, else do not. Default True. 
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
+        **kwargs: Additional keyword arguments are passed to the visualizer's
+            create_visualizations() method.
     '''
     visualization = NeuralNetVisualizer(filename, file_type=file_type)
-    if plot_cross_sections:
-        visualization.do_cross_sections()
-    visualization.plot_surface()
-    visualization.plot_density_surface()
-    visualization.plot_losses()
+    visualization.create_visualizations(**kwargs)
 
             
 class NeuralNetVisualizer(mll.NeuralNetLearner):
@@ -752,14 +924,15 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
     NeuralNetVisualizer extends of NeuralNetLearner, designed not to be used as a learner, but to instead post process a NeuralNetLearner archive file and produce useful data for visualization of the state of the learner. 
     
     Args:
-        filename (String): Filename of the GaussianProcessLearner archive.
+        filename (String): Filename of the NeuralNetLearner archive.
     
     Keyword Args:
-        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt' for text. Default 'pkl'. 
-      
+        file_type (String): Can be 'mat' for matlab, 'pkl' for pickle or 'txt'
+            for text. If set to None, then the type will be determined from the
+            extension in filename. Default None.
     '''
     
-    def __init__(self, filename, file_type = 'pkl', **kwargs):
+    def __init__(self, filename, file_type = None, **kwargs):
         
         
         
@@ -793,6 +966,20 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         Overides the GaussianProcessLearner multiprocessor run routine. Does nothing but makes a warning.
         '''
         self.log.warning('You should not have executed start() from the GaussianProcessVisualizer. It is not intended to be used as a independent process. Ending.')
+    
+    def create_visualizations(self, plot_cross_sections=True):
+        '''
+        Creates plots from a neural net's learner file.
+            
+        Keyword Args:
+            plot_cross_sections (Optional [bool]): If True plot predicted
+                landscape cross sections, else do not. Default True. 
+        '''
+        if plot_cross_sections:
+            self.do_cross_sections()
+        self.plot_surface()
+        self.plot_density_surface()
+        self.plot_losses()
     
       
     def return_cross_sections(self, points=100, cross_section_center=None):

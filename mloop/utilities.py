@@ -207,7 +207,78 @@ def get_dict_from_file(filename,file_type):
     else:
         raise ValueError
     return dictionary
+
+def get_file_type(filename):
+    '''
+    Get the file type of a file from the extension in its filename.
     
+    Args:
+        filename (String): The filename including extension, and optionally
+            including path, from which to extract the file type.
+
+    Returns:
+        file_type (String): The file's type, inferred from its extension. The
+            type does NOT include a leading period.
+    '''
+    _, file_type = os.path.splitext(filename)
+    file_type = file_type[1:]  # Remove leading '.'.
+    return file_type
+
+def get_controller_type_from_learner_archive(learner_filename):
+    '''
+    Determine the controller_type used in an optimization.
+    
+    This function returns the value used for controller_type during an
+    optimization run, determined by examining the optimization's learner
+    archive.
+    
+    Args:
+        learner_filename (String): The file name including extension, and
+            optionally including path, of a learner archive.
+
+    Returns:
+        controller_type (String): A string specifying the value for
+            controller_type used during the optimization run that produced the
+            provided learner archive.
+    '''
+    # Automatically determine file_type.
+    file_type = get_file_type(learner_filename)
+    
+    # Ensure file_type is supported.
+    log = logging.getLogger(__name__)
+    if not check_file_type_supported(file_type):
+        message = 'File type not supported: ' + repr(file_type)
+        log.error(message)
+        raise ValueError(message)
+    
+    # Get archive_type from the archive.
+    learner_dict = get_dict_from_file(learner_filename, file_type)
+    archive_type = learner_dict['archive_type']
+    
+    # Raise a helpful error if a controller archive was provided instead of a
+    # learner archive.
+    if archive_type == 'controller':
+        message = ('{filename} is a controller archive, not a '
+                   'learner archive.').format(filename=learner_filename)
+        log.error(message)
+        raise ValueError(message)
+    
+    # Convert archive_type to corresponding controller_type.
+    ARCHIVE_CONTROLLER_MAPPING = {
+        'gaussian_process_learner': 'gaussian_process',
+        'neural_net_learner': 'neural_net',
+        'differential_evolution': 'differential_evolution',
+    }
+    if archive_type in ARCHIVE_CONTROLLER_MAPPING:
+        controller_type = ARCHIVE_CONTROLLER_MAPPING[archive_type]
+    else:
+        message = ('Learner archive has unsupported archive_type: '
+                   '{archive_type}').format(archive_type=archive_type)
+        log.error(message)
+        raise NotImplementedError(message)
+    
+    return controller_type
+
 def check_file_type_supported(file_type):
     '''
     Checks whether the file type is supported

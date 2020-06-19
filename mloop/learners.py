@@ -920,13 +920,16 @@ class GaussianProcessLearner(Learner, mp.Process):
                  default_bad_uncertainty = None,
                  minimum_uncertainty = 1e-8,
                  gp_training_filename =None,
-                 gp_training_file_type ='txt',
+                 gp_training_file_type = None,
                  predict_global_minima_at_end = True,
                  **kwargs):
         
         if gp_training_filename is not None:
             
             gp_training_filename = str(gp_training_filename)
+            # Automatically determine gp_training_file_type if necessary.
+            if gp_training_file_type is None:
+                gp_training_file_type = mlu.get_file_type(gp_training_filename)
             gp_training_file_type = str(gp_training_file_type)
             if not mlu.check_file_type_supported(gp_training_file_type):
                 self.log.error('GP training file type not supported' + repr(gp_training_file_type))
@@ -1466,7 +1469,7 @@ class NeuralNetLearner(Learner, mp.Process):
                  default_bad_cost = None,
                  default_bad_uncertainty = None,
                  nn_training_filename =None,
-                 nn_training_file_type ='txt',
+                 nn_training_file_type =None,
                  minimum_uncertainty = 1e-8,
                  predict_global_minima_at_end = True,
                  **kwargs):
@@ -1474,6 +1477,9 @@ class NeuralNetLearner(Learner, mp.Process):
         if nn_training_filename is not None:
             
             nn_training_filename = str(nn_training_filename)
+            # Automatically determine file_type if necessary.
+            if nn_training_file_type is None:
+                nn_training_file_type = mlu.get_file_type(nn_training_filename)
             nn_training_file_type = str(nn_training_file_type)
             if not mlu.check_file_type_supported(nn_training_file_type):
                 self.log.error('NN training file type not supported' + repr(nn_training_file_type))
