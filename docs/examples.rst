@@ -45,7 +45,7 @@ You can set which interface you want to use with the option::
 
    controller_type = [name]
 
-Each of the controllers and their specific options are described below. There is also a set of common options shared by all controllers which is described in *controller_options.txt*. The common options include the parameter settings and the halting conditions.
+Each of the controllers and their specific options are described below. There is also a set of common options shared by all controllers which is described in *controller_config.txt*. The common options include the parameter settings and the halting conditions.
 
 .. include:: ../examples/controller_config.txt
    :literal:
