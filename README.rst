@@ -16,9 +16,9 @@ http://m-loop.readthedocs.io/
 
 Or you can build it by entering the docs folder and running::
 
-    build html
+    make html
 
-The docs can then be found in docs/build/html
+The docs can then be found in docs/_build/html
 
 If you use M-LOOP please cite its first application:
 
