@@ -94,7 +94,6 @@ pytest         >=2.9
 setuptools     >=26   
 scikit-learn   >=0.18
 scipy          >=0.17
-plotly         >=2.0.8
 tensorflow     >=1.1.0
 ============   =======  
 
