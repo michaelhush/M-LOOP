@@ -93,10 +93,12 @@ pip            >=7.0
 pytest         >=2.9
 setuptools     >=26   
 scikit-learn   >=0.18
-scipy          >=0.17 
+scipy          >=0.17
+plotly         >=2.0.8
+tensorflow     >=1.1.0
 ============   =======  
 
-These packages should be automatically installed by pip or the script setup.py when you install M-LOOP.
+These packages should be automatically installed by pip or the script setup.py when you install M-LOOP. The setup script itself requires pytest-runner.
 
 However, if you are using Anaconda some packages that are managed by the conda command may not be correctly updated, even if your installation passes all the tests. In this case, you will have to update these packages manually. You can check what packages you have installed and their version with the command::
 
