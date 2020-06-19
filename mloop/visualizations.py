@@ -58,6 +58,7 @@ def show_all_default_visualizations_from_archive(controller_filename,
                                                  learner_filename,
                                                  controller_type=None,
                                                  show_plots=True,
+                                                 max_parameters_per_plot=None,
                                                  controller_visualization_kwargs=None,
                                                  learner_visualization_kwargs=None,
                                                  learner_visualizer_init_kwargs=None):
@@ -77,7 +78,17 @@ def show_all_default_visualizations_from_archive(controller_filename,
             set to None then controller_type will be determined automatically.
             Default None.
         show_plots (bool): Determine whether to run plt.show() at the end or
-            not. For debugging. Default True.
+            not. For debugging. Default True. 
+        max_parameters_per_plot (Optional [int]): The maximum number of
+            parameters to include in plots that display the values of
+            parameters. If the number of parameters is larger than
+            parameters_per_plot, then the parameters will be divided into groups
+            and each group will be plotted in its own figure. If set to None,
+            then all parameters will be included in the same plot regardless of
+            how many there are. If a value for max_parameters_per_plot is
+            included in controller_visualization_kwargs, then the value in that
+            dictionary will override this setting. The same applies to
+            learner_visualization_kwargs. Default None.
         controller_visualization_kwargs (dict): Keyword arguments to pass to the
             controller visualizer's create_visualizations() method. If set to
             None, no additional keyword arguments will be passed. Default None.
@@ -88,9 +99,14 @@ def show_all_default_visualizations_from_archive(controller_filename,
             learner visualizer's __init__() method. If set to None, no
             additional keyword arguments will be passed. Default None.
     '''
-    # Set default value for controller_visualization_kwargs if necessary
+    # Set default value for controller_visualization_kwargs if necessary.
     if controller_visualization_kwargs is None:
         controller_visualization_kwargs = {}
+    
+    # Update controller_visualization_kwargs with max_parameters_per_plot if
+    # necessary.
+    if 'max_parameters_per_plot' not in controller_visualization_kwargs:
+        controller_visualization_kwargs['max_parameters_per_plot'] = max_parameters_per_plot
     
     log = logging.getLogger(__name__)
     configure_plots()
@@ -105,6 +121,7 @@ def show_all_default_visualizations_from_archive(controller_filename,
     # Create visualizations for the learner archive.
     create_learner_visualizations(
         learner_filename,
+        max_parameters_per_plot=max_parameters_per_plot,
         learner_visualization_kwargs=learner_visualization_kwargs,
         learner_visualizer_init_kwargs=learner_visualizer_init_kwargs,
     )
@@ -157,6 +174,7 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
     return visualizer
 
 def create_learner_visualizations(filename,
+                                  max_parameters_per_plot=None,
                                   learner_visualization_kwargs=None,
                                   learner_visualizer_init_kwargs=None):
     '''
@@ -166,6 +184,15 @@ def create_learner_visualizations(filename,
         filename (str): Filename for the learner archive. 
     
     Keyword Args:
+        max_parameters_per_plot (Optional [int]): The maximum number of
+            parameters to include in plots that display the values of
+            parameters. If the number of parameters is larger than
+            parameters_per_plot, then the parameters will be divided into groups
+            and each group will be plotted in its own figure. If set to None,
+            then all parameters will be included in the same plot regardless of
+            how many there are. If a value for max_parameters_per_plot is
+            included in learner_visualization_kwargs, then the value in that
+            dictionary will override this setting. Default None.
         learner_visualization_kwargs (dict): Keyword arguments to pass to the
             learner visualizer's create_visualizations() method.  If set to
             None, no additional keyword arguments will be passed. Default None.
@@ -178,6 +205,11 @@ def create_learner_visualizations(filename,
         learner_visualization_kwargs = {}
     if learner_visualizer_init_kwargs is None:
         learner_visualizer_init_kwargs = {}
+        
+    # Update controller_visualization_kwargs with max_parameters_per_plot if
+    # necessary.
+    if 'max_parameters_per_plot' not in learner_visualization_kwargs:
+        learner_visualization_kwargs['max_parameters_per_plot'] = max_parameters_per_plot
     
     # Create a visualizer and have it make the plots.
     visualizer = create_learner_visualizer_from_archive(
