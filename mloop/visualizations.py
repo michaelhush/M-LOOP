@@ -313,7 +313,8 @@ class ControllerVisualizer():
     def create_visualizations(self,
                               plot_cost_vs_run=True,
                               plot_parameters_vs_run=True,
-                              plot_parameters_vs_cost=True):
+                              plot_parameters_vs_cost=True,
+                              max_parameters_per_plot=None):
         '''
         Runs the plots for a controller file.
         
@@ -324,13 +325,29 @@ class ControllerVisualizer():
                 versus run number, else do not. Default True. 
             plot_parameters_vs_cost (Optional [bool]): If True plot parameters
                 versus cost number, else do not. Default True. 
+            max_parameters_per_plot (Optional [int]): The maximum number of
+                parameters to include in plots that display the values of
+                parameters. If the number of parameters is larger than
+                parameters_per_plot, then the parameters will be divided into
+                groups and each group will be plotted in its own figure. If set
+                to None, then all parameters will be included in the same plot
+                regardless of how many there are. Default None.
         '''
+        parameter_chunks = mlu.chunk_list(
+            self.param_numbers,
+            max_parameters_per_plot,
+        )
+        
         if plot_cost_vs_run:
             self.plot_cost_vs_run()
+            
         if plot_parameters_vs_run:
-            self.plot_parameters_vs_run()
+            for parameter_chunk in parameter_chunks:
+                self.plot_parameters_vs_run(parameter_subset=parameter_chunk)
+                
         if plot_parameters_vs_cost:
-            self.plot_parameters_vs_cost()
+            for parameter_chunk in parameter_chunks:
+                self.plot_parameters_vs_cost(parameter_subset=parameter_chunk)
         
     def plot_cost_vs_run(self):
         '''
@@ -542,7 +559,8 @@ class DifferentialEvolutionVisualizer():
         
     def create_visualizations(self,
                               plot_params_vs_generations=True,
-                              plot_costs_vs_generations=True):
+                              plot_costs_vs_generations=True,
+                              max_parameters_per_plot=None):
         '''
         Runs the plots from a differential evolution learner file.
             
@@ -551,9 +569,25 @@ class DifferentialEvolutionVisualizer():
                 vs generations, else do not. Default True. 
             plot_costs_generations (Optional [bool]): If True plot costs vs
                 generations, else do not. Default True. 
+            max_parameters_per_plot (Optional [int]): The maximum number of
+                parameters to include in plots that display the values of
+                parameters. If the number of parameters is larger than
+                parameters_per_plot, then the parameters will be divided into
+                groups and each group will be plotted in its own figure. If set
+                to None, then all parameters will be included in the same plot
+                regardless of how many there are. Default None.
         '''
+        parameter_chunks = mlu.chunk_list(
+            self.param_numbers,
+            max_parameters_per_plot,
+        )
+        
         if plot_params_vs_generations:
-            self.plot_params_vs_generations()
+            for parameter_chunk in parameter_chunks:
+                self.plot_params_vs_generations(
+                    parameter_subset=parameter_chunk,
+                )
+                
         if plot_costs_vs_generations:
             self.plot_costs_vs_generations()
         
@@ -735,7 +769,8 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     
     def create_visualizations(self,
                               plot_cross_sections=True,
-                              plot_hyperparameters_vs_run=True):
+                              plot_hyperparameters_vs_run=True,
+                              max_parameters_per_plot=None):
         '''
         Runs the plots from a gaussian process learner file.
             
@@ -745,11 +780,30 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
                 hyperparameters as a function of run number, else do not.
                 Default True.
+            max_parameters_per_plot (Optional [int]): The maximum number of
+                parameters to include in plots that display the values of
+                parameters. If the number of parameters is larger than
+                parameters_per_plot, then the parameters will be divided into
+                groups and each group will be plotted in its own figure. If set
+                to None, then all parameters will be included in the same plot
+                regardless of how many there are. Default None.
         '''
+        parameter_chunks = mlu.chunk_list(
+            self.param_numbers,
+            max_parameters_per_plot,
+        )
+        
         if plot_cross_sections:
-            self.plot_cross_sections()
+            for parameter_chunk in parameter_chunks:
+                self.plot_cross_sections(
+                    parameter_subset=parameter_chunk,
+                )
+            
         if plot_hyperparameters_vs_run:
-            self.plot_hyperparameters_vs_run()
+            for parameter_chunk in parameter_chunks:
+                self.plot_hyperparameters_vs_run(
+                    parameter_subset=parameter_chunk,
+                )
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
         _ensure_parameter_subset_valid(self, parameter_subset)
@@ -967,16 +1021,32 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         '''
         self.log.warning('You should not have executed start() from the GaussianProcessVisualizer. It is not intended to be used as a independent process. Ending.')
     
-    def create_visualizations(self, plot_cross_sections=True):
+    def create_visualizations(self,
+                              plot_cross_sections=True,
+                              max_parameters_per_plot=None):
         '''
         Creates plots from a neural net's learner file.
             
         Keyword Args:
             plot_cross_sections (Optional [bool]): If True plot predicted
                 landscape cross sections, else do not. Default True. 
+            max_parameters_per_plot (Optional [int]): The maximum number of
+                parameters to include in plots that display the values of
+                parameters. If the number of parameters is larger than
+                parameters_per_plot, then the parameters will be divided into
+                groups and each group will be plotted in its own figure. If set
+                to None, then all parameters will be included in the same plot
+                regardless of how many there are. Default None.
         '''
+        parameter_chunks = mlu.chunk_list(
+            self.param_numbers,
+            max_parameters_per_plot,
+        )
+        
         if plot_cross_sections:
-            self.do_cross_sections()
+            for parameter_chunk in parameter_chunks:
+                self.do_cross_sections(parameter_subset=parameter_chunk)
+                
         self.plot_surface()
         self.plot_density_surface()
         self.plot_losses()

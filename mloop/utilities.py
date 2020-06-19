@@ -329,7 +329,42 @@ def safe_cast_to_list(in_array):
         out_list = list(in_array)
     
     return out_list
+
+def chunk_list(list_, chunk_size):
+    '''
+    Divide a list into sublists of length chunk_size.
     
+    All elements in list_ will be included in exactly one of the sublists and
+    will be in the same order as in list_. If the length of list_ is not
+    divisible by chunk_size, then the final sublist returned will have fewer
+    than chunk_size elements.
+    
+    Examples:
+        >>> chunk_list([1, 2, 3, 4, 5], 2)
+        [[1, 2], [3, 4], [5]]
+        >>> chunk_list([1, 2, 3, 4, 5], None)
+        [[1, 2, 3, 4, 5]]
+        >>> chunk_list([1, 2, 3, 4, 5], float('inf'))
+        [[1, 2, 3, 4, 5]]
+
+    Args:
+        list_ (list-like): A list (or similar) to divide up into smaller lists.
+        chunk_size (int): The number of elements to have in each sublist. The
+            last sublist will have fewer elements than this if the length of
+            list_ is not divisible by chunk_size. If set to float('inf') or
+            None, then all elements will be put into one sublist.
+    
+    Returns:
+        (list): List of sublists, each of which contains elements from the input
+            list_. Each sublist has length chunk_size except for the last one
+            which may have fewer elements.
+    '''
+    # Deal with special case that chunk_size is infinity.
+    if (chunk_size is None) or (chunk_size == float('inf')):
+        # Make list with one sublist.
+        return [list_]
+    
+    return [list_[i:(i+chunk_size)] for i in range(0, len(list_), chunk_size)]
     
 class NullQueueListener():
     '''
