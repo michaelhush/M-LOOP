@@ -4,7 +4,7 @@
 Installation
 ============
 
-M-LOOP is available on PyPI and can be installed with your favorite package manager; simply search for 'M-LOOP' and install. However, if you want the latest features and a local copy of the examples you should install M-LOOP using the source code from the `Link GitHub <https://github.com/michaelhush/M-LOOP>`_. Detailed installation instruction are provided below.
+M-LOOP is available on PyPI and can be installed with your favorite package manager; simply search for 'M-LOOP' and install. However, if you want the latest features and a local copy of the examples you should install M-LOOP using the source code from the `GitHub <https://github.com/michaelhush/M-LOOP>`_. Detailed installation instruction are provided below.
 
 The installation process involves three steps.
 
@@ -12,7 +12,7 @@ The installation process involves three steps.
 2. Install the latest release of :ref:`sec-M-LOOP`.
 3. (Optional) :ref:`Test<sec-Testing>` your M-LOOP install.
 
-If you are having any trouble with the installation you may need to check your the :ref:`package dependencies<sec-dependencies>` have been correctly installed. If you ares still having trouble, you can `Link submit an issue <https://github.com/michaelhush/M-LOOP/issues>`_ to the GitHub.
+If you are having any trouble with the installation you may need to check your the :ref:`package dependencies<sec-dependencies>` have been correctly installed. If you ares still having trouble, you can `submit an issue <https://github.com/michaelhush/M-LOOP/issues>`_ to the GitHub.
 
 .. _sec-anaconda:
 
