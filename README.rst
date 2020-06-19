@@ -6,7 +6,7 @@ The Machine-Learner Online Optimization Package is designed to automatically and
 
 To install M-LOOP simply run::
 
-python setup.py develop
+    python setup.py develop
 
 In the M-LOOP source folder.
 
@@ -14,9 +14,9 @@ For more details on how to use the package see the documentation. You can see it
 
 http://m-loop.readthedocs.io/
 
-Or you can build it by entering the docs folder and running:
+Or you can build it by entering the docs folder and running::
 
-build html
+    build html
 
 The docs can then be found in docs/build/html
 
