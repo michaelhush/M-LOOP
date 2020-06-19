@@ -23,7 +23,9 @@ log_length_scale_label = 'Log of length scale'
 noise_label = 'Noise level'
 legend_loc = 2
 
-def show_all_default_visualizations(controller, show_plots=True):
+def show_all_default_visualizations(controller,
+                                    show_plots=True,
+                                    max_parameters_per_plot=None):
     '''
     Plots all visualizations available for a controller, and it's internal learners.
     
@@ -31,24 +33,29 @@ def show_all_default_visualizations(controller, show_plots=True):
         controller (Controller): The controller to extract plots from
         
     Keyword Args:
-        show_plots (bool): Determine whether to run plt.show() at the end or
-            not. For debugging. Default True.
+        show_plots (Optional, bool): Determine whether to run plt.show() at the
+            end or not. For debugging. Default True.
+        max_parameters_per_plot (Optional, int): The maximum number of
+            parameters to include in plots that display the values of
+            parameters. If the number of parameters is larger than
+            parameters_per_plot, then the parameters will be divided into groups
+            and each group will be plotted in its own figure. If set to None,
+            then all parameters will be included in the same plot regardless of
+            how many there are. Default None.
     '''
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
-    create_controller_visualizations(controller.total_archive_filename,
-                                    file_type=controller.controller_archive_file_type)
+    create_controller_visualizations(
+        controller.total_archive_filename,
+        max_parameters_per_plot=max_parameters_per_plot,
+    )
     
-    if isinstance(controller, mlc.DifferentialEvolutionController):
-        log.debug('Creating differential evolution visualizations.')
-        create_differential_evolution_learner_visualizations(controller.learner.total_archive_filename, 
-                                                             file_type=controller.learner.learner_archive_file_type)
-        
-    if isinstance(controller, mlc.GaussianProcessController):
-        log.debug('Creating gaussian process visualizations.')
-        create_gaussian_process_learner_visualizations(controller.ml_learner.total_archive_filename, 
-                                                       file_type=controller.ml_learner.learner_archive_file_type)
+    log.debug('Creating learner visualizations.')
+    create_learner_visualizations(
+        controller.learner.total_archive_filename,
+        max_parameters_per_plot=max_parameters_per_plot,
+    )
         
     log.info('Showing visualizations, close all to end MLOOP.')
     if show_plots:
