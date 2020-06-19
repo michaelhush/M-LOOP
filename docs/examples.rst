@@ -92,7 +92,7 @@ There are two example files for the neural net controller: *neural_net_simple_co
 Differential evolution
 ----------------------
 
-The differential evolution (DE) controller uses a `Link DE algorithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
+The differential evolution (DE) controller uses a `DE algorithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
 
 There are two example files for the differential evolution controller: *differential_evolution_simple_config.txt* which contains the basic options.
 
@@ -108,7 +108,7 @@ There are two example files for the differential evolution controller: *differen
 Nelder Mead
 -----------
 
-The Nelder Mead controller implements the `Link Nelder-Mead method <https://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method>`_ for optimization. You can control the starting point and size of the initial simplex of the method with the configuration file.
+The Nelder Mead controller implements the `Nelder-Mead method <https://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method>`_ for optimization. You can control the starting point and size of the initial simplex of the method with the configuration file.
 
 There are two example files for the Nelder-Mead controller: *nelder_mead_simple_config.txt* which contains the basic options.
 
@@ -138,7 +138,7 @@ There are two example files for the random controller: *random_simple_config.txt
 Logging
 =======
 
-You can control the filename of the logs and also the level which is reported to the file and the console. For more information see `Link logging levels <https://docs.python.org/3.6/library/logging.html#levels>`_. The logging options are described in *logging_config.txt*.
+You can control the filename of the logs and also the level which is reported to the file and the console. For more information see `logging levels <https://docs.python.org/3.6/library/logging.html#levels>`_. The logging options are described in *logging_config.txt*.
 
 .. include:: ../examples/logging_config.txt
    :literal:
