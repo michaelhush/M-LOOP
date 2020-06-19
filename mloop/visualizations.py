@@ -58,9 +58,9 @@ def show_all_default_visualizations_from_archive(controller_filename,
                                                  learner_filename,
                                                  controller_type=None,
                                                  show_plots=True,
-                                                 controller_visualization_args={},
-                                                 learner_visualization_args={},
-                                                 learner_visualizer_init_args={}):
+                                                 controller_visualization_kwargs={},
+                                                 learner_visualization_kwargs={},
+                                                 learner_visualizer_init_kwargs={}):
     '''
     Plots all visualizations available for a controller and its learner from their archives.
     
@@ -78,11 +78,11 @@ def show_all_default_visualizations_from_archive(controller_filename,
             Default None.
         show_plots (bool): Determine whether to run plt.show() at the end or
             not. For debugging. Default True.
-        controller_visualization_args (dict): Keyword arguments to pass to the
+        controller_visualization_kwargs (dict): Keyword arguments to pass to the
             controller visualizer's create_visualizations() method. Default {}.
-        learner_visualization_args (dict): Keyword arguments to pass to the
+        learner_visualization_kwargs (dict): Keyword arguments to pass to the
             learner visualizer's create_visualizations() method. Default {}.
-        learner_visualizer_init_args (dict): Keyword arguments to pass to the
+        learner_visualizer_init_kwargs (dict): Keyword arguments to pass to the
             learner visualizer's __init__() method. Default {}.
     '''
     log = logging.getLogger(__name__)
@@ -92,14 +92,14 @@ def show_all_default_visualizations_from_archive(controller_filename,
     log.debug('Creating controller visualizations.')
     create_controller_visualizations(
         controller_filename,
-        **controller_visualization_args,
+        **controller_visualization_kwargs,
     )
     
     # Create visualizations for the learner archive.
     create_learner_visualizations(
         learner_filename,
-        learner_visualization_args=learner_visualization_args,
-        learner_visualizer_init_args=learner_visualizer_init_args,
+        learner_visualization_kwargs=learner_visualization_kwargs,
+        learner_visualizer_init_kwargs=learner_visualizer_init_kwargs,
     )
 
     log.info('Showing visualizations, close all to end MLOOP.')
@@ -150,8 +150,8 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
     return visualizer
 
 def create_learner_visualizations(filename,
-                                  learner_visualization_args={},
-                                  learner_visualizer_init_args={}):
+                                  learner_visualization_kwargs={},
+                                  learner_visualizer_init_kwargs={}):
     '''
     Runs the plots for a learner archive file.
     
@@ -159,16 +159,16 @@ def create_learner_visualizations(filename,
         filename (str): Filename for the learner archive. 
     
     Keyword Args:
-        learner_visualization_args (dict): Keyword arguments to pass to the
+        learner_visualization_kwargs (dict): Keyword arguments to pass to the
             learner visualizer's create_visualizations() method. Default {}.
-        learner_visualizer_init_args (dict): Keyword arguments to pass to the
+        learner_visualizer_init_kwargs (dict): Keyword arguments to pass to the
             learner visualizer's __init__() method. Default {}.
     '''
     visualizer = create_learner_visualizer_from_archive(
         filename,
-        **learner_visualizer_init_args,
+        **learner_visualizer_init_kwargs,
     )
-    visualizer.create_visualizations(**learner_visualization_args)
+    visualizer.create_visualizations(**learner_visualization_kwargs)
 
 def _color_from_controller_name(controller_name):
     '''
