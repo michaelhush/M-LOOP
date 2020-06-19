@@ -21,7 +21,7 @@ Anaconda
 
 We recommend installing Anaconda to get a python environment with all the required scientific packages. The Anaconda distribution is available here:
 
-https://www.continuum.io/downloads
+https://www.anaconda.com/
 
 Follow the installation instructions they provide.
 
