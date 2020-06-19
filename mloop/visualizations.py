@@ -58,9 +58,9 @@ def show_all_default_visualizations_from_archive(controller_filename,
                                                  learner_filename,
                                                  controller_type=None,
                                                  show_plots=True,
-                                                 controller_visualization_kwargs={},
-                                                 learner_visualization_kwargs={},
-                                                 learner_visualizer_init_kwargs={}):
+                                                 controller_visualization_kwargs=None,
+                                                 learner_visualization_kwargs=None,
+                                                 learner_visualizer_init_kwargs=None):
     '''
     Plots all visualizations available for a controller and its learner from their archives.
     
@@ -79,12 +79,19 @@ def show_all_default_visualizations_from_archive(controller_filename,
         show_plots (bool): Determine whether to run plt.show() at the end or
             not. For debugging. Default True.
         controller_visualization_kwargs (dict): Keyword arguments to pass to the
-            controller visualizer's create_visualizations() method. Default {}.
+            controller visualizer's create_visualizations() method. If set to
+            None, no additional keyword arguments will be passed. Default None.
         learner_visualization_kwargs (dict): Keyword arguments to pass to the
-            learner visualizer's create_visualizations() method. Default {}.
+            learner visualizer's create_visualizations() method.  If set to
+            None, no additional keyword arguments will be passed. Default None.
         learner_visualizer_init_kwargs (dict): Keyword arguments to pass to the
-            learner visualizer's __init__() method. Default {}.
+            learner visualizer's __init__() method. If set to None, no
+            additional keyword arguments will be passed. Default None.
     '''
+    # Set default value for controller_visualization_kwargs if necessary
+    if controller_visualization_kwargs is None:
+        controller_visualization_kwargs = {}
+    
     log = logging.getLogger(__name__)
     configure_plots()
     
@@ -150,8 +157,8 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
     return visualizer
 
 def create_learner_visualizations(filename,
-                                  learner_visualization_kwargs={},
-                                  learner_visualizer_init_kwargs={}):
+                                  learner_visualization_kwargs=None,
+                                  learner_visualizer_init_kwargs=None):
     '''
     Runs the plots for a learner archive file.
     
@@ -160,10 +167,19 @@ def create_learner_visualizations(filename,
     
     Keyword Args:
         learner_visualization_kwargs (dict): Keyword arguments to pass to the
-            learner visualizer's create_visualizations() method. Default {}.
+            learner visualizer's create_visualizations() method.  If set to
+            None, no additional keyword arguments will be passed. Default None.
         learner_visualizer_init_kwargs (dict): Keyword arguments to pass to the
-            learner visualizer's __init__() method. Default {}.
+            learner visualizer's __init__() method. If set to None, no
+            additional keyword arguments will be passed. Default None.
     '''
+    # Set default values as necessary.
+    if learner_visualization_kwargs is None:
+        learner_visualization_kwargs = {}
+    if learner_visualizer_init_kwargs is None:
+        learner_visualizer_init_kwargs = {}
+    
+    # Create a visualizer and have it make the plots.
     visualizer = create_learner_visualizer_from_archive(
         filename,
         **learner_visualizer_init_kwargs,
