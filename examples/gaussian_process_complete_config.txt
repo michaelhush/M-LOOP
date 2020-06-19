@@ -23,7 +23,7 @@ predict_global_minima_at_end  = True   #find predicted global minima at end
 no_delay = True                       #whether to wait for the GP to make predictions or not. Default True (do not wait)  
 
 #Training source options
-training_type = 'random'               #training type can be random or nelder_mead
+training_type = 'random'               #training type can be random, differential_evolution, or nelder_mead
 first_params = [1.9,-1.0]              #first parameters to try in initial training
 gp_training_filename = None            #filename for training from previous experiment
 gp_training_file_type  = 'pkl'         #training data file type
