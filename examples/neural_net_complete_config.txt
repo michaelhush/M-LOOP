@@ -8,10 +8,10 @@ target_cost = 0.1                      #cost to beat
 #Neural net controller options
 controller_type = 'neural_net'         #name of controller to use
 num_params = 2                         #number of parameters
-min_boundary = [-10.,-10.]             #minimum boundary
-max_boundary = [10.,10.]               #maximum boundary
+min_boundary = [-10., -10.]            #minimum boundary
+max_boundary = [10. ,10.]              #maximum boundary
 minimum_uncertainty = 1e-8             #minimum uncertainty of cost, required to avoid fitting errors
-trust_region = [5,5]                   #maximum move distance from best params
+trust_region = [5, 5]                  #maximum move distance from best params
 default_bad_cost = 10                  #default cost for bad run
 default_bad_uncertainty = 1            #default uncertainty for bad run
 learner_archive_filename = 'a_word'    #filename of neural net learner archive, can include path
@@ -21,7 +21,7 @@ no_delay = True                        #whether to wait for the GP to make predi
 
 #Training source options
 training_type = 'random'               #training type can be random, differential_evolution, or nelder_mead
-first_params = [1.9,-1.0]              #first parameters to try in initial training
+first_params = [1.9, -1.0]             #first parameters to try in initial training
 nn_training_filename = None            #filename for training from previous experiment
 nn_training_file_type = 'pkl'          #training data file type
 

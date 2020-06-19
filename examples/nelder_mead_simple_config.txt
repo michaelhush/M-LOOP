@@ -2,12 +2,12 @@
 #-------------------------
 
 #General options
-max_num_runs = 100           #number of planned runs
+max_num_runs = 100               #number of planned runs
 target_cost = 0.1                #cost to beat
 
 #Specific options
 controller_type = 'nelder_mead'
 num_params = 3                   #number of parameters
-min_boundary = [-1,-1,-1]      #minimum boundary
-max_boundary = [1,1,1]       #maximum boundary
+min_boundary = [-1, -1, -1]      #minimum boundary
+max_boundary = [1, 1, 1]         #maximum boundary
 initial_simplex_scale = 0.4      #initial size of simplex relative to the boundary size.
