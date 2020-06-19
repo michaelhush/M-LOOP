@@ -62,7 +62,7 @@ def show_all_default_visualizations_from_archive(controller_filename,
                                                  learner_visualization_args={},
                                                  learner_visualizer_init_args={}):
     '''
-    Plots all visualizations available for a controller and it's learner from their archives.
+    Plots all visualizations available for a controller and its learner from their archives.
     
     Args:
         controller_filename (str): The filename, inlcuding path, of the
