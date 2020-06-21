@@ -21,7 +21,32 @@ scale_param_label = 'Min (0) to max (1) parameters'
 param_label = 'Parameter'
 log_length_scale_label = 'Log of length scale'
 noise_label = 'Noise level'
-legend_loc = 2
+_DEFAULT_LEGEND_LOC = 2
+legend_loc = _DEFAULT_LEGEND_LOC
+
+def set_legend_location(loc=None):
+    '''
+    Set the location of the legend in future figures.
+    
+    Note that this function doesn't change the location of legends in existing
+    figures. It only changes where legends will appear in figures generated
+    after the call to this function. If called without arguments, the legend
+    location for future figures will revert to its default value.
+    
+    Keyword Args:
+        loc (Optional str, int, or pair of floats): The value to use for loc in
+            the calls to matplotlib's legend(). Can be e.g. 2, 'upper right',
+            (1, 0). See matplotlib's documentation for more options and
+            additional information. If set to None then the legend location will
+            be set back to its default value. Default None.
+    '''
+    # Set default value for loc if necessary.
+    if loc is None:
+        loc = _DEFAULT_LEGEND_LOC
+    
+    # Update the global used for setting the legend location.
+    global legend_loc
+    legend_loc = loc
 
 def show_all_default_visualizations(controller, show_plots=True):
     '''
