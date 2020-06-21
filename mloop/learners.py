@@ -53,6 +53,7 @@ class Learner():
         learner_archive_file_type (Optional [string]):  File type for archive. Can be either 'txt' a human readable text file, 'pkl' a python dill file, 'mat' a matlab file or None if there is no archive. Default 'mat'.
         log_level (Optional [int]): Level for the learners logger. If None, set to warning. Default None.
         start_datetime (Optional [datetime]): Start date time, if None, is automatically generated.
+        param_names (Optional [list of str]): A list of names of the parameters for use e.g. in plot legends. Number of elements must equal num_params. If None, each name will be set to an empty sting. Default None.
         
     Attributes:
         params_out_queue (queue): Queue for parameters created by learner.
@@ -67,6 +68,7 @@ class Learner():
                  learner_archive_filename=default_learner_archive_filename,
                  learner_archive_file_type=default_learner_archive_file_type,
                  start_datetime=None,
+                 param_names=None,
                  **kwargs):
 
         super(Learner,self).__init__()
@@ -139,12 +141,28 @@ class Learner():
             self.learner_archive_dir = learner_archive_dir
             if not os.path.exists(learner_archive_dir):
                 os.makedirs(learner_archive_dir)
+        # Interpret/check param_names.
+        if param_names is None:
+            self.param_names = [''] * self.num_params
+        else:
+            self.param_names = param_names
+        # Ensure that there are the correct number of entries.
+        if len(self.param_names) != self.num_params:
+            message = ('param_names has {n_names} elements but there are '
+                       '{n_params} parameters.').format(
+                           n_names=len(self.param_names),
+                           n_params=self.num_params)
+            self.log.error(message)
+            raise ValueError(message)
+        # Ensure that all of the entries are strings.
+        self.param_names = [str(name) for name in self.param_names]
         
         self.archive_dict = {'archive_type':'learner',
                              'num_params':self.num_params,
                              'min_boundary':self.min_boundary,
                              'max_boundary':self.max_boundary,
-                             'start_datetime':mlu.datetime_to_string(self.start_datetime)}
+                             'start_datetime':mlu.datetime_to_string(self.start_datetime),
+                             'param_names':self.param_names}
         
         self.log.debug('Learner init completed.')   
         
@@ -940,6 +958,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             num_params = int(self.training_dict['num_params'])
             min_boundary = mlu.safe_cast_to_array(self.training_dict['min_boundary'])
             max_boundary = mlu.safe_cast_to_array(self.training_dict['max_boundary'])
+            param_names = mlu._param_names_from_file_dict(self.training_dict)
             
             #Configuration of the learner
             self.cost_has_noise = bool(self.training_dict['cost_has_noise'])
@@ -978,6 +997,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             super(GaussianProcessLearner,self).__init__(num_params=num_params,
                              min_boundary=min_boundary,
                              max_boundary=max_boundary,
+                             param_names=param_names,
                              **kwargs)
             
         else:
@@ -1491,6 +1511,7 @@ class NeuralNetLearner(Learner, mp.Process):
             num_params = int(self.training_dict['num_params'])
             min_boundary = mlu.safe_cast_to_list(self.training_dict['min_boundary'])
             max_boundary = mlu.safe_cast_to_list(self.training_dict['max_boundary'])
+            param_names = mlu._param_names_from_file_dict(self.training_dict)
             
             #Counters
             self.costs_count = int(self.training_dict['costs_count'])
@@ -1531,6 +1552,7 @@ class NeuralNetLearner(Learner, mp.Process):
             super(NeuralNetLearner,self).__init__(num_params=num_params,
                              min_boundary=min_boundary, 
                              max_boundary=max_boundary, 
+                             param_names=param_names,
                              **kwargs)
         else:
             self.nn_training_file_dir = None

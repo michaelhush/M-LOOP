@@ -228,10 +228,12 @@ class Controller():
         self.learner_costs_queue = self.learner.costs_in_queue
         self.end_learner = self.learner.end_event
         self.remaining_kwargs = self.learner.remaining_kwargs
+        self.param_names = self.learner.param_names
 
         self.archive_dict.update({'num_params':self.learner.num_params,
                                   'min_boundary':self.learner.min_boundary,
-                                  'max_boundary':self.learner.max_boundary})
+                                  'max_boundary':self.learner.max_boundary,
+                                  'param_names':self.param_names})
 
 
     def _put_params_and_out_dict(self, params,  param_type=None, **kwargs):
@@ -534,6 +536,7 @@ class MachineLearnerController(Controller):
                  trust_region=None,
                  learner_archive_filename = mll.default_learner_archive_filename,
                  learner_archive_file_type = mll.default_learner_archive_file_type,
+                 param_names=None,
                  **kwargs):
         
         super(MachineLearnerController,self).__init__(interface, **kwargs)   
@@ -564,6 +567,7 @@ class MachineLearnerController(Controller):
                                              trust_region=trust_region,
                                              learner_archive_filename=None,
                                              learner_archive_file_type=learner_archive_file_type,
+                                             param_names=param_names,
                                              **self.remaining_kwargs)
 
         elif self.training_type == 'nelder_mead':
@@ -573,6 +577,7 @@ class MachineLearnerController(Controller):
                                                  max_boundary=max_boundary,
                                                  learner_archive_filename=None,
                                                  learner_archive_file_type=learner_archive_file_type,
+                                                 param_names=param_names,
                                                  **self.remaining_kwargs)
 
         elif self.training_type == 'differential_evolution':
@@ -584,6 +589,7 @@ class MachineLearnerController(Controller):
                                                             evolution_strategy='rand2',
                                                             learner_archive_filename=None,
                                                             learner_archive_file_type=learner_archive_file_type,
+                                                            param_names=param_names,
                                                             **self.remaining_kwargs)
 
         else:
@@ -780,6 +786,7 @@ class GaussianProcessController(MachineLearnerController):
                  trust_region=None,
                  learner_archive_filename = mll.default_learner_archive_filename,
                  learner_archive_file_type = mll.default_learner_archive_file_type,
+                 param_names=None,
                  **kwargs):
 
         super(GaussianProcessController,self).__init__(interface,
@@ -790,6 +797,7 @@ class GaussianProcessController(MachineLearnerController):
                                                        trust_region=trust_region,
                                                        learner_archive_filename=learner_archive_filename,
                                                        learner_archive_file_type=learner_archive_file_type,
+                                                       param_names=param_names,
                                                        **kwargs)
 
         self.ml_learner = mll.GaussianProcessLearner(start_datetime=self.start_datetime,
@@ -799,6 +807,7 @@ class GaussianProcessController(MachineLearnerController):
                                                      trust_region=trust_region,
                                                      learner_archive_filename=learner_archive_filename,
                                                      learner_archive_file_type=learner_archive_file_type,
+                                                     param_names=param_names,
                                                      **self.remaining_kwargs)
 
         self._update_controller_with_machine_learner_attributes()
@@ -819,6 +828,7 @@ class NeuralNetController(MachineLearnerController):
                  trust_region=None,
                  learner_archive_filename = mll.default_learner_archive_filename,
                  learner_archive_file_type = mll.default_learner_archive_file_type,
+                 param_names=None,
                  **kwargs):
         
         super(NeuralNetController,self).__init__(interface, 
@@ -828,7 +838,8 @@ class NeuralNetController(MachineLearnerController):
                                                 max_boundary=max_boundary,
                                                 trust_region=trust_region,
                                                 learner_archive_filename=learner_archive_filename,
-                                                learner_archive_file_type=learner_archive_file_type, 
+                                                learner_archive_file_type=learner_archive_file_type,
+                                                param_names=param_names, 
                                                 **kwargs)   
 
         self.ml_learner = mll.NeuralNetLearner(start_datetime=self.start_datetime,
@@ -838,6 +849,7 @@ class NeuralNetController(MachineLearnerController):
                                                trust_region=trust_region,
                                                learner_archive_filename=learner_archive_filename,
                                                learner_archive_file_type=learner_archive_file_type,
+                                               param_names=param_names,
                                                **self.remaining_kwargs)
 
         self._update_controller_with_machine_learner_attributes()
