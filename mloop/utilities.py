@@ -186,17 +186,26 @@ def save_dict_to_file(dictionary,filename,file_type):
     else:
         raise ValueError 
     
-def get_dict_from_file(filename,file_type):
+def get_dict_from_file(filename,file_type=None):
     '''
     Method for getting a dictionary from a file, of a given format. 
     
     Args:    
-        filename: The filename for the file.
-        file_type: The file_type for the file. Can be 'mat' for matlab, 'txt' for text, or 'pkl' for pickle.
+        filename (str): The filename for the file.
+    
+    Keyword Args:
+        file_type (Optional str): The file_type for the file. Can be 'mat' for
+            matlab, 'txt' for text, or 'pkl' for pickle. If set to None, then
+            file_type will be automatically determined from the file extension.
+            Default None.
     
     Returns:
         dict : Dictionary of values in file.
     '''
+    # Automatically determine file_type if necessary.
+    if file_type is None:
+        file_type = get_file_type(file_type)
+
     if file_type=='mat':
         dictionary = si.loadmat(filename)
     elif file_type=='txt':
