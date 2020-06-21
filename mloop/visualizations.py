@@ -51,9 +51,18 @@ def show_all_default_visualizations(controller,
         max_parameters_per_plot=max_parameters_per_plot,
     )
     
+    # For machine learning controllers, the controller.learner is actually the
+    # learner for the trainer while controller.ml_learner is the machine
+    # learning controller. For other controllers, controller.learner is the
+    # actual learner.
+    try:
+        learner_archive_filename = controller.ml_learner.total_archive_filename
+    except AttributeError:
+        learner_archive_filename = controller.learner.total_archive_filename
+    
     log.debug('Creating learner visualizations.')
     create_learner_visualizations(
-        controller.learner.total_archive_filename,
+        learner_archive_filename,
         max_parameters_per_plot=max_parameters_per_plot,
     )
         
