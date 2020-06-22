@@ -186,17 +186,26 @@ def save_dict_to_file(dictionary,filename,file_type):
     else:
         raise ValueError 
     
-def get_dict_from_file(filename,file_type):
+def get_dict_from_file(filename,file_type=None):
     '''
     Method for getting a dictionary from a file, of a given format. 
     
     Args:    
-        filename: The filename for the file.
-        file_type: The file_type for the file. Can be 'mat' for matlab, 'txt' for text, or 'pkl' for pickle.
+        filename (str): The filename for the file.
+    
+    Keyword Args:
+        file_type (Optional str): The file_type for the file. Can be 'mat' for
+            matlab, 'txt' for text, or 'pkl' for pickle. If set to None, then
+            file_type will be automatically determined from the file extension.
+            Default None.
     
     Returns:
         dict : Dictionary of values in file.
     '''
+    # Automatically determine file_type if necessary.
+    if file_type is None:
+        file_type = get_file_type(file_type)
+
     if file_type=='mat':
         dictionary = si.loadmat(filename)
     elif file_type=='txt':
@@ -330,6 +339,42 @@ def safe_cast_to_list(in_array):
     
     return out_list
 
+def chunk_list(list_, chunk_size):
+    '''
+    Divide a list into sublists of length chunk_size.
+    
+    All elements in list_ will be included in exactly one of the sublists and
+    will be in the same order as in list_. If the length of list_ is not
+    divisible by chunk_size, then the final sublist returned will have fewer
+    than chunk_size elements.
+    
+    Examples:
+        >>> chunk_list([1, 2, 3, 4, 5], 2)
+        [[1, 2], [3, 4], [5]]
+        >>> chunk_list([1, 2, 3, 4, 5], None)
+        [[1, 2, 3, 4, 5]]
+        >>> chunk_list([1, 2, 3, 4, 5], float('inf'))
+        [[1, 2, 3, 4, 5]]
+
+    Args:
+        list_ (list-like): A list (or similar) to divide up into smaller lists.
+        chunk_size (int): The number of elements to have in each sublist. The
+            last sublist will have fewer elements than this if the length of
+            list_ is not divisible by chunk_size. If set to float('inf') or
+            None, then all elements will be put into one sublist.
+    
+    Returns:
+        (list): List of sublists, each of which contains elements from the input
+            list_. Each sublist has length chunk_size except for the last one
+            which may have fewer elements.
+    '''
+    # Deal with special case that chunk_size is infinity.
+    if (chunk_size is None) or (chunk_size == float('inf')):
+        # Make list with one sublist.
+        return [list_]
+    
+    return [list_[i:(i+chunk_size)] for i in range(0, len(list_), chunk_size)]
+
 def _param_names_from_file_dict(file_dict):
     '''
     Extract the value for 'param_names' from a training dictionary.
@@ -358,7 +403,7 @@ def _param_names_from_file_dict(file_dict):
         num_params = int(file_dict['num_params'])
         param_names = [''] * num_params
     return param_names
-    
+
 def _generate_legend_labels(param_indices, all_param_names):
     '''
     Generate a list of labels for the legend of a plot.
