@@ -369,6 +369,7 @@ class ControllerVisualizer():
         self.num_params = int(controller_dict['num_params'])
         self.min_boundary = np.squeeze(np.array(controller_dict['min_boundary']))
         self.max_boundary = np.squeeze(np.array(controller_dict['max_boundary']))
+        self.param_names = mlu._param_names_from_file_dict(controller_dict)
         
         if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.max_boundary)):
             self.finite_flag = True
@@ -498,7 +499,11 @@ class ControllerVisualizer():
         for ind in range(num_params):
             color = param_colors[ind]
             artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
+        legend_labels = mlu._generate_legend_labels(
+            parameter_subset,
+            self.param_names,
+        )
+        plt.legend(artists, legend_labels ,loc=legend_loc)
         
     def plot_parameters_vs_cost(self, parameter_subset=None):
         '''
@@ -558,7 +563,11 @@ class ControllerVisualizer():
         for ind in range(num_params):
             color = param_colors[ind]
             artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
-        plt.legend(artists,[str(x) for x in parameter_subset], loc=legend_loc)
+        legend_labels = mlu._generate_legend_labels(
+            parameter_subset,
+            self.param_names,
+        )
+        plt.legend(artists, legend_labels ,loc=legend_loc)
 
 def create_differential_evolution_learner_visualizations(filename,
                                                          file_type=None,
@@ -618,6 +627,7 @@ class DifferentialEvolutionVisualizer():
         self.num_params = int(learner_dict['num_params'])
         self.min_boundary = np.squeeze(np.array(learner_dict['min_boundary']))
         self.max_boundary = np.squeeze(np.array(learner_dict['max_boundary']))
+        self.param_names = mlu._param_names_from_file_dict(learner_dict)
         self.params_generations = np.array(learner_dict['params_generations'])
         self.costs_generations = np.array(learner_dict['costs_generations'])
           
@@ -724,8 +734,12 @@ class DifferentialEvolutionVisualizer():
         
         plt.title('Differential evolution: Params vs generation number.') 
         plt.xlabel(generation_label)
-        plt.ylabel(scale_param_label)           
-        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
+        plt.ylabel(scale_param_label) 
+        legend_labels = mlu._generate_legend_labels(
+            parameter_subset,
+            self.param_names,
+        )
+        plt.legend(artists, legend_labels ,loc=legend_loc)
         
 def create_gaussian_process_learner_visualizations(filename,
                                                    file_type=None,
@@ -932,7 +946,11 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         for ind in range(num_params):
             color = param_colors[ind]
             artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
-        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)    
+        legend_labels = mlu._generate_legend_labels(
+            parameter_subset,
+            self.param_names,
+        )
+        plt.legend(artists, legend_labels ,loc=legend_loc)    
     
     '''
     Method is currently not supported. Of questionable usefulness. Not yet deleted.
@@ -1011,7 +1029,11 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
                 plt.plot(self.fit_numbers,self.log_length_scale_history[:,param_index],'o',color=color)
             artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
             
-        plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
+        legend_labels = mlu._generate_legend_labels(
+            parameter_subset,
+            self.param_names,
+        )
+        plt.legend(artists, legend_labels ,loc=legend_loc)
         plt.xlabel(run_label)
         plt.ylabel(log_length_scale_label)
         plt.title('GP Learner: Log of lengths scales vs fit number.')
@@ -1196,6 +1218,12 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         num_params = len(parameter_subset)
         param_colors = _color_list_from_num_of_params(num_params)
         
+        # Generate labels for legends.
+        legend_labels = mlu._generate_legend_labels(
+            parameter_subset,
+            self.param_names,
+        )
+        
         points = 100
         rel_params = np.linspace(0,1,points)
         all_cost_arrays = [a for _,a in self.return_cross_sections(points=points)]
@@ -1226,7 +1254,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             for ind in range(num_params):
                 color = param_colors[ind]
                 artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
-            plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
+            plt.legend(artists, legend_labels ,loc=legend_loc)
         if self.num_nets > 1:
             # And now create a plot showing the average, max and min for each cross section.
             def prepare_plot():
@@ -1253,7 +1281,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
             for ind in range(num_params):
                 color = param_colors[ind]
                 artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
-            plt.legend(artists,[str(x) for x in parameter_subset],loc=legend_loc)
+            plt.legend(artists, legend_labels ,loc=legend_loc)
 
     def plot_surface(self):
         '''
