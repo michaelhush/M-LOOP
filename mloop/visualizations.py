@@ -857,6 +857,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     def create_visualizations(self,
                               plot_cross_sections=True,
                               plot_hyperparameters_vs_run=True,
+                              plot_noise_level_vs_run=True,
                               max_parameters_per_plot=None):
         '''
         Runs the plots from a gaussian process learner file.
@@ -867,6 +868,11 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
                 hyperparameters as a function of run number, else do not.
                 Default True.
+            plot_noise_level_vs_run (Optional [bool]): If True plot the fitted
+                noise level as a function of run number, else do not. If there
+                is no fitted noise level (i.e. cost_has_noise was set to False),
+                then this plot will not be made regardless of the value passed
+                for plot_noise_level_vs_run. Default True.
             max_parameters_per_plot (Optional [int]): The maximum number of
                 parameters to include in plots that display the values of
                 parameters. If the number of parameters is larger than
@@ -891,6 +897,9 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
                 self.plot_hyperparameters_vs_run(
                     parameter_subset=parameter_chunk,
                 )
+        
+        if plot_noise_level_vs_run:
+            self.plot_noise_level_vs_run()
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
         _ensure_parameter_subset_valid(self, parameter_subset)
@@ -992,9 +1001,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     def plot_hyperparameters_vs_run(self, parameter_subset=None):
         '''
         Produce a figure of the hyperparameters as a function of run number.
-        
-        This method also plots the fitted noise level as a function of run
-        number if the cost has noise.
     
         Args:
             parameter_subset (list-like): The indices of parameters to plot. The
@@ -1015,7 +1021,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         num_params = len(parameter_subset)
         param_colors = _color_list_from_num_of_params(num_params)
         
-        global figure_counter, run_label, legend_loc, log_length_scale_label, noise_label
+        global figure_counter, run_label, legend_loc, log_length_scale_label
         figure_counter += 1
         plt.figure(figure_counter)
         
@@ -1037,16 +1043,24 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         plt.xlabel(run_label)
         plt.ylabel(log_length_scale_label)
         plt.title('GP Learner: Log of lengths scales vs fit number.')
+    
+    def plot_noise_level_vs_run(self):
+        '''
+        This method plots the fitted noise level as a function of run number.
         
+        This plot is only relevant to optimizations for which cost_has_noise is
+        True. If cost_has_noise is False then this method does nothing and
+        silently returns.
+        '''
         # Make plot of noise level vs run number if cost has noise. 
         if self.cost_has_noise:
+            global figure_counter, run_label, noise_label
             figure_counter += 1
-            plt.figure(figure_counter)
             plt.figure(figure_counter)
             plt.plot(self.fit_numbers,self.noise_level_history,'o',color='k')
             plt.xlabel(run_label)
             plt.ylabel(noise_label)
-            plt.title('GP Learner: Noise level vs fit number.')
+            plt.title('GP Learner: Noise level vs fit number.')     
             
 def create_neural_net_learner_visualizations(filename,
                                              file_type=None,
