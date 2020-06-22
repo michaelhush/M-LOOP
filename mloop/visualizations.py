@@ -23,7 +23,9 @@ log_length_scale_label = 'Log of length scale'
 noise_label = 'Noise level'
 legend_loc = 2
 
-def show_all_default_visualizations(controller, show_plots=True):
+def show_all_default_visualizations(controller,
+                                    show_plots=True,
+                                    max_parameters_per_plot=None):
     '''
     Plots all visualizations available for a controller, and it's internal learners.
     
@@ -31,24 +33,38 @@ def show_all_default_visualizations(controller, show_plots=True):
         controller (Controller): The controller to extract plots from
         
     Keyword Args:
-        show_plots (bool): Determine whether to run plt.show() at the end or
-            not. For debugging. Default True.
+        show_plots (Optional, bool): Determine whether to run plt.show() at the
+            end or not. For debugging. Default True.
+        max_parameters_per_plot (Optional, int): The maximum number of
+            parameters to include in plots that display the values of
+            parameters. If the number of parameters is larger than
+            parameters_per_plot, then the parameters will be divided into groups
+            and each group will be plotted in its own figure. If set to None,
+            then all parameters will be included in the same plot regardless of
+            how many there are. Default None.
     '''
     log = logging.getLogger(__name__)
     configure_plots()
     log.debug('Creating controller visualizations.')
-    create_controller_visualizations(controller.total_archive_filename,
-                                    file_type=controller.controller_archive_file_type)
+    create_controller_visualizations(
+        controller.total_archive_filename,
+        max_parameters_per_plot=max_parameters_per_plot,
+    )
     
-    if isinstance(controller, mlc.DifferentialEvolutionController):
-        log.debug('Creating differential evolution visualizations.')
-        create_differential_evolution_learner_visualizations(controller.learner.total_archive_filename, 
-                                                             file_type=controller.learner.learner_archive_file_type)
-        
-    if isinstance(controller, mlc.GaussianProcessController):
-        log.debug('Creating gaussian process visualizations.')
-        create_gaussian_process_learner_visualizations(controller.ml_learner.total_archive_filename, 
-                                                       file_type=controller.ml_learner.learner_archive_file_type)
+    # For machine learning controllers, the controller.learner is actually the
+    # learner for the trainer while controller.ml_learner is the machine
+    # learning controller. For other controllers, controller.learner is the
+    # actual learner.
+    try:
+        learner_archive_filename = controller.ml_learner.total_archive_filename
+    except AttributeError:
+        learner_archive_filename = controller.learner.total_archive_filename
+    
+    log.debug('Creating learner visualizations.')
+    create_learner_visualizations(
+        learner_archive_filename,
+        max_parameters_per_plot=max_parameters_per_plot,
+    )
         
     log.info('Showing visualizations, close all to end MLOOP.')
     if show_plots:
@@ -58,6 +74,7 @@ def show_all_default_visualizations_from_archive(controller_filename,
                                                  learner_filename,
                                                  controller_type=None,
                                                  show_plots=True,
+                                                 max_parameters_per_plot=None,
                                                  controller_visualization_kwargs=None,
                                                  learner_visualization_kwargs=None,
                                                  learner_visualizer_init_kwargs=None):
@@ -77,7 +94,17 @@ def show_all_default_visualizations_from_archive(controller_filename,
             set to None then controller_type will be determined automatically.
             Default None.
         show_plots (bool): Determine whether to run plt.show() at the end or
-            not. For debugging. Default True.
+            not. For debugging. Default True. 
+        max_parameters_per_plot (Optional [int]): The maximum number of
+            parameters to include in plots that display the values of
+            parameters. If the number of parameters is larger than
+            parameters_per_plot, then the parameters will be divided into groups
+            and each group will be plotted in its own figure. If set to None,
+            then all parameters will be included in the same plot regardless of
+            how many there are. If a value for max_parameters_per_plot is
+            included in controller_visualization_kwargs, then the value in that
+            dictionary will override this setting. The same applies to
+            learner_visualization_kwargs. Default None.
         controller_visualization_kwargs (dict): Keyword arguments to pass to the
             controller visualizer's create_visualizations() method. If set to
             None, no additional keyword arguments will be passed. Default None.
@@ -88,9 +115,14 @@ def show_all_default_visualizations_from_archive(controller_filename,
             learner visualizer's __init__() method. If set to None, no
             additional keyword arguments will be passed. Default None.
     '''
-    # Set default value for controller_visualization_kwargs if necessary
+    # Set default value for controller_visualization_kwargs if necessary.
     if controller_visualization_kwargs is None:
         controller_visualization_kwargs = {}
+    
+    # Update controller_visualization_kwargs with max_parameters_per_plot if
+    # necessary.
+    if 'max_parameters_per_plot' not in controller_visualization_kwargs:
+        controller_visualization_kwargs['max_parameters_per_plot'] = max_parameters_per_plot
     
     log = logging.getLogger(__name__)
     configure_plots()
@@ -105,6 +137,7 @@ def show_all_default_visualizations_from_archive(controller_filename,
     # Create visualizations for the learner archive.
     create_learner_visualizations(
         learner_filename,
+        max_parameters_per_plot=max_parameters_per_plot,
         learner_visualization_kwargs=learner_visualization_kwargs,
         learner_visualizer_init_kwargs=learner_visualizer_init_kwargs,
     )
@@ -157,6 +190,7 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
     return visualizer
 
 def create_learner_visualizations(filename,
+                                  max_parameters_per_plot=None,
                                   learner_visualization_kwargs=None,
                                   learner_visualizer_init_kwargs=None):
     '''
@@ -166,6 +200,15 @@ def create_learner_visualizations(filename,
         filename (str): Filename for the learner archive. 
     
     Keyword Args:
+        max_parameters_per_plot (Optional [int]): The maximum number of
+            parameters to include in plots that display the values of
+            parameters. If the number of parameters is larger than
+            parameters_per_plot, then the parameters will be divided into groups
+            and each group will be plotted in its own figure. If set to None,
+            then all parameters will be included in the same plot regardless of
+            how many there are. If a value for max_parameters_per_plot is
+            included in learner_visualization_kwargs, then the value in that
+            dictionary will override this setting. Default None.
         learner_visualization_kwargs (dict): Keyword arguments to pass to the
             learner visualizer's create_visualizations() method.  If set to
             None, no additional keyword arguments will be passed. Default None.
@@ -178,6 +221,11 @@ def create_learner_visualizations(filename,
         learner_visualization_kwargs = {}
     if learner_visualizer_init_kwargs is None:
         learner_visualizer_init_kwargs = {}
+        
+    # Update controller_visualization_kwargs with max_parameters_per_plot if
+    # necessary.
+    if 'max_parameters_per_plot' not in learner_visualization_kwargs:
+        learner_visualization_kwargs['max_parameters_per_plot'] = max_parameters_per_plot
     
     # Create a visualizer and have it make the plots.
     visualizer = create_learner_visualizer_from_archive(
@@ -313,7 +361,8 @@ class ControllerVisualizer():
     def create_visualizations(self,
                               plot_cost_vs_run=True,
                               plot_parameters_vs_run=True,
-                              plot_parameters_vs_cost=True):
+                              plot_parameters_vs_cost=True,
+                              max_parameters_per_plot=None):
         '''
         Runs the plots for a controller file.
         
@@ -324,13 +373,29 @@ class ControllerVisualizer():
                 versus run number, else do not. Default True. 
             plot_parameters_vs_cost (Optional [bool]): If True plot parameters
                 versus cost number, else do not. Default True. 
+            max_parameters_per_plot (Optional [int]): The maximum number of
+                parameters to include in plots that display the values of
+                parameters. If the number of parameters is larger than
+                parameters_per_plot, then the parameters will be divided into
+                groups and each group will be plotted in its own figure. If set
+                to None, then all parameters will be included in the same plot
+                regardless of how many there are. Default None.
         '''
+        parameter_chunks = mlu.chunk_list(
+            self.param_numbers,
+            max_parameters_per_plot,
+        )
+        
         if plot_cost_vs_run:
             self.plot_cost_vs_run()
+            
         if plot_parameters_vs_run:
-            self.plot_parameters_vs_run()
+            for parameter_chunk in parameter_chunks:
+                self.plot_parameters_vs_run(parameter_subset=parameter_chunk)
+                
         if plot_parameters_vs_cost:
-            self.plot_parameters_vs_cost()
+            for parameter_chunk in parameter_chunks:
+                self.plot_parameters_vs_cost(parameter_subset=parameter_chunk)
         
     def plot_cost_vs_run(self):
         '''
@@ -542,7 +607,8 @@ class DifferentialEvolutionVisualizer():
         
     def create_visualizations(self,
                               plot_params_vs_generations=True,
-                              plot_costs_vs_generations=True):
+                              plot_costs_vs_generations=True,
+                              max_parameters_per_plot=None):
         '''
         Runs the plots from a differential evolution learner file.
             
@@ -551,9 +617,25 @@ class DifferentialEvolutionVisualizer():
                 vs generations, else do not. Default True. 
             plot_costs_generations (Optional [bool]): If True plot costs vs
                 generations, else do not. Default True. 
+            max_parameters_per_plot (Optional [int]): The maximum number of
+                parameters to include in plots that display the values of
+                parameters. If the number of parameters is larger than
+                parameters_per_plot, then the parameters will be divided into
+                groups and each group will be plotted in its own figure. If set
+                to None, then all parameters will be included in the same plot
+                regardless of how many there are. Default None.
         '''
+        parameter_chunks = mlu.chunk_list(
+            self.param_numbers,
+            max_parameters_per_plot,
+        )
+        
         if plot_params_vs_generations:
-            self.plot_params_vs_generations()
+            for parameter_chunk in parameter_chunks:
+                self.plot_params_vs_generations(
+                    parameter_subset=parameter_chunk,
+                )
+                
         if plot_costs_vs_generations:
             self.plot_costs_vs_generations()
         
@@ -735,7 +817,8 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     
     def create_visualizations(self,
                               plot_cross_sections=True,
-                              plot_hyperparameters_vs_run=True):
+                              plot_hyperparameters_vs_run=True,
+                              max_parameters_per_plot=None):
         '''
         Runs the plots from a gaussian process learner file.
             
@@ -745,11 +828,30 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
                 hyperparameters as a function of run number, else do not.
                 Default True.
+            max_parameters_per_plot (Optional [int]): The maximum number of
+                parameters to include in plots that display the values of
+                parameters. If the number of parameters is larger than
+                parameters_per_plot, then the parameters will be divided into
+                groups and each group will be plotted in its own figure. If set
+                to None, then all parameters will be included in the same plot
+                regardless of how many there are. Default None.
         '''
+        parameter_chunks = mlu.chunk_list(
+            self.param_numbers,
+            max_parameters_per_plot,
+        )
+        
         if plot_cross_sections:
-            self.plot_cross_sections()
+            for parameter_chunk in parameter_chunks:
+                self.plot_cross_sections(
+                    parameter_subset=parameter_chunk,
+                )
+            
         if plot_hyperparameters_vs_run:
-            self.plot_hyperparameters_vs_run()
+            for parameter_chunk in parameter_chunks:
+                self.plot_hyperparameters_vs_run(
+                    parameter_subset=parameter_chunk,
+                )
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
         _ensure_parameter_subset_valid(self, parameter_subset)
@@ -967,16 +1069,32 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         '''
         self.log.warning('You should not have executed start() from the GaussianProcessVisualizer. It is not intended to be used as a independent process. Ending.')
     
-    def create_visualizations(self, plot_cross_sections=True):
+    def create_visualizations(self,
+                              plot_cross_sections=True,
+                              max_parameters_per_plot=None):
         '''
         Creates plots from a neural net's learner file.
             
         Keyword Args:
             plot_cross_sections (Optional [bool]): If True plot predicted
                 landscape cross sections, else do not. Default True. 
+            max_parameters_per_plot (Optional [int]): The maximum number of
+                parameters to include in plots that display the values of
+                parameters. If the number of parameters is larger than
+                parameters_per_plot, then the parameters will be divided into
+                groups and each group will be plotted in its own figure. If set
+                to None, then all parameters will be included in the same plot
+                regardless of how many there are. Default None.
         '''
+        parameter_chunks = mlu.chunk_list(
+            self.param_numbers,
+            max_parameters_per_plot,
+        )
+        
         if plot_cross_sections:
-            self.do_cross_sections()
+            for parameter_chunk in parameter_chunks:
+                self.do_cross_sections(parameter_subset=parameter_chunk)
+                
         self.plot_surface()
         self.plot_density_surface()
         self.plot_losses()
