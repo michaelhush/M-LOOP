@@ -204,7 +204,7 @@ def get_dict_from_file(filename,file_type=None):
     '''
     # Automatically determine file_type if necessary.
     if file_type is None:
-        file_type = get_file_type(file_type)
+        file_type = get_file_type(filename)
 
     if file_type=='mat':
         dictionary = si.loadmat(filename)
