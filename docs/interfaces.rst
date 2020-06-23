@@ -19,11 +19,11 @@ The simplest method to connect your experiment to M-LOOP is with the file interf
 
    interface='file'
    
-in your configuration file. The file interface happens to be the default, so this is not necessary. 
+in your configuration file. The file interface happens to be the default, so this is not necessary.
 
-The file interface works under the assumption that you experiment follows the following algorithm.
+The file interface works under the assumption that your experiment follows the following algorithm.
 
-1. Wait for the file *exp_input.txt* to be made on the disk in the same folder M-LOOP is run.
+1. Wait for the file *exp_input.txt* to be made on the disk in the same folder in which M-LOOP is run.
 2. Read the parameters for the next experiment from the file (named params).
 3. Delete the file  *exp_input.txt*.
 4. Run the experiment with the parameters provided and calculate a cost, and optionally the uncertainty.
@@ -39,7 +39,7 @@ When writing the file *exp_output.txt* there are three keywords and values you c
 
 cost refers to the cost calculated from the experimental data. uncer, is optional, and refers to the uncertainty in the cost measurement made. Note, M-LOOP by default assumes there is some noise corrupting costs, which is fitted and compensated for. Hence, if there is some noise in your costs which you are unable to predict from a single measurement, do not worry, you do not have to estimate uncer, you can just leave it out. Lastly bad can be used to indicate an experiment failed and was not able to produce a cost. If the experiment worked set bad = false and if it failed set bad = true.
 
-Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to false. For example a successful run can simply be::
+Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to true. For example a successful run can simply be::
 
    cost = 0.3
    
