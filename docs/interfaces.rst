@@ -21,6 +21,8 @@ The simplest method to connect your experiment to M-LOOP is with the file interf
    
 in your configuration file. The file interface happens to be the default, so this is not necessary.
 
+.. tutorials-interface-include-start
+
 The file interface works under the assumption that your experiment follows the following algorithm.
 
 1. Wait for the file *exp_input.txt* to be made on the disk in the same folder in which M-LOOP is run.
@@ -47,7 +49,9 @@ and failed experiment can be as simple as::
 
    bad = True
    
-Once the *exp_output.txt* has been written to disk, M-LOOP will read it and delete it. 
+Once the *exp_output.txt* has been written to disk, M-LOOP will read it and delete it.
+
+.. tutorials-interface-include-end
 
 Shell interface
 ===============

@@ -85,13 +85,12 @@ In almost all cases you will only need to adjust the parameters settings and hal
 Parameter settings
 ~~~~~~~~~~~~~~~~~~
 
-The number of parameters and constraints on what parameters can be tried are defined with a few keywords::
+The number of parameters and constraints on what parameters can be tried are defined with a few keywords:
 
-   num_params = 2
-   min_boundary = [-1, -1]
-   max_boundary = [1, 1]
-   first_params = [0.5, 0.5]      
-   trust_region = 0.4
+.. include:: ../examples/tutorial_config.txt
+   :literal:
+   :start-after: #Parameter settings
+   :end-before: #Halting conditions
 
 num_params defines the number of parameters, min_boundary defines the minimum value each of the parameters can take and max_boundary defines the maximum value each parameter can take. Here there are two value which each must be between -1 and 1.
 
@@ -112,11 +111,12 @@ Simply delete this keyword if your experiment works with any set of parameters w
 Halting conditions
 ~~~~~~~~~~~~~~~~~~
 
-The halting conditions define when the optimization will stop. We present three options here::
+The halting conditions define when the optimization will stop. We present three options here:
 
-   max_num_runs = 100                        
-   max_num_runs_without_better_params = 10   
-   target_cost = 0.1
+.. include:: ../examples/tutorial_config.txt
+   :literal:
+   :start-after: #Halting conditions
+   :end-before: #Learner options
 
 max_num_runs is the maximum number of runs that the optimization algorithm is allowed to run. max_num_runs_without_better_params is the maximum number of runs allowed before a lower cost and better parameters is found. Finally, when target_cost is set, if a run produces a cost that is less than this value the optimization process will stop.
 
@@ -124,18 +124,23 @@ When multiple halting conditions are set, the optimization process will halt whe
 
 If you do not have any prior knowledge of the problem use only the keyword max_num_runs and set it to the highest value you can wait for. If you have some knowledge about what the minimum attainable cost is or there is some cost threshold you need to achieve, you might want to set the target_cost. max_num_runs_without_better_params is useful if you want to let the optimization algorithm run as long as it needs until there is a good chance the global optimum has been found. 
 
-If you do not want one of the halting conditions, simply delete it from your file. For example if you just wanted the algorithm to search as long as it can until it found a global minimum you could set::
+If you do not want one of the halting conditions, simply delete it from your file. For example if you just wanted the algorithm to search as long as it can until it found a global minimum you could set:
 
-   max_num_runs_without_better_params = 10 
-
+.. include:: ../examples/tutorial_config.txt
+   :literal:
+   :start-after: #maximum number of runs
+   :end-before: target_cost
 
 Learner Options
 ~~~~~~~~~~~~~~~
 
-There are many learner specific options (and different learner algorithms) described in :ref:`sec-examples`. Here we just present a common one::
+There are many learner specific options (and different learner algorithms) described in :ref:`sec-examples`. Here we just present a common one:
 
-   cost_has_noise = True
-   
+.. include:: ../examples/tutorial_config.txt
+   :literal:
+   :start-after: #Learner options
+   :end-before: #Timing options
+
 If the cost you provide has noise in it, meaning the cost you calculate would fluctuate if you did multiple experiments with the same parameters, then set this flag to True.
 If the costs you provide have no noise then set this flag to False.
 M-LOOP will automatically determine if the costs have noise in them or not, so if you are unsure, just delete this keyword and it will use the default value of True. 
@@ -148,9 +153,12 @@ This learning process can take some time. If M-LOOP is asked for new parameters 
 This allows for an experiment to be run while the learner is still thinking.
 The training algorithm by default is differential evolution.
 This algorithm is also used to do the first initial set of experiments which are then used to train M-LOOP.
-If you would prefer M-LOOP waits for the learner to come up with its best prediction before running another experiment you can change this behavior with the option::
+If you would prefer M-LOOP waits for the learner to come up with its best prediction before running another experiment you can change this behavior with the option:
 
-   no_delay = True
+.. include:: ../examples/tutorial_config.txt
+   :literal:
+   :start-after: #Timing options
+   :end-before: #File format options
    
 Set no_delay to true to ensure that there are no pauses between experiments and set it to false if you want to give M-LOOP the time to come up with its most informed choice.
 Sometimes doing fewer more intelligent experiments will lead to an optimum quicker than many quick unintelligent experiments.
@@ -159,11 +167,12 @@ You can delete the keyword if you are unsure and it will default to True.
 File format options
 ~~~~~~~~~~~~~~~~~~~
 
-You can set the file formats for the archives produced at the end and the files exchanged with the experiment with the options::
+You can set the file formats for the archives produced at the end and the files exchanged with the experiment with the options:
 
-   interface_file_type = 'txt'          
-   controller_archive_file_type = 'mat'  
-   learner_archive_file_type = 'pkl' 
+.. include:: ../examples/tutorial_config.txt
+   :literal:
+   :start-after: #File format options
+   :end-before: #Visualizations
 
 interface_file_type controls the file format for the files exchanged with the experiment. controller_archive_file_type and learner_archive_file_type control the format of the respective archives.  
 
@@ -172,9 +181,11 @@ There are three file formats currently available: 'mat' is for MATLAB readable f
 Visualization
 ~~~~~~~~~~~~~
 
-By default M-LOOP will display a set of plots that allow the user to visualize the optimization process and the cost landscape. To change this behavior use the option::
+By default M-LOOP will display a set of plots that allow the user to visualize the optimization process and the cost landscape. To change this behavior use the option:
 
-   visualizations = True
+.. include:: ../examples/tutorial_config.txt
+   :literal:
+   :start-after: #Visualizations
    
 Set it to false to turn the visualizations off. For more details see :ref:`sec-visualizations`.
 
@@ -186,33 +197,9 @@ Here we consider the most generic method, writing and reading files to disk.
 For other options see :ref:`sec-interfaces`.
 If you design a bespoke interface for your experiment please consider :ref:`sec-contributing` to the project by sharing your method with other users.
 
-The file interface works under the assumption that your experiment follows the following algorithm.
-
-1. Wait for the file *exp_input.txt* to be made on the disk in the same folder in which M-LOOP is run.
-2. Read the parameters for the next experiment from the file (named params).
-3. Delete the file  *exp_input.txt*.
-4. Run the experiment with the parameters provided and calculate a cost, and optionally the uncertainty.
-5. Write the cost to the file *exp_output.txt*. Go back to step 1.
-
-It is important you delete the file *exp_input.txt* after reading it, since it is used to as an indicator for the next experiment to run.
-
-When writing the file *exp_output.txt* there are three keywords and values you can include in your file, for example after the first run your experiment may produce the following::
-
-   cost = 0.5
-   uncer = 0.01
-   bad = false
-
-cost refers to the cost calculated from the experimental data. uncer, is optional, and refers to the uncertainty in the cost measurement made. Note, M-LOOP by default assumes there is some noise corrupting costs, which is fitted and compensated for. Hence, if there is some noise in your costs which you are unable to predict from a single measurement, do not worry, you do not have to estimate uncer, you can just leave it out. Lastly bad can be used to indicate an experiment failed and was not able to produce a cost. If the experiment worked set bad = false and if it failed set bad = true.
-
-Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to true. For example a successful run can simply be::
-
-   cost = 0.3
-   
-and failed experiment can be as simple as::
-
-   bad = True
-   
-Once the *exp_output.txt* has been written to disk, M-LOOP will read it and delete it. 
+.. include:: ./interfaces.rst
+   :start-after: .. tutorials-interface-include-start
+   :end-before: .. tutorials-interface-include-end
    
 Parameters and cost function
 ----------------------------
@@ -284,8 +271,8 @@ The start of the script imports the libraries that are necessary for M-LOOP to w
 
 .. literalinclude:: ../examples/python_controlled_experiment.py
    :language: python
-   :lines: 1-12
-	
+   :end-before: #Declare your custom class that inherets from the Interface class
+
 The first group of imports are just for python 2 compatibility. M-LOOP is targeted at python3, but has been designed to be bilingual. These imports ensure backward compatibility.
 
 The second group of imports are the most important modules M-LOOP needs to run. The interfaces and controllers modules are essential, while the visualizations module is only needed if you want to view your data afterwards.
@@ -339,7 +326,8 @@ By taking an object oriented approach, M-LOOP can provide a lot more flexibility
 
 .. literalinclude:: ../examples/python_controlled_experiment.py
    :language: python
-   :lines: 15-47
+   :start-after: import time
+   :end-before: def main():
     
 In this code snippet we also implement a constructor with the *__init__()* method.
 Here we just define a numpy array which defines the minimum_parameter values.
@@ -355,7 +343,8 @@ Once you have made your interface class, running M-LOOP can be as simple as thre
 
 .. literalinclude:: ../examples/python_controlled_experiment.py
    :language: python
-   :lines: 49-62
+   :start-after: return cost_dict
+   :end-before: #The results of the optimization will be saved
 		
 In the code snippet we first make an instance of our custom interface class called interface. We then create an instance of a controller. The controller will run the experiment and perform the optimization. You must provide the controller with the interface and any of the M-LOOP options you would normally provide in the configuration file. In this case we give five options, which do the following:
 
@@ -382,7 +371,8 @@ Within the python environment you can also access the results as attributes of t
 
 .. literalinclude:: ../examples/python_controlled_experiment.py
    :language: python
-   :lines: 64-66
+   :start-after: controller.optimize()
+   :end-before: #You can also run the default sets of visualizations
 
 All of the results saved in the controller archive can be directly accessed as attributes of the controller object. For a comprehensive list of the attributes of the controller generated after an optimization run see the :ref:`sec-api`.
 
@@ -396,7 +386,8 @@ The example includes a simple demonstration of this:
 
 .. literalinclude:: ../examples/python_controlled_experiment.py
    :language: python
-   :lines: 68-69
+   :start-after: print(controller.best_params)
+   :end-before: #Ensures main is run when this code is run as a script
 
 This code snippet will display all the visualizations available for that controller. There are many other visualization methods and options available that let you control which plots are displayed and when.
 See the :ref:`sec-api` for details.
