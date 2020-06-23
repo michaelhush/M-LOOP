@@ -17,7 +17,7 @@ max_num_runs_without_better_params = 50   #maximum number of runs without findin
 target_cost = 0.01                        #optimization halts when a cost below this target is found 
 
 #Learner options
-cost_has_noise = True                     #whether the cost are corrupted by noise or not
+cost_has_noise = True                     #whether the costs are corrupted by noise or not
 
 #Timing options
 no_delay = True                           #wait for learner to make generate new parameters or use training algorithms
