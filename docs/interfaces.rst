@@ -64,7 +64,10 @@ The shell interface is used when experiments can be run from a command in a shel
 	
 in the configuration file. The interface keyword simply indicates that you want M-LOOP to operate the experiment through the shell. The other two keywords need to be customized to your needs.
 
-The command keyword should be provided with the command on the shell that runs the experiment. In the example above the executable would be *run_exp*. Note M-LOOP will try and execute the command in the folder that you run M-LOOP from, if this causes trouble you should just the absolute address of your executable. Your command can be more complicated than a single work, for example if you wanted to include some options like './run_exp --verbose -U' this would also be acceptable. 
+The command keyword should be provided with the command on the shell that runs the experiment.
+In the example above the executable would be *run_exp*. Note M-LOOP will try and execute the command in the folder that you run M-LOOP from.
+If this causes trouble you should just include the absolute address of your executable.
+Your command can be more complicated than a single word, for example if you want to include some options like './run_exp --verbose -U' this would also be acceptable. 
 
 The params_args_type keyword controls how M-LOOP delivers the parameters to the executable. If you use the 'direct' option the parameters will just be fed directly to the experiment as arguments. For example if the command was ./run_exp and the parameters to test next were 1.3, -23 and 12, M-LOOP would execute the following command::
 
