@@ -1314,7 +1314,6 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         params = [(x,y) for x in param_set[0] for y in param_set[1]]
         costs = self.predict_costs_from_param_array(params)
         ax.scatter([param[0] for param in params], [param[1] for param in params], costs)
-        ax.set_zlim(top=500,bottom=0)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_zlabel('cost')
