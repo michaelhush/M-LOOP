@@ -1306,6 +1306,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         global figure_counter
         figure_counter += 1
         fig = plt.figure(figure_counter)
+        from mpl_toolkits.mplot3d import Axes3D
         ax = fig.add_subplot(111, projection='3d')
 
         points = 50
