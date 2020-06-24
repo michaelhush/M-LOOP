@@ -2021,5 +2021,5 @@ class NeuralNetLearner(Learner, mp.Process):
     def get_losses(self):
         all_losses = []
         for n in self.neural_net:
-            all_losses += n.get_losses()
+            all_losses.append(n.get_losses())
         return all_losses
