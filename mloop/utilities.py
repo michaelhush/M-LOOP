@@ -167,15 +167,24 @@ def txt_file_to_dict(filename):
     tdict = eval('dict('+tdict_string+')')
     return tdict
     
-def save_dict_to_file(dictionary,filename,file_type):
+def save_dict_to_file(dictionary,filename,file_type=None):
     '''
     Method for saving a dictionary to a file, of a given format. 
     
     Args:
         dictionary: The dictionary to be saved in the file.
-        filename: The filename for the saved file
-        file_type: The file_type for the saved file. Can be 'mat' for matlab, 'txt' for text, or 'pkl' for pickle.
+        filename: The filename for the saved file.
+
+    Keyword Args:
+        file_type (Optional str): The file_type for the file. Can be 'mat' for
+            matlab, 'txt' for text, or 'pkl' for pickle. If set to None, then
+            file_type will be automatically determined from the file extension.
+            Default None.
     '''
+    # Automatically determine file_type if necessary.
+    if file_type is None:
+        file_type = get_file_type(filename)
+
     if file_type=='mat':
         si.savemat(filename,dictionary)
     elif file_type=='txt':
