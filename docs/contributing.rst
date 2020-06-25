@@ -36,4 +36,5 @@ Other contributors, listed alphabetically, are:
 * Nick P. Robins - first demonstration
 * Mahasen A. Sooriyabandara - first demonstration
 * Richard Taylor - testing
+* Zak Vendeiro - ease of use enhancements
 * Paul B. Wigley - testing, design, first demonstration
