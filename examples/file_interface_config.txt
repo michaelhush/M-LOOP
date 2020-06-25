@@ -3,5 +3,5 @@
 
 interface_type = 'file'                #The type of interface
 interface_out_filename = 'exp_input'   #The filename of the file output by the interface and input into the experiment
-interface_in_filename  = 'exp_output'  #The filename o the file input into the interface and output by the experiment
+interface_in_filename = 'exp_output'   #The filename o the file input into the interface and output by the experiment
 interface_file_type = 'txt'            #The file_type of both the input and output files, can be 'txt', 'pkl' or 'mat'.

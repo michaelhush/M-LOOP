@@ -7,9 +7,9 @@ target_cost = 0.1                         #cost to beat
 max_num_runs_without_better_params = 100  #max allowed number of runs between finding better parameters
 
 #Parameter controls
-num_params = 2          #Number of parameters
-min_boundary = [0,0]    #Minimum value for each parameter
-max_boundary = [2,2]    #Maximum value for each parameter
+num_params = 2                            #Number of parameters
+min_boundary = [0,0]                      #Minimum value for each parameter
+max_boundary = [2,2]                      #Maximum value for each parameter
 
 #Filename related
 controller_archive_filename = 'agogo'     #filename prefix for controller archive

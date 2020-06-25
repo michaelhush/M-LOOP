@@ -12,4 +12,3 @@ min_boundary = [-4.8]           #minimum boundary
 max_boundary = [10.0]           #maximum boundary
 trust_region = 0.6              #maximum % move distance from best params
 first_params = [5.3]            #first parameters to try
-

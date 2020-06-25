@@ -2,15 +2,13 @@
 #----------------------------
 
 #General options
-max_num_runs = 100                              #number of planned runs
-target_cost = 0.1                               #cost to beat
+max_num_runs = 100                                           #number of planned runs
+target_cost = 0.1                                            #cost to beat
 
 #Specific options
 controller_type = 'nelder_mead'
-num_params = 5                                           #number of parameters
-min_boundary = [-1.1,-1.2, -1.3, -1.4, -1.5]             #minimum boundary
-max_boundary = [1.1, 1.1, 1.1, 1.1, 1.1]                 #maximum boundary
-initial_simplex_corner= [-0.21,-0.23,-0.24,-0.23,-0.25]  #initial corner of the simplex
-initial_simplex_displacements=[1,1,1,1,1]                #initial displacements for the N+1 (i this case 6) points of the simplex
-
-
+num_params = 5                                               #number of parameters
+min_boundary = [-1.1, -1.2, -1.3, -1.4, -1.5]                #minimum boundary
+max_boundary = [1.1, 1.1, 1.1, 1.1, 1.1]                     #maximum boundary
+initial_simplex_corner = [-0.21, -0.23, -0.24, -0.23, -0.25] #initial corner of the simplex
+initial_simplex_displacements = [1, 1, 1, 1, 1]              #initial displacements for the N+1 (i this case 6) points of the simplex

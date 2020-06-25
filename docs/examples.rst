@@ -39,11 +39,13 @@ The shell interface is for experiments that can be run through a command execute
 Controllers
 ===========
 
-There are currently three controller types supported: 'gaussian_process', 'random' and 'nelder_mead'. The default is 'gaussian_process'. You can set which interface you want to use with the option::
+There are currently five controller types supported: 'gaussian_process', 'neural_net', 'differential_evolution', 'nelder_mead', and 'random'.
+The default is 'gaussian_process'.
+You can set which interface you want to use with the option::
 
    controller_type = [name]
 
-Each of the controllers and their specific options are described below. There is also a set of common options shared by all controllers which is described in *controller_options.txt*. The common options include the parameter settings and the halting conditions.
+Each of the controllers and their specific options are described below. There is also a set of common options shared by all controllers which is described in *controller_config.txt*. The common options include the parameter settings and the halting conditions.
 
 .. include:: ../examples/controller_config.txt
    :literal:
@@ -51,7 +53,9 @@ Each of the controllers and their specific options are described below. There is
 Gaussian process
 ----------------
 
-The Gaussian-process controller is the default controller and is the currently the most sophisticated machine learner algorithm. It uses a `Link Gaussian process <http://scikit-learn.org/dev/modules/gaussian_process.html>`_ to develop a model for how the parameters relate to the measured cost, effectively creating a model for how the experiment operates. This model is then used when picking new points to test. 
+The Gaussian process controller is the default controller.
+It uses a `Gaussian process <http://scikit-learn.org/dev/modules/gaussian_process.html>`_ to develop a model for how the parameters relate to the measured cost, effectively creating a model for how the experiment operates.
+This model is then used when picking new points to test. 
 
 There are two example files for the Gaussian-process controller: *gaussian_process_simple_config.txt* which contains the basic options.
 
@@ -62,11 +66,33 @@ There are two example files for the Gaussian-process controller: *gaussian_proce
 
 .. include:: ../examples/gaussian_process_complete_config.txt
    :literal:
+   
+Neural net
+----------------
+
+The neural net controller also uses a machine-learning-based algorithm.
+It is similar to the Gaussian process controller in that it constructs a model of how the parameters relate to the cost and then uses that model for the optimization.
+However instead of modeling with a Gaussian process, it works by modeling with a sampled neural net.
+
+The neural net models aren't always as robust and reliable as the Gaussian process.
+However, the time required to fit a Gaussian process scales as the cube of the number of data points, while the time to train a neural net only scales linearly.
+Often the Gaussian process fitting can be prohibitively slow for long optimizations with many parameters, while the neural net training remains relatively fast.
+That makes the neural net controller a good choice for high-dimensional optimizations.
+
+There are two example files for the neural net controller: *neural_net_simple_config.txt* which contains the basic options.
+
+.. include:: ../examples/neural_net_simple_config.txt
+   :literal:
+   
+*neural_net_complete_config.txt* which contains a comprehensive list of options.
+
+.. include:: ../examples/neural_net_complete_config.txt
+   :literal:
 
 Differential evolution
 ----------------------
 
-The differential evolution (DE) controller uses a `Link DE algorithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
+The differential evolution (DE) controller uses a `DE algorithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
 
 There are two example files for the differential evolution controller: *differential_evolution_simple_config.txt* which contains the basic options.
 
@@ -82,7 +108,7 @@ There are two example files for the differential evolution controller: *differen
 Nelder Mead
 -----------
 
-The Nelder Mead controller implements the `Link Nelder-Mead method <https://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method>`_ for optimization. You can control the starting point and size of the initial simplex of the method with the configuration file.
+The Nelder Mead controller implements the `Nelder-Mead method <https://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method>`_ for optimization. You can control the starting point and size of the initial simplex of the method with the configuration file.
 
 There are two example files for the Nelder-Mead controller: *nelder_mead_simple_config.txt* which contains the basic options.
 
@@ -112,7 +138,7 @@ There are two example files for the random controller: *random_simple_config.txt
 Logging
 =======
 
-You can control the filename of the logs and also the level which is reported to the file and the console. For more information see `Link logging levels <https://docs.python.org/3.6/library/logging.html#levels>`_. The logging options are described in *logging_config.txt*.
+You can control the filename of the logs and also the level which is reported to the file and the console. For more information see `logging levels <https://docs.python.org/3.6/library/logging.html#levels>`_. The logging options are described in *logging_config.txt*.
 
 .. include:: ../examples/logging_config.txt
    :literal:

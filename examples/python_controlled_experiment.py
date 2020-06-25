@@ -51,7 +51,7 @@ def main():
     
     #First create your interface
     interface = CustomInterface()
-    #Next create the controller, provide it with your controller and any options you want to set
+    #Next create the controller. Provide it with your interface and any options you want to set
     controller = mlc.create_controller(interface, 
                                        max_num_runs = 1000,
                                        target_cost = -2.99,

@@ -19,11 +19,13 @@ The simplest method to connect your experiment to M-LOOP is with the file interf
 
    interface='file'
    
-in your configuration file. The file interface happens to be the default, so this is not necessary. 
+in your configuration file. The file interface happens to be the default, so this is not necessary.
 
-The file interface works under the assumption that you experiment follows the following algorithm.
+.. tutorials-interface-include-start
 
-1. Wait for the file *exp_input.txt* to be made on the disk in the same folder M-LOOP is run.
+The file interface works under the assumption that your experiment follows the following algorithm.
+
+1. Wait for the file *exp_input.txt* to be made on the disk in the same folder in which M-LOOP is run.
 2. Read the parameters for the next experiment from the file (named params).
 3. Delete the file  *exp_input.txt*.
 4. Run the experiment with the parameters provided and calculate a cost, and optionally the uncertainty.
@@ -39,7 +41,7 @@ When writing the file *exp_output.txt* there are three keywords and values you c
 
 cost refers to the cost calculated from the experimental data. uncer, is optional, and refers to the uncertainty in the cost measurement made. Note, M-LOOP by default assumes there is some noise corrupting costs, which is fitted and compensated for. Hence, if there is some noise in your costs which you are unable to predict from a single measurement, do not worry, you do not have to estimate uncer, you can just leave it out. Lastly bad can be used to indicate an experiment failed and was not able to produce a cost. If the experiment worked set bad = false and if it failed set bad = true.
 
-Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to false. For example a successful run can simply be::
+Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to true. For example a successful run can simply be::
 
    cost = 0.3
    
@@ -47,7 +49,9 @@ and failed experiment can be as simple as::
 
    bad = True
    
-Once the *exp_output.txt* has been written to disk, M-LOOP will read it and delete it. 
+Once the *exp_output.txt* has been written to disk, M-LOOP will read it and delete it.
+
+.. tutorials-interface-include-end
 
 Shell interface
 ===============
@@ -60,7 +64,10 @@ The shell interface is used when experiments can be run from a command in a shel
 	
 in the configuration file. The interface keyword simply indicates that you want M-LOOP to operate the experiment through the shell. The other two keywords need to be customized to your needs.
 
-The command keyword should be provided with the command on the shell that runs the experiment. In the example above the executable would be *run_exp*. Note M-LOOP will try and execute the command in the folder that you run M-LOOP from, if this causes trouble you should just the absolute address of your executable. Your command can be more complicated than a single work, for example if you wanted to include some options like './run_exp --verbose -U' this would also be acceptable. 
+The command keyword should be provided with the command on the shell that runs the experiment.
+In the example above the executable would be *run_exp*. Note M-LOOP will try and execute the command in the folder that you run M-LOOP from.
+If this causes trouble you should just include the absolute address of your executable.
+Your command can be more complicated than a single word, for example if you want to include some options like './run_exp --verbose -U' this would also be acceptable. 
 
 The params_args_type keyword controls how M-LOOP delivers the parameters to the executable. If you use the 'direct' option the parameters will just be fed directly to the experiment as arguments. For example if the command was ./run_exp and the parameters to test next were 1.3, -23 and 12, M-LOOP would execute the following command::
 

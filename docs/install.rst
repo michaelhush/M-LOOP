@@ -4,7 +4,7 @@
 Installation
 ============
 
-M-LOOP is available on PyPI and can be installed with your favorite package manager; simply search for 'M-LOOP' and install. However, if you want the latest features and a local copy of the examples you should install M-LOOP using the source code from the `Link GitHub <https://github.com/michaelhush/M-LOOP>`_. Detailed installation instruction are provided below.
+M-LOOP is available on PyPI and can be installed with your favorite package manager; simply search for 'M-LOOP' and install. However, if you want the latest features and a local copy of the examples you should install M-LOOP using the source code from the `GitHub <https://github.com/michaelhush/M-LOOP>`_. Detailed installation instruction are provided below.
 
 The installation process involves three steps.
 
@@ -12,7 +12,8 @@ The installation process involves three steps.
 2. Install the latest release of :ref:`sec-M-LOOP`.
 3. (Optional) :ref:`Test<sec-Testing>` your M-LOOP install.
 
-If you are having any trouble with the installation you may need to check your the :ref:`package dependencies<sec-dependencies>` have been correctly installed. If you ares still having trouble, you can `Link submit an issue <https://github.com/michaelhush/M-LOOP/issues>`_ to the GitHub.
+If you are having any trouble with the installation you may need to check your the :ref:`package dependencies<sec-dependencies>` have been correctly installed.
+If you are still having trouble, you can `submit an issue <https://github.com/michaelhush/M-LOOP/issues>`_ to the GitHub.
 
 .. _sec-anaconda:
 
@@ -21,7 +22,7 @@ Anaconda
 
 We recommend installing Anaconda to get a python environment with all the required scientific packages. The Anaconda distribution is available here:
 
-https://www.continuum.io/downloads
+https://www.anaconda.com/
 
 Follow the installation instructions they provide.
 
@@ -43,7 +44,8 @@ M-LOOP can be installed from the latest source code with three commands::
    cd ./M-LOOP
    python setup.py develop
 
-The first command downloads the latest source code for M-LOOP from GitHub into the current directory, the second moves into the M-LOOP source directory, and the third link builds the package and creates a link from you python package to the source. If you are using linux or MacOS you may need admin privileges to run the setup script.
+The first command downloads the latest source code for M-LOOP from GitHub into the current directory, the second moves into the M-LOOP source directory, and the third command builds the package and creates a link from you python package to the source.
+If you are using linux or MacOS you may need admin privileges to run the setup script.
 
 At any time you can update M-LOOP to the latest version from GitHub by running the command::
 
@@ -68,7 +70,7 @@ If you are using linux or MacOS you may need admin privileges to run the command
 Testing
 =======
 
-If you have installed from source, to test you installation use the command::
+If you have installed from source, you can test your installation with the command::
 
    python setup.py test
    

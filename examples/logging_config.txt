@@ -1,6 +1,6 @@
 #Logging Options
 #--------------
 
-log_filename = 'cl_run'              #Prefix for logging filename
+log_filename = 'cl_run'             #Prefix for logging filename
 file_log_level=logging.DEBUG        #Logging level saved in file 
 console_log_level=logging.WARNING   #Logging level presented to console, normally INFO

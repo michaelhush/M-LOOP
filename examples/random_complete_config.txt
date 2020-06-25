@@ -2,14 +2,12 @@
 #-----------------------
 
 #General options
-max_num_runs = 20              #number of planned runs
+max_num_runs = 20                 #number of planned runs
 
 #Random controller options
 controller_type = 'random'
-num_params = 2                      #number of parameters
-min_boundary = [1.2,-2]             #minimum boundary
-max_boundary = [10.0,4]            #maximum boundary
-trust_region = [0.2,0.5]            #maximum move distance from best params
-first_params = [5.1,-1.0]           #first parameters to try
-
-
+num_params = 2                    #number of parameters
+min_boundary = [1.2, -2]          #minimum boundary
+max_boundary = [10.0, 4]          #maximum boundary
+trust_region = [0.2, 0.5]         #maximum move distance from best params
+first_params = [5.1, -1.0]        #first parameters to try

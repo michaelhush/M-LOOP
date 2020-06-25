@@ -2,13 +2,13 @@
 #------------------------------
 
 #General options
-max_num_runs = 100                #number of planned runs
+max_num_runs = 100                     #number of planned runs
 target_cost = 0.1
 
 #Gaussian process controller options
 controller_type = 'gaussian_process'   #name of controller to use
 num_params = 3                         #number of parameters
-min_boundary = [-0.8,-0.9,-1.1]        #minimum boundary
-max_boundary = [0.8,0.9,1.1]           #maximum boundary
+min_boundary = [-0.8, -0.9, -1.1]      #minimum boundary
+max_boundary = [0.8, 0.9, 1.1]         #maximum boundary
 trust_region = 0.4                     #maximum % move distance from best params
 cost_has_noise = False                 #whether cost function has noise
