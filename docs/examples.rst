@@ -71,12 +71,12 @@ Neural net
 ----------------
 
 The neural net controller also uses a machine-learning-based algorithm.
-It is similar to the gaussian process controller in that it constructs a model of how the parameters relate to the cost and then uses that model for the optimization.
-However instead of modeling with a gaussian process, it works by modeling with a sampled neural net.
+It is similar to the Gaussian process controller in that it constructs a model of how the parameters relate to the cost and then uses that model for the optimization.
+However instead of modeling with a Gaussian process, it works by modeling with a sampled neural net.
 
-The neural net models aren't always as robust and reliable as the gaussian process.
-However, the time required to fit a gaussian process scales as the cube of the number of data points, while the time to train a neural net only scales linearly.
-Often the gaussian process fitting can be prohibitively slow for long optimizations with many parameters, while the neural net training remains relatively fast.
+The neural net models aren't always as robust and reliable as the Gaussian process.
+However, the time required to fit a Gaussian process scales as the cube of the number of data points, while the time to train a neural net only scales linearly.
+Often the Gaussian process fitting can be prohibitively slow for long optimizations with many parameters, while the neural net training remains relatively fast.
 That makes the neural net controller a good choice for high-dimensional optimizations.
 
 There are two example files for the neural net controller: *neural_net_simple_config.txt* which contains the basic options.
