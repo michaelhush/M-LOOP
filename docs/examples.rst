@@ -53,7 +53,7 @@ Each of the controllers and their specific options are described below. There is
 Gaussian process
 ----------------
 
-The Gaussian-process controller is the default controller.
+The Gaussian process controller is the default controller.
 It uses a `Gaussian process <http://scikit-learn.org/dev/modules/gaussian_process.html>`_ to develop a model for how the parameters relate to the measured cost, effectively creating a model for how the experiment operates.
 This model is then used when picking new points to test. 
 
