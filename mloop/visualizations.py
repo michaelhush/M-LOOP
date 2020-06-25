@@ -1360,10 +1360,11 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         legend_labels=[]
         for ind, losses in enumerate(all_losses):
             color = net_colors[ind]
-            plt.scatter(range(len(losses)), losses, color=color)
+            plt.plot(range(len(losses)), losses, color=color, marker='o', linestyle='')
             artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
             legend_labels.append('Net {net_index}'.format(net_index=ind))
 
+        plt.yscale('log')
         plt.xlabel("Training Run")
         plt.ylabel("Training cost")
         plt.title('Loss vs training run.')
