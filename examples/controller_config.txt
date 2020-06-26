@@ -12,8 +12,8 @@ min_boundary = [0,0]                      #Minimum value for each parameter
 max_boundary = [2,2]                      #Maximum value for each parameter
 
 #Filename related
-controller_archive_filename = 'agogo'     #filename prefix for controller archive
+controller_archive_filename = 'agogo'     #filename prefix for controller archive, can include path
 controller_archive_file_type = 'mat'      #file_type for controller archive 
-learner_archive_filename = 'ogoga'        #filename prefix for learner archive
+learner_archive_filename = 'ogoga'        #filename prefix for learner archive, can include path
 learner_archive_file_type = 'pkl'         #file_type for learner archive
 archive_extra_dict = {'test':'this_is'}   #dictionary of any extra data to be put in archive
