@@ -10,6 +10,7 @@ controller_type = 'differential_evolution'
 num_params = 2                         #number of parameters
 min_boundary = [-1.2, -2]              #minimum boundary
 max_boundary = [10.0, 4]               #maximum boundary
+param_names = ['a', 'b']               #names for parameters
 trust_region = [3.2, 3.1]              #maximum move distance from best params
 first_params = None                    #first parameters to try if None a random set of parameters is chosen
 evolution_strategy = 'best2'           #evolution strategy can be 'best1', 'best2', 'rand1' and 'rand2'. Best uses the best point, rand uses a random one, the number indicates the number of directions added.

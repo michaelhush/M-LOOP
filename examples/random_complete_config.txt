@@ -9,5 +9,6 @@ controller_type = 'random'
 num_params = 2                    #number of parameters
 min_boundary = [1.2, -2]          #minimum boundary
 max_boundary = [10.0, 4]          #maximum boundary
+param_names = ['a', 'b']               #names for parameters
 trust_region = [0.2, 0.5]         #maximum move distance from best params
 first_params = [5.1, -1.0]        #first parameters to try
