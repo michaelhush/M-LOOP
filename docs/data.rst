@@ -33,5 +33,5 @@ If for whatever reason you want to convert files between the formats you can do 
 
    import mloop.utilities as mlu
 
-   saved_dict = mlu.get_dict_from_file('./M-LOOP_archives/controller_archive_2016-08-18_12-18.pkl','pkl') 
-   mlu.save_dict_to_file(saved_dict,'./M-LOOP_archives/controller_archive_2016-08-18_12-18.mat','mat')
+   saved_dict = mlu.get_dict_from_file('./M-LOOP_archives/controller_archive_2016-08-18_12-18.pkl') 
+   mlu.save_dict_to_file(saved_dict,'./M-LOOP_archives/controller_archive_2016-08-18_12-18.mat')

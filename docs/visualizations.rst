@@ -17,6 +17,18 @@ In addition, for most controller types there will be more plots which present da
 The information presented in these plots is explained below.
 The plots which start with *Controller:* are generated from the controller archive, while plots that start with *Learner:* are generated from the learner archive. 
 
+Often optimization runs can involve many parameters, which can make the plots that display values of different parameters too busy and difficult to interpret.
+To avoid this issue, low-level plotting functions support an optional ``parameter_subset`` argument.
+Passing a list of indices for ``parameter_subset`` instructs those functions to only display the data for the parameters corresponding to those indices.
+The high-level plotting functions, i.e. the ones that generate all of the plots that are implemented for a given archive, instead support an optional ``max_parameters_per_plot`` argument.
+When that argument is provided, plots with many parameters will be broken up into several different plots, each displaying the data for at most ``max_parameters_per_plot`` arguments.
+
+Occasionally the legend can obscure some of the data in the plots.
+The positions of legends can be adjusted by calling :meth:`mloop.visualizations.set_legend_location`, which accepts any of the values that can be used for ``loc`` in ``matpotlib``'s ``legend()`` function.
+For example, to set the legend outside of the plot, you can use ``set_legend_location((1, 0))``.
+Note that ``set_legend_location()`` must be called before generating a plot in order for it to have an effect.
+To move the legend in an existing plot, call ``set_legend_location()`` then recreate the plot.
+
 Controller Visualizations
 =========================
 
@@ -128,10 +140,9 @@ If you have a controller and learner archive and would like to examine the visua
 For example the following code will plot the visualizations again from the files *controller_archive_2016-08-23_13-59.mat* and *learner_archive_2016-08-18_12-18.pkl*::
 
    import mloop.visualizations as mlv
-   import matplotlib.pyplot as plt
    
    mlv.configure_plots()
-   mlv.create_controller_visualizations('controller_archive_2016-08-23_13-59.mat',file_type='mat')
-   mlv.create_gaussian_process_learner_visualizations('learner_archive_2016-08-18_12-18.pkl',file_type='pkl')
-   
-   plt.show()
+   mlv.show_all_default_visualizations_from_archive(
+       controller_filename='controller_archive_2016-08-23_13-59.mat',
+       learner_filename='learner_archive_2016-08-18_12-18.pkl',
+   )

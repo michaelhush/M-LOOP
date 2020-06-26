@@ -73,7 +73,10 @@ The params_args_type keyword controls how M-LOOP delivers the parameters to the 
 
 	./run_exp 1.3 -23 12
 
-the other params_args_type option is 'named' in this case each parameter is fed to the experiment as a named option. Given the same parameters as before, M-LOOP would execute the command::
+The other ``params_args_type`` option is ``'named'``, in which case each parameter is fed to the experiment as a named option.
+As of yet, M-LOOP does not use the values from ``param_names`` when calling the executable.
+Instead the executable is passed arguments named ``param1``, ``param2`` and so on.
+Given the same parameters as before, M-LOOP would execute the command::
 
 	./run_exp --param1 1.3 --param2 -23 --param3 12
 	
