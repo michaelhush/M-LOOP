@@ -17,6 +17,12 @@ In addition, for most controller types there will be more plots which present da
 The information presented in these plots is explained below.
 The plots which start with *Controller:* are generated from the controller archive, while plots that start with *Learner:* are generated from the learner archive. 
 
+Often optimization runs can involve many parameters, which can make the plots that display values of different parameters too busy and difficult to interpret.
+To avoid this issue, low-level plotting functions support an optional ``parameter_subset`` argument.
+Passing a list of indices for ``parameter_subset`` instructs those functions to only display the data for the parameters corresponding to those indices.
+The high-level plotting functions, i.e. the ones that generate all of the plots that are implemented for a given archive, instead support an optional ``max_parameters_per_plot`` argument.
+When that argument is provided, plots with many parameters will be broken up into several different plots, each displaying the data for at most ``max_parameters_per_plot`` arguments.
+
 Controller Visualizations
 =========================
 
