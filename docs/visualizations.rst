@@ -128,10 +128,9 @@ If you have a controller and learner archive and would like to examine the visua
 For example the following code will plot the visualizations again from the files *controller_archive_2016-08-23_13-59.mat* and *learner_archive_2016-08-18_12-18.pkl*::
 
    import mloop.visualizations as mlv
-   import matplotlib.pyplot as plt
    
    mlv.configure_plots()
-   mlv.create_controller_visualizations('controller_archive_2016-08-23_13-59.mat',file_type='mat')
-   mlv.create_gaussian_process_learner_visualizations('learner_archive_2016-08-18_12-18.pkl',file_type='pkl')
-   
-   plt.show()
+   mlv.show_all_default_visualizations_from_archive(
+       controller_filename='controller_archive_2016-08-23_13-59.mat',
+       learner_filename='learner_archive_2016-08-18_12-18.pkl',
+   )
