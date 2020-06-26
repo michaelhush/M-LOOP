@@ -23,6 +23,12 @@ Passing a list of indices for ``parameter_subset`` instructs those functions to 
 The high-level plotting functions, i.e. the ones that generate all of the plots that are implemented for a given archive, instead support an optional ``max_parameters_per_plot`` argument.
 When that argument is provided, plots with many parameters will be broken up into several different plots, each displaying the data for at most ``max_parameters_per_plot`` arguments.
 
+Ocassionally the legend can obscure some of the data in the plots.
+The positions of legends can be adjusted by calling :meth:`mloop.visualizations.set_legend_location`, which accepts any of the values that can be used for ``loc`` in ``matpotlib``'s ``legend()`` function.
+For example, to set the legend outside of the plot, you can use ``set_legend_location((1, 0))``.
+Note that ``set_legend_location()`` must be called before generating a plot in order for it to have an effect.
+To move the legend in an existing plot, call ``set_legend_location()`` then recreate the plot.
+
 Controller Visualizations
 =========================
 
