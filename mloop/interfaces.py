@@ -262,6 +262,14 @@ class ShellInterface(Interface):
         else:
             self.log.error('params_args_type not recognized: ' + repr(params_args_type))
         
+        if 'param_names' in kwargs:
+            self.param_names = kwargs['param_names']
+        else:
+            #If no param_names specified, construct the default list
+            self.param_names = []
+            for count in range(0,kwargs['num_params']):
+                self.param_names.append('param' + str(count+1))
+        
         #Counters
         self.command_count = 0
         
@@ -274,6 +282,7 @@ class ShellInterface(Interface):
         self.last_params_dict = params_dict
         
         params = params_dict['params'] 
+        param_names = self.param_names
         
         curr_command = self.command
         
@@ -282,7 +291,7 @@ class ShellInterface(Interface):
                 curr_command += ' ' + str(p)
         elif self.params_args_type == 'named':
             for ind,p in enumerate(params):
-                curr_command += ' ' + '--param' + str(ind +1) + ' ' + str(p)
+                curr_command += ' ' + '--' + str(param_names[ind]) + ' ' + str(p)
         else:
             self.log.error('THIS SHOULD NOT HAPPEN. params_args_type not recognized')
         
