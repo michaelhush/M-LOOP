@@ -246,14 +246,16 @@ class ShellInterface(Interface):
                 ./run_exp --param1 7 --param2 5 --param3 9
             
             Default 'direct'.
+        param_names (Optional [string]): List of names for parameters to be passed as options to the shell command, replacing --param1, --param2, etc. Default None
     '''
     
     def __init__(self,
                  command = './run_exp',
                  params_args_type = 'direct',
+                 param_names = None,
                  **kwargs):
         
-        super(ShellInterface,self).__init__(**kwargs)
+        super(ShellInterface,self).__init__(param_names=param_names,**kwargs)
         
         #User defined variables
         self.command = str(command)
@@ -262,13 +264,7 @@ class ShellInterface(Interface):
         else:
             self.log.error('params_args_type not recognized: ' + repr(params_args_type))
         
-        if 'param_names' in kwargs:
-            self.param_names = kwargs['param_names']
-        else:
-            #If no param_names specified, construct the default list
-            self.param_names = []
-            for count in range(0,kwargs['num_params']):
-                self.param_names.append('param' + str(count+1))
+        self.param_names = param_names
         
         #Counters
         self.command_count = 0
@@ -284,6 +280,12 @@ class ShellInterface(Interface):
         params = params_dict['params'] 
         param_names = self.param_names
         
+        #If no param_names supplied, construct the default list
+        if param_names == None:
+            param_names = []
+            for ind,p in enumerate(params):
+                self.param_names.append('param' + str(ind+1))
+                
         curr_command = self.command
         
         if self.params_args_type == 'direct':
