@@ -246,14 +246,16 @@ class ShellInterface(Interface):
                 ./run_exp --param1 7 --param2 5 --param3 9
             
             Default 'direct'.
+        param_names (Optional [string]): List of names for parameters to be passed as options to the shell command, replacing --param1, --param2, etc. Default None
     '''
     
     def __init__(self,
                  command = './run_exp',
                  params_args_type = 'direct',
+                 param_names = None,
                  **kwargs):
         
-        super(ShellInterface,self).__init__(**kwargs)
+        super(ShellInterface,self).__init__(param_names=param_names,**kwargs)
         
         #User defined variables
         self.command = str(command)
@@ -261,6 +263,8 @@ class ShellInterface(Interface):
             self.params_args_type = str(params_args_type)
         else:
             self.log.error('params_args_type not recognized: ' + repr(params_args_type))
+        
+        self.param_names = param_names
         
         #Counters
         self.command_count = 0
@@ -274,7 +278,14 @@ class ShellInterface(Interface):
         self.last_params_dict = params_dict
         
         params = params_dict['params'] 
+        param_names = self.param_names
         
+        #If no param_names supplied, construct the default list
+        if param_names == None:
+            param_names = []
+            for ind,p in enumerate(params):
+                self.param_names.append('param' + str(ind+1))
+                
         curr_command = self.command
         
         if self.params_args_type == 'direct':
@@ -282,7 +293,7 @@ class ShellInterface(Interface):
                 curr_command += ' ' + str(p)
         elif self.params_args_type == 'named':
             for ind,p in enumerate(params):
-                curr_command += ' ' + '--param' + str(ind +1) + ' ' + str(p)
+                curr_command += ' ' + '--' + str(param_names[ind]) + ' ' + str(p)
         else:
             self.log.error('THIS SHOULD NOT HAPPEN. params_args_type not recognized')
         
