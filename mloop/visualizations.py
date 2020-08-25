@@ -950,7 +950,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         plt.xlabel(scale_param_label)
         plt.xlim((0,1))
         plt.ylabel(cost_label)
-        plt.title('GP Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
+        plt.title('GP Learner: Predicted landscape' + (' with trust regions.' if self.has_trust_region else '.'))
         artists = []
         for ind in range(num_params):
             color = param_colors[ind]
