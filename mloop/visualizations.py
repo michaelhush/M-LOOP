@@ -1037,10 +1037,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             for ind in range(num_params):
                 param_index = parameter_subset[ind]
                 color = param_colors[ind]
-                if self.num_params == 1:
-                    plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=color)
-                else:
-                    plt.plot(self.fit_numbers,self.log_length_scale_history[:,param_index],'o',color=color)
+                plt.plot(self.fit_numbers,self.log_length_scale_history[:,param_index],'o',color=color)
                 artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
                 
             legend_labels = mlu._generate_legend_labels(
