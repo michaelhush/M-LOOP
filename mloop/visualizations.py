@@ -950,7 +950,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         plt.xlabel(scale_param_label)
         plt.xlim((0,1))
         plt.ylabel(cost_label)
-        plt.title('GP Learner: Predicted landscape' + ('with trust regions.' if self.has_trust_region else '.'))
+        plt.title('GP Learner: Predicted landscape' + (' with trust regions.' if self.has_trust_region else '.'))
         artists = []
         for ind in range(num_params):
             color = param_colors[ind]
@@ -1025,24 +1025,30 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         figure_counter += 1
         plt.figure(figure_counter)
         
-        artists=[]
-        for ind in range(num_params):
-            param_index = parameter_subset[ind]
-            color = param_colors[ind]
-            if self.num_params == 1:
-                plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=color)
-            else:
+        if type(self.length_scale) is float:
+            # First treat the case of an isotropic kernel with one length scale
+            # shared by all parameters.
+            plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=param_colors[0])
+            plt.title('GP Learner: Log of length scale vs fit number.')
+        else:
+            # Now treat case of non-isotropic kernels with one length scale per
+            # parameter.
+            artists=[]
+            for ind in range(num_params):
+                param_index = parameter_subset[ind]
+                color = param_colors[ind]
                 plt.plot(self.fit_numbers,self.log_length_scale_history[:,param_index],'o',color=color)
-            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
-            
-        legend_labels = mlu._generate_legend_labels(
-            parameter_subset,
-            self.param_names,
-        )
-        plt.legend(artists, legend_labels ,loc=legend_loc)
+                artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
+                
+            legend_labels = mlu._generate_legend_labels(
+                parameter_subset,
+                self.param_names,
+            )
+            plt.legend(artists, legend_labels ,loc=legend_loc)
+            plt.title('GP Learner: Log of length scales vs fit number.')
+        
         plt.xlabel(run_label)
         plt.ylabel(log_length_scale_label)
-        plt.title('GP Learner: Log of lengths scales vs fit number.')
     
     def plot_noise_level_vs_run(self):
         '''
