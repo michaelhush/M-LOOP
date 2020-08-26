@@ -39,7 +39,12 @@ When writing the file *exp_output.txt* there are three keywords and values you c
    uncer = 0.01
    bad = false
 
-cost refers to the cost calculated from the experimental data. uncer, is optional, and refers to the uncertainty in the cost measurement made. Note, M-LOOP by default assumes there is some noise corrupting costs, which is fitted and compensated for. Hence, if there is some noise in your costs which you are unable to predict from a single measurement, do not worry, you do not have to estimate uncer, you can just leave it out. Lastly bad can be used to indicate an experiment failed and was not able to produce a cost. If the experiment worked set bad = false and if it failed set bad = true.
+``cost`` refers to the cost calculated from the experimental data.
+``uncer``, is optional, and refers to the uncertainty in the cost measurement made.
+Note, M-LOOP by default assumes there is some noise corrupting costs, which is fitted and compensated for.
+Hence, if there is some noise in your costs which you are unable to predict from a single measurement, do not worry, you do not have to estimate uncer, you can just leave it out.
+Lastly ``bad`` can be used to indicate an experiment failed and was not able to produce a cost.
+If the experiment worked set ``bad = false`` and if it failed set ``bad = true``.
 
 Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to true. For example a successful run can simply be::
 
@@ -67,15 +72,17 @@ in the configuration file. The interface keyword simply indicates that you want 
 The command keyword should be provided with the command on the shell that runs the experiment.
 In the example above the executable would be *run_exp*. Note M-LOOP will try and execute the command in the folder that you run M-LOOP from.
 If this causes trouble you should just include the absolute address of your executable.
-Your command can be more complicated than a single word, for example if you want to include some options like './run_exp --verbose -U' this would also be acceptable. 
+Your command can be more complicated than a single word, for example if you want to include some options like ``'./run_exp --verbose -U'`` this would also be acceptable. 
 
-The params_args_type keyword controls how M-LOOP delivers the parameters to the executable. If you use the 'direct' option the parameters will just be fed directly to the experiment as arguments. For example if the command was ./run_exp and the parameters to test next were 1.3, -23 and 12, M-LOOP would execute the following command::
+The ``params_args_type`` keyword controls how M-LOOP delivers the parameters to the executable.
+If you use the ``'direct'`` option the parameters will just be fed directly to the experiment as arguments.
+For example if the command was ``./run_exp`` and the parameters to test next were 1.3, -23 and 12, M-LOOP would execute the following command::
 
 	./run_exp 1.3 -23 12
 
 The other ``params_args_type`` option is ``'named'``, in which case each parameter is fed to the experiment as a named option.
-As of yet, M-LOOP does not use the values from ``param_names`` when calling the executable.
-Instead the executable is passed arguments named ``param1``, ``param2`` and so on.
+If the optional ``param_names`` argument is provided in the configuration file, then M-LOOP will use those as the names of the arguments passed to the executable.
+If ``param_names`` is not provided, then M-LOOP will default to using arguments named ``param1``, ``param2`` and so on.
 Given the same parameters as before, M-LOOP would execute the command::
 
 	./run_exp --param1 1.3 --param2 -23 --param3 12
@@ -87,7 +94,8 @@ After the experiment has run and a cost (and uncertainty or bad value) has been 
 	uncer = 0.1
 	M-LOOP_end
 
-You can also output other information to the shell and split up the information you provide to M-LOOP if you wish. The following output would also valid.
+You can also output other information to the shell and split up the information you provide to M-LOOP if you wish.
+The following output would also valid::
 
 	Running experiment... Experiment complete.
 	Checking it was valid... It worked.
