@@ -43,7 +43,7 @@ When writing the file *exp_output.txt* there are three keywords and values you c
 ``uncer``, is optional, and refers to the uncertainty in the cost measurement made.
 Note, M-LOOP by default assumes there is some noise corrupting costs, which is fitted and compensated for.
 Hence, if there is some noise in your costs which you are unable to predict from a single measurement, do not worry, you do not have to estimate uncer, you can just leave it out.
-Lastly bad can be used to indicate an experiment failed and was not able to produce a cost.
+Lastly ``bad`` can be used to indicate an experiment failed and was not able to produce a cost.
 If the experiment worked set ``bad = false`` and if it failed set ``bad = true``.
 
 Note you do not have to include all of the keywords, you must provide at least a cost or the bad keyword set to true. For example a successful run can simply be::
