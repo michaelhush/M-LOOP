@@ -805,6 +805,11 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
             self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
         
+        # Record value of update_hyperparameters used for optimization. Note that
+        # self.update_hyperparameters is always set to False here above
+        # regardless of its value during the optimization.
+        self.used_update_hyperparameters = self.training_dict['update_hyperparameters']
+        
     def run(self):
         '''
         Overides the GaussianProcessLearner multiprocessor run routine. Does nothing but makes a warning.
@@ -1017,6 +1022,16 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # Make sure that the provided parameter_subset is acceptable.
         self._ensure_parameter_subset_valid(parameter_subset)
         
+        # Get the indices corresponding to the number of fits. If
+        # update_hyperparameters was set to False, then we'll say that there
+        # were zero fits of the hyperparameters.
+        if self.used_update_hyperparameters:
+            fit_numbers = self.fit_numbers
+            log_length_scale_history = self.log_length_scale_history
+        else:
+            fit_numbers = [0]
+            log_length_scale_history = np.log10(np.array([self.length_scale], dtype=float))
+        
         # Generate set of distinct colors for plotting.
         num_params = len(parameter_subset)
         param_colors = _color_list_from_num_of_params(num_params)
@@ -1028,7 +1043,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         if type(self.length_scale) is float:
             # First treat the case of an isotropic kernel with one length scale
             # shared by all parameters.
-            plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=param_colors[0])
+            plt.plot(fit_numbers, log_length_scale_history,'o',color=param_colors[0])
             plt.title('GP Learner: Log of length scale vs fit number.')
         else:
             # Now treat case of non-isotropic kernels with one length scale per
@@ -1037,7 +1052,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             for ind in range(num_params):
                 param_index = parameter_subset[ind]
                 color = param_colors[ind]
-                plt.plot(self.fit_numbers,self.log_length_scale_history[:,param_index],'o',color=color)
+                plt.plot(fit_numbers, log_length_scale_history[:,param_index],'o',color=color)
                 artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
                 
             legend_labels = mlu._generate_legend_labels(
@@ -1061,9 +1076,20 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # Make plot of noise level vs run number if cost has noise. 
         if self.cost_has_noise:
             global figure_counter, run_label, noise_label
+            
+            if self.used_update_hyperparameters:
+                fit_numbers = self.fit_numbers
+                noise_level_history = self.noise_level_history
+            else:
+                # As in self.plot_hyperparameters_vs_run(), if
+                # update_hyperparameters was set to False, we'll say there were
+                # zero fits and plot the only value.
+                fit_numbers = [0]
+                noise_level_history = [self.noise_level]
+
             figure_counter += 1
             plt.figure(figure_counter)
-            plt.plot(self.fit_numbers,self.noise_level_history,'o',color='k')
+            plt.plot(fit_numbers, noise_level_history,'o',color='k')
             plt.xlabel(run_label)
             plt.ylabel(noise_label)
             plt.title('GP Learner: Noise level vs fit number.')     
