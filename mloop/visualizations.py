@@ -805,6 +805,11 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
             self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
         
+        # Record value of update_hyperparameters used for optimization. Note that
+        # self.update_hyperparameters is always set to False here above
+        # regardless of its value during the optimization.
+        self.used_update_hyperparameters = self.training_dict['update_hyperparameters']
+        
     def run(self):
         '''
         Overides the GaussianProcessLearner multiprocessor run routine. Does nothing but makes a warning.
@@ -1020,7 +1025,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # Get the indices corresponding to the number of fits. If
         # update_hyperparameters was set to False, then we'll say that there
         # were zero fits of the hyperparameters.
-        if self.update_hyperparameters:
+        if self.used_update_hyperparameters:
             fit_numbers = self.fit_numbers
             log_length_scale_history = self.log_length_scale_history
         else:
@@ -1072,7 +1077,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         if self.cost_has_noise:
             global figure_counter, run_label, noise_label
             
-            if self.update_hyperparameters:
+            if self.used_update_hyperparameters:
                 fit_numbers = self.fit_numbers
                 noise_level_history = self.noise_level_history
             else:
