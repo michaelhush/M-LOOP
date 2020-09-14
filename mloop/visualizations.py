@@ -1017,6 +1017,16 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # Make sure that the provided parameter_subset is acceptable.
         self._ensure_parameter_subset_valid(parameter_subset)
         
+        # Get the indices corresponding to the number of fits. If
+        # update_hyperparameters was set to False, then we'll say that there
+        # were zero fits of the hyperparameters.
+        if self.update_hyperparameters:
+            fit_numbers = self.fit_numbers
+            log_length_scale_history = self.log_length_scale_history
+        else:
+            fit_numbers = [0]
+            log_length_scale_history = np.log10(np.array([self.length_scale], dtype=float))
+        
         # Generate set of distinct colors for plotting.
         num_params = len(parameter_subset)
         param_colors = _color_list_from_num_of_params(num_params)
@@ -1028,7 +1038,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         if type(self.length_scale) is float:
             # First treat the case of an isotropic kernel with one length scale
             # shared by all parameters.
-            plt.plot(self.fit_numbers,self.log_length_scale_history,'o',color=param_colors[0])
+            plt.plot(fit_numbers, log_length_scale_history,'o',color=param_colors[0])
             plt.title('GP Learner: Log of length scale vs fit number.')
         else:
             # Now treat case of non-isotropic kernels with one length scale per
@@ -1037,7 +1047,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             for ind in range(num_params):
                 param_index = parameter_subset[ind]
                 color = param_colors[ind]
-                plt.plot(self.fit_numbers,self.log_length_scale_history[:,param_index],'o',color=color)
+                plt.plot(fit_numbers, log_length_scale_history[:,param_index],'o',color=color)
                 artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
                 
             legend_labels = mlu._generate_legend_labels(
