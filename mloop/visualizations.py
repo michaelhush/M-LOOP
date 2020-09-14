@@ -1071,9 +1071,20 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # Make plot of noise level vs run number if cost has noise. 
         if self.cost_has_noise:
             global figure_counter, run_label, noise_label
+            
+            if self.update_hyperparameters:
+                fit_numbers = self.fit_numbers
+                noise_level_history = self.noise_level_history
+            else:
+                # As in self.plot_hyperparameters_vs_run(), if
+                # update_hyperparameters was set to False, we'll say there were
+                # zero fits and plot the only value.
+                fit_numbers = [0]
+                noise_level_history = [self.noise_level]
+
             figure_counter += 1
             plt.figure(figure_counter)
-            plt.plot(self.fit_numbers,self.noise_level_history,'o',color='k')
+            plt.plot(fit_numbers, noise_level_history,'o',color='k')
             plt.xlabel(run_label)
             plt.ylabel(noise_label)
             plt.title('GP Learner: Noise level vs fit number.')     
