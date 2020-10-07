@@ -1297,7 +1297,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
             raise ValueError
         self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
-        self.scaled_uncers = self.all_uncers * self.cost_scaler.scale_
+        self.scaled_uncers = self.all_uncers / self.cost_scaler.scale_
         self.gaussian_process.alpha_ = self.scaled_uncers
         self.gaussian_process.fit(self.all_params,self.scaled_costs)
         
@@ -1434,7 +1434,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.predicted_best_scaled_uncertainty = curr_best_uncer
         
         self.predicted_best_cost = self.cost_scaler.inverse_transform(self.predicted_best_scaled_cost)
-        self.predicted_best_uncertainty = self.predicted_best_scaled_uncertainty / self.cost_scaler.scale_
+        self.predicted_best_uncertainty = self.predicted_best_scaled_uncertainty * self.cost_scaler.scale_
         
         self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                                   'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
