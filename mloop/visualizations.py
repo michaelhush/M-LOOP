@@ -1230,10 +1230,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 sample_parameters[:, ind] = cross_parameter_arrays[ind]
                 costs = self.predict_costs_from_param_array(sample_parameters, net_index)
                 cost_arrays.append(costs)
-            if self.cost_scaler.scale_:
-                cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
-            else:
-                cross_parameter_arrays = np.array(cross_parameter_arrays)
+            cross_parameter_arrays = np.array(cross_parameter_arrays)
             cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
             res.append((cross_parameter_arrays, cost_arrays))
         return res
