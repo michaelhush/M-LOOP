@@ -846,17 +846,17 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
                 raise ValueError
         
         cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
-        cost_arrays = []
-        uncertainty_arrays = []
+        scaled_cost_arrays = []
+        scaled_uncertainty_arrays = []
         for ind in range(self.num_params):
             sample_parameters = np.array([cross_section_center for _ in range(points)])
             sample_parameters[:, ind] = cross_parameter_arrays[ind]
             (costs, uncers) = self.gaussian_process.predict(sample_parameters,return_std=True)
-            cost_arrays.append(costs)
-            uncertainty_arrays.append(uncers)
-        cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
-        cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
-        uncertainty_arrays = np.array(uncertainty_arrays)
+            scaled_cost_arrays.append(costs)
+            scaled_uncertainty_arrays.append(uncers)
+        cross_parameter_arrays = np.array(cross_parameter_arrays)
+        cost_arrays = self.cost_scaler.inverse_transform(np.array(scaled_cost_arrays))
+        uncertainty_arrays = np.array(scaled_uncertainty_arrays) * self.cost_scaler.scale_
         return (cross_parameter_arrays,cost_arrays,uncertainty_arrays) 
     
     def create_visualizations(self,
@@ -1224,17 +1224,14 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         res = []
         for net_index in range(self.num_nets):
             cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
-            cost_arrays = []
+            scaled_cost_arrays = []
             for ind in range(self.num_params):
                 sample_parameters = np.array([cross_section_center for _ in range(points)])
                 sample_parameters[:, ind] = cross_parameter_arrays[ind]
                 costs = self.predict_costs_from_param_array(sample_parameters, net_index)
-                cost_arrays.append(costs)
-            if self.cost_scaler.scale_:
-                cross_parameter_arrays = np.array(cross_parameter_arrays)/self.cost_scaler.scale_
-            else:
-                cross_parameter_arrays = np.array(cross_parameter_arrays)
-            cost_arrays = self.cost_scaler.inverse_transform(np.array(cost_arrays))
+                scaled_cost_arrays.append(costs)
+            cross_parameter_arrays = np.array(cross_parameter_arrays)
+            cost_arrays = self.cost_scaler.inverse_transform(np.array(scaled_cost_arrays))
             res.append((cross_parameter_arrays, cost_arrays))
         return res
     
