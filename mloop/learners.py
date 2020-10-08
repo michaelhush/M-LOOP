@@ -1298,7 +1298,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             raise ValueError
         self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
         self.scaled_uncers = self.all_uncers / self.cost_scaler.scale_
-        self.gaussian_process.alpha_ = self.scaled_uncers
+        self.gaussian_process.set_params(alpha=self.scaled_uncers**2)
         self.gaussian_process.fit(self.all_params,self.scaled_costs)
         
         if self.update_hyperparameters:
