@@ -66,6 +66,11 @@ There are two example files for the Gaussian-process controller: *gaussian_proce
 
 .. include:: ../examples/gaussian_process_complete_config.txt
    :literal:
+
+Note that ``noise_level`` corresponds to a variance, not a standard deviation.
+In particular ``noise_level`` estimates the variance if the cost for a given set of parameters were measured many times.
+This is in contrast to the cost uncertainty that the user optionally passes to M-LOOP with the cost itself; that should be the standard deviation.
+In other words the cost uncertainty should estimate the standard deviation if the cost for a given set of parameters were measured many times.
    
 Neural net
 ----------------
