@@ -897,7 +897,7 @@ class GaussianProcessLearner(Learner, mp.Process):
     Keyword Args:
         length_scale (Optional [array]): The initial guess for length scale(s) of the gaussian process. The array can either of size one or the number of parameters or None. If it is size one, it is assumed all the correlation lengths are the same. If it is the number of the parameters then all the parameters have their own independent length scale. If it is None, it is assumed all the length scales should be independent and they are all given an initial value of 1. Default None.
         cost_has_noise (Optional [bool]): If true the learner assumes there is common additive white noise that corrupts the costs provided. This noise is assumed to be on top of the uncertainty in the costs (if it is provided). If false, it is assumed that there is no noise in the cost (or if uncertainties are provided no extra noise beyond the uncertainty). Default True. 
-        noise_level (Optional [float]): The initial guess for the noise level in the costs, is only used if cost_has_noise is true. Default 1.0.
+        noise_level (Optional [float]): The initial guess for the noise level (variance, not standard deviation) in the costs, is only used if cost_has_noise is true. If None, it will be set to the variance of the training data costs. Default None.
         update_hyperparameters (Optional [bool]): Whether the length scales and noise estimate should be updated when new data is provided. Is set to true by default.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
         default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
@@ -932,7 +932,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                  length_scale = None,
                  update_hyperparameters = True,
                  cost_has_noise=True,
-                 noise_level=1.0,
+                 noise_level=None,
                  trust_region=None,
                  default_bad_cost = None,
                  default_bad_uncertainty = None,
@@ -1028,7 +1028,14 @@ class GaussianProcessLearner(Learner, mp.Process):
                 self.length_scale = np.ones((self.num_params,))
             else:
                 self.length_scale = np.array(length_scale, dtype=float)
-            self.noise_level = float(noise_level)
+            if noise_level is None:
+                # Temporarily change to NaN to mark that the default value
+                # should be calcualted once training data is available. Using
+                # NaN instead of None is necessary in case the archive is saved
+                # in .mat format since it can handle NaN but not None.
+                self.noise_level = float('nan')
+            else:
+                self.noise_level = float(noise_level)
             self.cost_has_noise = bool(cost_has_noise)
             
             
@@ -1038,6 +1045,12 @@ class GaussianProcessLearner(Learner, mp.Process):
         #Storage variables and counters
         self.search_params = []
         self.scaled_costs = None
+        self.scaled_uncers = None
+        # Give self.scaled_noise_level a dummy value for now for use in
+        # self.create_gaussian_process(). It will be updated in
+        # self.fit_gaussian_process() once the cost scaling parameters have been
+        # calculated.
+        self.scaled_noise_level = 1.0  
         self.cost_bias = None
         self.uncer_bias = None
         
@@ -1132,7 +1145,7 @@ class GaussianProcessLearner(Learner, mp.Process):
         Create the initial Gaussian process.
         '''
         if self.cost_has_noise:
-            gp_kernel = skk.RBF(length_scale=self.length_scale) + skk.WhiteKernel(noise_level=self.noise_level)
+            gp_kernel = skk.RBF(length_scale=self.length_scale) + skk.WhiteKernel(noise_level=self.scaled_noise_level)
         else:
             gp_kernel = skk.RBF(length_scale=self.length_scale)
         if self.update_hyperparameters:
@@ -1299,6 +1312,15 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
         self.scaled_uncers = self.all_uncers / self.cost_scaler.scale_
         self.gaussian_process.set_params(alpha=self.scaled_uncers**2)
+        if self.cost_has_noise:
+            if np.isnan(self.noise_level):
+                # Set noise_level to its default value, which is the variance of
+                # the training data. This will only happen on first iteration
+                # since self.noise_level is overwritten.
+                self.noise_level = self.cost_scaler.var_
+            # Cost variance's scaling factor is square of costs's scaling factor.
+            self.scaled_noise_level = self.noise_level / self.cost_scaler.scale_**2
+            self.gaussian_process.kernel.set_params(k2__noise_level=self.scaled_noise_level)
         self.gaussian_process.fit(self.all_params,self.scaled_costs)
         
         if self.update_hyperparameters:
@@ -1313,7 +1335,8 @@ class GaussianProcessLearner(Learner, mp.Process):
                 if isinstance(self.length_scale, float):
                     self.length_scale = np.array([self.length_scale])
                 self.length_scale_history.append(self.length_scale)
-                self.noise_level = last_hyperparameters['k2__noise_level']
+                self.scaled_noise_level = last_hyperparameters['k2__noise_level']
+                self.noise_level = self.scaled_noise_level * self.cost_scaler.scale_**2
                 self.noise_level_history.append(self.noise_level)
             else:
                 self.length_scale = last_hyperparameters['length_scale']
