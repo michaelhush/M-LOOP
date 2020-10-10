@@ -20,7 +20,7 @@ import multiprocessing as mp
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
-        
+
 import mloop.neuralnet as mlnn
 #Lazy import of scikit-learn and tensorflow
 
@@ -896,8 +896,10 @@ class GaussianProcessLearner(Learner, mp.Process):
         
     Keyword Args:
         length_scale (Optional [array]): The initial guess for length scale(s) of the gaussian process. The array can either of size one or the number of parameters or None. If it is size one, it is assumed all the correlation lengths are the same. If it is the number of the parameters then all the parameters have their own independent length scale. If it is None, it is assumed all the length scales should be independent and they are all given an initial value of 1. Default None.
+        length_scale_bounds (Optional [array]): The limits on the fitted length scale values, specified as a single pair of numbers e.g. [min, max], or a list of pairs of numbers, e.g. [[min_0, max_0], ..., [min_N, max_N]]. This only has an effect if update_hyperparameters is set to True. If one pair is provided, the same limits will be used for all length scales. Alternatively one pair of [min, max] can be provided for each length scale. For example, possible valid values include [1e-5, 1e5] and [[1e-2, 1e2], [5, 5], [1.6e-4, 1e3]] for optimizations with three parameters. If set to None, the value [1e-5, 1e5] will be used. Default None.
         cost_has_noise (Optional [bool]): If true the learner assumes there is common additive white noise that corrupts the costs provided. This noise is assumed to be on top of the uncertainty in the costs (if it is provided). If false, it is assumed that there is no noise in the cost (or if uncertainties are provided no extra noise beyond the uncertainty). Default True. 
         noise_level (Optional [float]): The initial guess for the noise level (variance, not standard deviation) in the costs, is only used if cost_has_noise is true. If None, it will be set to the variance of the training data costs. Default None.
+        noise_level_bounds (Optional [array]): The limits on the fitted noise_level values, specified as a single pair of numbers [min, max]. This only has an effect if update_hyperparameters and cost_has_noise are both set to True. If set to None, the value [1e-5 * var, 1e5 * var] will be used where var is the variance of the training data costs. Default None.
         update_hyperparameters (Optional [bool]): Whether the length scales and noise estimate should be updated when new data is provided. Is set to true by default.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction. 
         default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
@@ -930,9 +932,11 @@ class GaussianProcessLearner(Learner, mp.Process):
     
     def __init__(self, 
                  length_scale = None,
+                 length_scale_bounds=None,
                  update_hyperparameters = True,
                  cost_has_noise=True,
                  noise_level=None,
+                 noise_level_bounds=None,
                  trust_region=None,
                  default_bad_cost = None,
                  default_bad_uncertainty = None,
@@ -966,6 +970,11 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.length_scale_history = list(self.training_dict['length_scale_history'])
             self.noise_level = float(self.training_dict['noise_level'])
             self.noise_level_history = mlu.safe_cast_to_list(self.training_dict['noise_level_history'])
+            # Try to extract options not present in archives from M-LOOP <= 3.1.1
+            if 'length_scale_bounds' in self.training_dict:
+                length_scale_bounds = mlu.safe_cast_to_array(self.training_dict['length_scale_bounds'])
+            if 'noise_level_bounds' in self.training_dict:
+                noise_level_bounds = mlu.safe_cast_to_array(self.training_dict['noise_level_bounds'])
             
             #Counters
             self.costs_count = int(self.training_dict['costs_count'])
@@ -1046,11 +1055,8 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.search_params = []
         self.scaled_costs = None
         self.scaled_uncers = None
-        # Give self.scaled_noise_level a dummy value for now for use in
-        # self.create_gaussian_process(). It will be updated in
-        # self.fit_gaussian_process() once the cost scaling parameters have been
-        # calculated.
-        self.scaled_noise_level = 1.0  
+        self.scaled_noise_level = None
+        self.scaled_noise_level_bounds = None
         self.cost_bias = None
         self.uncer_bias = None
         
@@ -1082,6 +1088,14 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.default_bad_uncertainty = None
         self.minimum_uncertainty = float(minimum_uncertainty)
         self._set_trust_region(trust_region)
+        if length_scale_bounds is None:
+            self.length_scale_bounds = np.array([1e-5, 1e5])
+        else:
+            self.length_scale_bounds = mlu.safe_cast_to_array(length_scale_bounds)
+        if noise_level_bounds is None:
+            self.noise_level_bounds = float('nan')
+        else:
+            self.noise_level_bounds = mlu.safe_cast_to_array(noise_level_bounds)
         
         #Checks of variables
         if self.length_scale.size == 1:
@@ -1092,9 +1106,11 @@ class GaussianProcessLearner(Learner, mp.Process):
         if not np.all(self.length_scale >0):
             self.log.error('Correlation lengths must all be positive numbers:' + repr(self.length_scale))
             raise ValueError
+        self._check_length_scale_bounds()
         if self.noise_level < 0:
             self.log.error('noise_level must be greater or equal to zero:' +repr(self.noise_level))
             raise ValueError
+        self._check_noise_level_bounds()
         if self.default_bad_uncertainty is not None:
             if self.default_bad_uncertainty < 0:
                 self.log.error('Default bad uncertainty must be positive.')
@@ -1110,7 +1126,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.log.error('Minimum uncertainty must be larger than zero for the learner.')
             raise ValueError
                 
-        self.create_gaussian_process()
+        self.gaussian_process = None
         
         #Search bounds
         self.search_min = self.min_boundary
@@ -1123,7 +1139,9 @@ class GaussianProcessLearner(Learner, mp.Process):
         self.archive_dict.update({'archive_type':'gaussian_process_learner',
                                   'cost_has_noise':self.cost_has_noise,
                                   'length_scale_history':self.length_scale_history,
+                                  'length_scale_bounds':self.length_scale_bounds,
                                   'noise_level_history':self.noise_level_history,
+                                  'noise_level_bounds':self.noise_level_bounds,
                                   'bad_run_indexs':self.bad_run_indexs,
                                   'bias_func_cycle':self.bias_func_cycle,
                                   'bias_func_cost_factor':self.bias_func_cost_factor,
@@ -1138,20 +1156,100 @@ class GaussianProcessLearner(Learner, mp.Process):
                                   'predict_global_minima_at_end':self.predict_global_minima_at_end})
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
-            
+    
+    def _check_length_scale_bounds(self):
+        '''
+        Ensure self.length_scale_bounds has a valid value, otherwise raise a
+        ValueError.
+        '''
+        bounds = self.length_scale_bounds
+        # First ensure that all of the limits are positive numbers.
+        if not np.all(bounds > 0):
+            message = 'Correlation length bounds must all be positive numbers: ' + repr(self.length_scale_bounds)
+            self.log.error(message)
+            raise ValueError(message)
+        dims_error_message = ('Length scale bounds must a single pair '
+                              '(min, max) or a list of pairs [(min_0, max_0), '
+                              '..., (min_N, max_N)] with one pair per '
+                              'parameter: ' + repr(bounds))
+        range_error_message = ('The length scale lower bound must be less than '
+                               'or equal to the upper bound: ' + repr(bounds))
+        if bounds.ndim == 1:
+            # In this case, length_scale_bounds should be a single pair of
+            # numbers, e.g. (1, 2).
+            if bounds.shape[0] != 2:
+                self.log.error(dims_error_message)
+                raise ValueError(dims_error_message)
+            # Ensure min <= max.
+            if bounds[1] < bounds[0]:
+                self.log.error(range_error_message)
+                raise ValueError(range_error_message)
+        elif bounds.ndim == 2:
+            # In this case, length_scale_bounds should be a list of pairs of
+            # numbers, with exactly one pair per parameter.
+            if bounds.shape[0] != self.num_params:
+                self.log.error(dims_error_message)
+                raise ValueError(dims_error_message)
+            elif bounds.shape[1] != 2:
+                self.log.error(dims_error_message)
+                raise ValueError(dims_error_message)
+            # Ensure min <= max for all pairs.
+            if np.any(bounds[:, 1] < bounds[:, 0]):
+                self.log.error(range_error_message)
+                raise ValueError(range_error_message)
+        else:
+            # Any number of dimensions other that 1 or 2 is definitely wrong.
+            self.log.error(dims_error_message)
+            raise ValueError(dims_error_message)
+    
+    def _check_noise_level_bounds(self):
+        '''
+        Ensure self.noise_level has a valid value, otherwise raise a ValueError.
+        '''
+        bounds = self.noise_level_bounds
+        # If self.noise_level_bounds is set to NaN, then it's actual value will
+        # be automatically set later once training data is available. In that
+        # case there's no need to check anything.
+        if np.any(np.isnan(bounds)):
+            return
+        # Ensure that all of the limits are positive numbers.
+        if not np.all(bounds > 0):
+            message = ('Noise level bounds must all be positive numbers: ' +
+                       repr(bounds))
+            self.log.error(message)
+            raise ValueError(message)
+        # Ensure that the dimensions are correct.
+        if bounds.shape != (2,):
+            message = ('Noise level bounds should have exactly two elements: ' +
+                       repr(bounds))
+            self.log.error(message)
+            raise ValueError(message)
+        # Ensure min <= max.
+        if bounds[1] < bounds[0]:
+            message = ('Noise level lower bound must be less than or equal to '
+                       'upper bound' + repr(bounds))
+            self.log.error(message)
+            raise ValueError(message)
         
     def create_gaussian_process(self):
         '''
-        Create the initial Gaussian process.
+        Create a Gaussian process.
         '''
+        gp_kernel = skk.RBF(
+            length_scale=self.length_scale,
+            length_scale_bounds=self.length_scale_bounds,
+        )
         if self.cost_has_noise:
-            gp_kernel = skk.RBF(length_scale=self.length_scale) + skk.WhiteKernel(noise_level=self.scaled_noise_level)
-        else:
-            gp_kernel = skk.RBF(length_scale=self.length_scale)
+            white_kernel = skk.WhiteKernel(
+                noise_level=self.scaled_noise_level,
+                noise_level_bounds=self.scaled_noise_level_bounds,
+            )
+            gp_kernel = gp_kernel + white_kernel
+        alpha = self.scaled_uncers**2
         if self.update_hyperparameters:
-            self.gaussian_process = skg.GaussianProcessRegressor(kernel=gp_kernel,n_restarts_optimizer=self.hyperparameter_searches)
+            self.gaussian_process = skg.GaussianProcessRegressor(alpha=alpha, kernel=gp_kernel,n_restarts_optimizer=self.hyperparameter_searches)
         else:
-            self.gaussian_process = skg.GaussianProcessRegressor(kernel=gp_kernel,optimizer=None)
+            self.gaussian_process = skg.GaussianProcessRegressor(alpha=alpha, kernel=gp_kernel,optimizer=None)
     
     def wait_for_new_params_event(self):
         '''
@@ -1310,25 +1408,29 @@ class GaussianProcessLearner(Learner, mp.Process):
             self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
             raise ValueError
         self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
-        self.scaled_uncers = self.all_uncers / self.cost_scaler.scale_
-        self.gaussian_process.set_params(alpha=self.scaled_uncers**2)
+        cost_scaling_factor = float(self.cost_scaler.scale_)
+        self.scaled_uncers = self.all_uncers / cost_scaling_factor
         if self.cost_has_noise:
             if np.isnan(self.noise_level):
                 # Set noise_level to its default value, which is the variance of
-                # the training data. This will only happen on first iteration
-                # since self.noise_level is overwritten.
-                self.noise_level = self.cost_scaler.var_
+                # the training data, which is equal to the square of the cost
+                # scaling factor. This will only happen on first iteration since
+                # self.noise_level is overwritten.
+                self.noise_level = cost_scaling_factor**2
+            if np.any(np.isnan(self.noise_level_bounds)):
+                self.noise_level_bounds = np.array([1e-5, 1e5]) * cost_scaling_factor**2
             # Cost variance's scaling factor is square of costs's scaling factor.
-            self.scaled_noise_level = self.noise_level / self.cost_scaler.scale_**2
-            self.gaussian_process.kernel.set_params(k2__noise_level=self.scaled_noise_level)
+            self.scaled_noise_level = self.noise_level / cost_scaling_factor**2
+            self.scaled_noise_level_bounds = self.noise_level_bounds / cost_scaling_factor**2
+
+        self.create_gaussian_process()
         self.gaussian_process.fit(self.all_params,self.scaled_costs)
         
         if self.update_hyperparameters:
             
             self.fit_count += 1
-            self.gaussian_process.kernel = self.gaussian_process.kernel_
         
-            last_hyperparameters = self.gaussian_process.kernel.get_params()
+            last_hyperparameters = self.gaussian_process.kernel_.get_params()
             
             if self.cost_has_noise:
                 self.length_scale = last_hyperparameters['k1__length_scale']
@@ -1336,7 +1438,7 @@ class GaussianProcessLearner(Learner, mp.Process):
                     self.length_scale = np.array([self.length_scale])
                 self.length_scale_history.append(self.length_scale)
                 self.scaled_noise_level = last_hyperparameters['k2__noise_level']
-                self.noise_level = self.scaled_noise_level * self.cost_scaler.scale_**2
+                self.noise_level = self.scaled_noise_level * cost_scaling_factor**2
                 self.noise_level_history.append(self.noise_level)
             else:
                 self.length_scale = last_hyperparameters['length_scale']
