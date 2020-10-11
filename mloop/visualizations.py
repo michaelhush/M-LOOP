@@ -787,7 +787,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         self.has_trust_region = bool(np.array(self.training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(self.training_dict['trust_region'], dtype=float))
         
-        self.create_gaussian_process()
         self.fit_gaussian_process()
         
         self.param_numbers = np.arange(self.num_params)
