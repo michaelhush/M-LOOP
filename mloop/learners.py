@@ -977,6 +977,14 @@ class GaussianProcessLearner(Learner, mp.Process):
                 length_scale_bounds = mlu.safe_cast_to_array(self.training_dict['length_scale_bounds'])
             if 'noise_level_bounds' in self.training_dict:
                 noise_level_bounds = mlu.safe_cast_to_array(self.training_dict['noise_level_bounds'])
+            if 'mloop_version' not in self.training_dict:
+                # M-LOOP versions <= 3.1.1 didn't scale noise level and didn't
+                # record the M-LOOP version. Mark that noise levels should be
+                # unscaled later, which is necessary for plotting for archives
+                # from older versions of M-LOOP.
+                self._scale_deprecated_noise_levels = True
+            else:
+                self._scale_deprecated_noise_levels = False
             
             #Counters
             self.costs_count = int(self.training_dict['costs_count'])
@@ -1048,6 +1056,7 @@ class GaussianProcessLearner(Learner, mp.Process):
             else:
                 self.noise_level = float(noise_level)
             self.cost_has_noise = bool(cost_has_noise)
+            self._scale_deprecated_noise_levels = False
             
             
         #Multiprocessor controls
@@ -1413,6 +1422,12 @@ class GaussianProcessLearner(Learner, mp.Process):
         cost_scaling_factor = float(self.cost_scaler.scale_)
         self.scaled_uncers = self.all_uncers / cost_scaling_factor
         if self.cost_has_noise:
+            # Ensure compatability with archives from M-LOOP versions <= 3.1.1.
+            if self._scale_deprecated_noise_levels:
+                self.noise_level = self.noise_level * cost_scaling_factor**2
+                self.noise_level_history = [level * cost_scaling_factor**2 for level in self.noise_level_history]
+                # Mark that scaling is done to avoid doing it multiple times.
+                self._scale_deprecated_noise_levels = False
             if np.isnan(self.noise_level):
                 # Set noise_level to its default value, which is the variance of
                 # the training data, which is equal to the square of the cost
