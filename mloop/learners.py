@@ -21,6 +21,7 @@ import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
 
+from mloop import __version__
 import mloop.neuralnet as mlnn
 #Lazy import of scikit-learn and tensorflow
 
@@ -157,7 +158,8 @@ class Learner():
         # Ensure that all of the entries are strings.
         self.param_names = [str(name) for name in self.param_names]
         
-        self.archive_dict = {'archive_type':'learner',
+        self.archive_dict = {'mloop_version':__version__,
+                             'archive_type':'learner',
                              'num_params':self.num_params,
                              'min_boundary':self.min_boundary,
                              'max_boundary':self.max_boundary,

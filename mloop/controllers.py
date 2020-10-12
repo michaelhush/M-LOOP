@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import datetime
+from mloop import __version__
 import mloop.utilities as mlu
 import mloop.learners as mll
 import mloop.interfaces as mli
@@ -195,7 +196,8 @@ class Controller():
             if not os.path.exists(archive_dir):
                 os.makedirs(archive_dir)
 
-        self.archive_dict = {'archive_type':'controller',
+        self.archive_dict = {'mloop_version':__version__,
+                             'archive_type':'controller',
                              'num_out_params':self.num_out_params,
                              'out_params':self.out_params,
                              'out_type':self.out_type,

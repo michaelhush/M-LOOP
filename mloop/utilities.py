@@ -83,6 +83,7 @@ def _config_logger(log_filename = default_log_filename,
         ch.setLevel(console_log_level)
         ch.setFormatter(logging.Formatter('%(levelname)-8s %(message)s'))
         log.addHandler(ch)
+        log.info('MLOOP version ' + mloop.__version__)
         log.debug('MLOOP Logger configured.')
     
     return kwargs
