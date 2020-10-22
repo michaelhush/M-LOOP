@@ -1314,9 +1314,10 @@ class GaussianProcessLearner(Learner, mp.Process):
             if not self.check_in_boundary(param):
                 self.log.warning('Parameters provided to Gaussian process learner not in boundaries:' + repr(param))
             cost = float(cost)
+            uncer = float(uncer)
             if uncer < 0:
                 self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
-                uncer = max(float(uncer), self.minimum_uncertainty)
+            uncer = max(uncer, self.minimum_uncertainty)
             
             cost_change_flag = False
             if cost > self.worst_cost:
@@ -1925,9 +1926,10 @@ class NeuralNetLearner(Learner, mp.Process):
             if not self.check_in_boundary(param):
                 self.log.warning('Parameters provided to neural network learner not in boundaries:' + repr(param))
             cost = float(cost)
+            uncer = float(uncer)
             if uncer < 0:
                 self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
-                uncer = max(float(uncer), self.minimum_uncertainty)
+            uncer = max(uncer, self.minimum_uncertainty)
 
             cost_change_flag = False
             if cost > self.worst_cost:
