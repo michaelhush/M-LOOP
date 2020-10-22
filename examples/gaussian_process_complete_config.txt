@@ -13,6 +13,7 @@ max_boundary = [10., 10.]              #maximum boundary
 param_names = ['a', 'b']               #names for parameters
 length_scale = [1.0]                   #initial lengths scales for GP
 length_scale_bounds = [-1e5, 1e5]      #limits on values fit for length_scale
+minimum_uncertainty = 1e-8             #minimum uncertainty of cost, required to avoid fitting errors
 cost_has_noise = True                  #whether cost function has noise
 noise_level = 0.1                      #initial noise level estimate, cost's variance (standard deviation squared)
 noise_level_bounds = [1e-5, 1e5]       #limits on values fit for noise_level
