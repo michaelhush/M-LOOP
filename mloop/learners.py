@@ -74,9 +74,7 @@ class Learner():
 
         super(Learner,self).__init__()
         
-        global learner_thread_count
-        learner_thread_count += 1        
-        self.log = logging.getLogger(__name__ + '.' + str(learner_thread_count))
+        self._prepare_logger()
         
         self.learner_wait=float(1)
         
@@ -167,6 +165,19 @@ class Learner():
                              'param_names':self.param_names}
         
         self.log.debug('Learner init completed.')   
+        
+    def _prepare_logger(self):
+        '''
+        Prepare the logger.
+        
+        If `self.log` already exists, then this method silently returns without
+        changing anything.
+        '''
+        if not hasattr(self, 'log'):
+            global learner_thread_count
+            learner_thread_count += 1
+            name = __name__ + '.' + str(learner_thread_count)
+            self.log = logging.getLogger(name)
         
     def check_num_params(self,param):
         '''
@@ -950,6 +961,9 @@ class MachineLearner(Learner):
                  training_filename=None,
                  training_file_type=None,
                  **kwargs):
+        # Prepare logger now so that logging can be done before calling parent's
+        # __init__() method.
+        self._prepare_logger()
 
         if training_filename is not None:
             # Automatically determine gp_training_file_type if necessary.
@@ -1129,12 +1143,7 @@ class MachineLearner(Learner):
                            kwargs_val=kwargs_[name],
                            training_value=training_value,
                        )
-                # Catch 22 here. self.log doesn't exist until Learner.__init__()
-                # creates it, but this method needs to be used before calling
-                # Learner.__init__(). Since this would only be printed to
-                # console anyway due to issues with multi-process logging, we'll
-                # just raise the error without logging it.
-                # self.log.error(msg)
+                self.log.error(msg)
                 raise ValueError(msg)
 
 
