@@ -980,6 +980,17 @@ class MachineLearner(Learner):
             # Get the training dictionary.
             self.training_dict = mlu.get_dict_from_file(training_filename, training_file_type)
 
+            # Ensure the archive is of the correct type.
+            if self.training_dict['archive_type'] != self._ARCHIVE_TYPE:
+                msg = ("Training archive must have "
+                       "'archive_type'='{correct_type}' but has "
+                       "'archive_type'='{actual_type}'.").format(
+                           correct_type=self._ARCHIVE_TYPE,
+                           actual_type=self.training_dict['archive_type'],
+                       )
+                self.log.error(msg)
+                raise NotImplementedError(msg)
+
             # Basic optimization settings that get passed to parent.
             num_params = int(self.training_dict['num_params'])
             kwargs['num_params'] = self._reconcile_kwarg_and_training_val(
@@ -1204,6 +1215,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         cost_scaler (StandardScaler): Scaler used to normalize the provided costs. 
         has_trust_region (bool): Whether the learner has a trust region. 
     ''' 
+    _ARCHIVE_TYPE = 'gaussian_process_learner'
     
     def __init__(self, 
                  length_scale = None,
@@ -1324,7 +1336,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         
         self.cost_scaler = skp.StandardScaler()
         
-        self.archive_dict.update({'archive_type':'gaussian_process_learner',
+        self.archive_dict.update({'archive_type':self._ARCHIVE_TYPE,
                                   'cost_has_noise':self.cost_has_noise,
                                   'length_scale_history':self.length_scale_history,
                                   'length_scale_bounds':self.length_scale_bounds,
@@ -1812,6 +1824,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         cost_scaler_init_index (int): The number of params to use to initialise cost_scaler.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
+    _ARCHIVE_TYPE = 'neural_net_learner'
 
     def __init__(self,
                  nn_training_filename =None,
@@ -1865,7 +1878,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         self.cost_has_noise = True
         self.noise_level = 1
 
-        self.archive_dict.update({'archive_type':'neural_net_learner',
+        self.archive_dict.update({'archive_type':self._ARCHIVE_TYPE,
                                   'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
