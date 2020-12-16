@@ -968,9 +968,29 @@ class MachineLearner(Learner):
 
             # Basic optimization settings that get passed to parent.
             num_params = int(self.training_dict['num_params'])
+            kwargs['num_params'] = self._reconcile_kwarg_and_training_val(
+                kwargs,
+                'num_params',
+                num_params,
+            )
             min_boundary = mlu.safe_cast_to_array(self.training_dict['min_boundary'])
+            kwargs['min_boundary'] = self._reconcile_kwarg_and_training_val(
+                kwargs,
+                'min_boundary',
+                min_boundary,
+            )
             max_boundary = mlu.safe_cast_to_array(self.training_dict['max_boundary'])
+            kwargs['max_boundary'] = self._reconcile_kwarg_and_training_val(
+                kwargs,
+                'max_boundary',
+                max_boundary,
+            )
             param_names = mlu._param_names_from_file_dict(self.training_dict)
+            kwargs['param_names'] = self._reconcile_kwarg_and_training_val(
+                kwargs,
+                'param_names',
+                param_names,
+            )
 
             #Counters
             self.costs_count = int(self.training_dict['costs_count'])
@@ -996,12 +1016,7 @@ class MachineLearner(Learner):
                 self.has_global_minima = True
             except KeyError:
                 self.has_global_minima = False
-            super(MachineLearner, self).__init__(
-                num_params=num_params,
-                min_boundary=min_boundary,
-                max_boundary=max_boundary,
-                param_names=param_names,
-                **kwargs)
+            super(MachineLearner, self).__init__(**kwargs)
         else:
             #Storage variables, archived
             self.all_params = np.array([], dtype=float)
@@ -1060,7 +1075,68 @@ class MachineLearner(Learner):
         self.search_max = self.max_boundary
         self.search_diff = self.search_max - self.search_min
         self.search_region = list(zip(self.search_min, self.search_max))
-        
+
+    def _reconcile_kwarg_and_training_val(self, kwargs_, name, training_value):
+        '''Utility function for comparing values from kwargs to training values.
+
+        When a training archive is specified there can be two values specified
+        for some parameters; one from user's config/kwargs and one from the
+        training archive. This function compares the values. If the values are
+        the same then the value is returned, and if they are different a
+        `ValueError` is raised. Care is taken not to raise that error though if
+        one of the values is `None` since that can mean that a value wasn't
+        specified. In that case the other value is returned, or `None` is
+        returned if they are both `None`.
+
+        Args:
+            kwargs_ ([dict]): The dictionary of keyword arguments passed to
+                `__init__()`.
+            name ([str]): The name of the parameter.
+            training_value ([any]): The value for the parameter in the training
+                archive.
+
+        Raises:
+            ValueError: A `ValueError` is raised if the value of the parameter
+                in the keyword arguments doesn't match the value from the
+                training archive.
+
+        Returns:
+            [any]: The value for the parameter, taken from either `kwargs_` or
+                `training_value`, or both if they are the same.
+        '''
+        if name not in kwargs_ or kwargs_[name] is None:
+            # No non-default value provided in kwargs_, so use the training
+            # value.
+            return training_value
+        elif training_value is None:
+            # Have a non-default value in kwargs_ but training_value is None, so
+            # use the value from kwargs_.
+            return kwargs_[name]
+        else:
+            # In this case both kwargs_ and and training_value are non-default.
+            # If they are the same, then return their common value. If they are
+            # different raise an error to alert the user.
+            if isinstance(kwargs_[name], np.ndarray) or isinstance(training_value, np.ndarray):
+                same = np.all(kwargs_[name] == training_value)
+            else:
+                same = (kwargs_[name] == training_value)
+            if same:
+                return training_value
+            else:
+                msg = ("Value passed for {name} ({kwargs_val}) does not match "
+                       "value in training archive ({training_value}).").format(
+                           name=name,
+                           kwargs_val=kwargs_[name],
+                           training_value=training_value,
+                       )
+                # Catch 22 here. self.log doesn't exist until Learner.__init__()
+                # creates it, but this method needs to be used before calling
+                # Learner.__init__(). Since this would only be printed to
+                # console anyway due to issues with multi-process logging, we'll
+                # just raise the error without logging it.
+                # self.log.error(msg)
+                raise ValueError(msg)
+
 
 class GaussianProcessLearner(MachineLearner, mp.Process):
     '''
