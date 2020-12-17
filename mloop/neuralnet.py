@@ -149,6 +149,7 @@ class SingleNeuralNet():
 
             ## Define tensors for evaluating the loss on the full input
             self.loss_raw = get_loss_raw(self.output_placeholder, self.output_var)
+            self.loss_reg = loss_reg
             self.loss_total = self.loss_raw + loss_reg
 
             ## Training
@@ -222,10 +223,10 @@ class SingleNeuralNet():
 
     def _loss(self, params, costs):
         '''
-        Returns the loss and unregularised loss for the given params and costs.
+        Returns the loss, unregularised loss, and regularization loss for the given params and costs.
         '''
         return self.tf_session.run(
-            [self.loss_total, self.loss_raw],
+            [self.loss_total, self.loss_raw, self.loss_reg],
             feed_dict={self.input_placeholder: params,
                        self.output_placeholder: [[c] for c in costs],
                        self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
@@ -277,13 +278,16 @@ class SingleNeuralNet():
                                                    self.keep_prob_placeholder: self.keep_prob,
                                                    })
                 if i % 10 == 0:
-                    (l, ul) = self._loss(params, costs)
+                    (l, ul, lr) = self._loss(params, costs)
                     self.losses_list.append(l)
-                    self.log.info('Fit neural network with total training cost ' + str(l)
-                            + ', with unregularized cost ' + str(ul))
+                    self.log.info(
+                        ("Fit neural network with total training cost {l}, "
+                         "with unregularized cost {ul} and regularization cost "
+                         "{lr}").format(l=l, ul=ul, lr=lr)
+                    )
             self.log.debug("Run trained for: " + str(time.time() - run_start))
 
-            (l, ul) = self._loss(params, costs)
+            (l, ul, lr) = self._loss(params, costs)
             al = tot / float(epochs)
             self.log.debug('Loss ' + str(l) + ', average loss ' + str(al))
             if l > threshold:
