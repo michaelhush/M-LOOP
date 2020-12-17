@@ -646,13 +646,19 @@ class NeuralNet():
 
                 # Fit regularisation
 
-                # Split the data into training and cross validation
+                # Split the data into training and cross validation randomly
                 training_fraction = 0.9
-                split_index = int(training_fraction * len(all_params))
-                train_params = all_params[:split_index]
-                train_costs = all_costs[:split_index]
-                cv_params = all_params[split_index:]
-                cv_costs = all_costs[split_index:]
+                n_observations = len(all_costs)
+                split_index = int(training_fraction * n_observations)
+                indices = np.random.permutation(n_observations)
+                # Extract the training dataset.
+                train_indices = indices[:split_index]
+                train_params = all_params[train_indices]
+                train_costs = all_costs[train_indices]
+                # Extract the cross validation dataset.
+                cv_indices = indices[split_index:]
+                cv_params = all_params[cv_indices]
+                cv_costs = all_costs[cv_indices]
 
                 orig_cv_loss = self.net.cross_validation_loss(cv_params, cv_costs)
                 best_cv_loss = orig_cv_loss
