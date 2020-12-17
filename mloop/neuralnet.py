@@ -298,7 +298,7 @@ class SingleNeuralNet():
             params (array): array of parameter arrays
             costs (array): array of costs (associated with the corresponding parameters)
         '''
-        return self.tf_session.run(self.loss_total,
+        return self.tf_session.run(self.loss_raw,
                                   feed_dict={self.input_placeholder: params,
                                   self.output_placeholder: [[c] for c in costs],
                                   })
