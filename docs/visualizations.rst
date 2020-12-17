@@ -83,6 +83,7 @@ Gaussian Process
   The noise level is useful for quantifying the intrinsic noise and uncertainty in your cost value.
   Most other optimization algorithms will not provide this estimate.
   The noise level estimate may be helpful when isolating what part of your system can be optimized and what part is due to random fluctuations.
+  This plot will only be generated if the ``cost_has_noise`` option was set to ``True``.
 
 Neural Net
 ----------
@@ -101,13 +102,14 @@ Neural Net
   This plot is also only generated if the optimization had two parameters.
   It shows the same data as the cost surface plot, except that the predicted cost is plotted using a color scale rather than using a third dimension.
 
-- **Neural Net Learner: Loss vs Training Run.**
-  Each time the neural nets are fitted there is a resulting loss, which is a measure of how well the predicted cost fits the measured values.
+- **Neural Net Learner: Loss vs Epoch.**
+  While fitting the neural nets their loss is calculated, which is a measure of how well the predicted cost fits the measured values.
   In M-LOOP this is measured as the mean of the square of the deviation between the predicted and measured values, plus a contribution from the regularization loss which is used to reduce overfitting.
   Each neural net records its loss every ten training epochs.
   This plot displays those recorded losses.
-  Note that a "training run" here is not the same as a run of the experiment.
-  Instead it is a measure of how many times the neural net fitting routine iterated over the data.
+  Note that a "epoch" here is not the same as a run of the experiment.
+  One epoch corresponds to one iteration over the full data set while fitting a neural net.
+  Generally the fitting routine will go through many epochs during one fit, and the number of epochs per fit will vary.
   
 
 Differential Evolution
