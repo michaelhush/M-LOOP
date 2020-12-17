@@ -1422,7 +1422,21 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
 
     def plot_losses(self):
         '''
-        Produce a figure of the loss as a function of training run for each net.
+        Produce a figure of the loss as a function of epoch for each net.
+        
+        The loss is the mean-squared fitting error of the neural net plus the
+        regularization loss, which is the regularization coefficient times the
+        mean L2 norm of the neural net weight arrays (without the square root).
+        Note that the fitting error is calculated after normalizing the data, so
+        it is in arbitrary units.
+
+        As the neural nets are fit, the loss is recorded every 10 epochs. The
+        number of epochs per fit varies, and may be different for different
+        nets. The loss will generally increase at the begining of each fit as
+        new data points will have been added.
+        
+        Also note that a lower loss isn't always better; a loss that is too low
+        can be a sign of overfitting.
         '''
         global figure_counter
         figure_counter += 1
@@ -1438,12 +1452,13 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         legend_labels=[]
         for ind, losses in enumerate(all_losses):
             color = net_colors[ind]
-            plt.plot(range(len(losses)), losses, color=color, marker='o', linestyle='')
+            epoch_numbers = 10 * np.arange(len(losses))
+            plt.plot(epoch_numbers, losses, color=color, marker='o', linestyle='')
             artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
             legend_labels.append('Net {net_index}'.format(net_index=ind))
 
         plt.yscale('log')
-        plt.xlabel("Training Run")
-        plt.ylabel("Training cost")
-        plt.title('Loss vs training run.')
+        plt.xlabel("Epoch")
+        plt.ylabel("Fitting Loss")
+        plt.title('Loss vs Epoch')
         plt.legend(artists, legend_labels, loc=legend_loc)
