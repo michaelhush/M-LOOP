@@ -663,23 +663,41 @@ class NeuralNet():
                 orig_cv_loss = self.net.cross_validation_loss(cv_params, cv_costs)
                 best_cv_loss = orig_cv_loss
 
-                self.log.debug("Fitting regularisation, current cv loss=" + str(orig_cv_loss))
-
-                # Try a bunch of different regularisation parameters, switching to a new one if it
-                # does significantly better on the cross validation set than the old one.
-                for r in [0.001, 0.01, 0.1, 1, 10]:
+                # Try a bunch of different regularisation parameters, switching
+                # to a new one if it does better on the cross validation set
+                # than the old one.
+                previous_regularization = self.last_net_reg
+                regularizations = [0.001, 0.01, 0.1, 1, 10]
+                if previous_regularization not in regularizations:
+                    regularizations.append(previous_regularization)
+                cv_losses = []
+                best_cv_loss = np.inf
+                for r in regularizations:
                     net = self._make_net(r)
                     net.init()
                     net.fit(train_params, train_costs, self.initial_epochs)
                     this_cv_loss = net.cross_validation_loss(cv_params, cv_costs)
-                    if this_cv_loss < best_cv_loss and this_cv_loss < 0.1 * orig_cv_loss:
+                    cv_losses.append(this_cv_loss)
+                    if this_cv_loss < best_cv_loss:
                         best_cv_loss = this_cv_loss
-                        self.log.debug("Switching to reg=" + str(r) + ", cv loss=" + str(best_cv_loss))
                         self.last_net_reg = r
                         self.net.destroy()
                         self.net = net
                     else:
                         net.destroy()
+                self.log.debug(
+                    ("Regularizations tried: {regularizations}, corresponding "
+                     "cross validation losses: {cv_losses}").format(
+                         regularizations=regularizations,
+                         cv_losses=cv_losses,
+                     )
+                )
+                self.log.info(
+                    "Using reg={last_net_reg}, cv loss={best_cv_loss}".format(
+                        last_net_reg=self.last_net_reg,
+                        best_cv_loss=best_cv_loss,
+                    )
+                )
 
         self.net.fit(
                 all_params,
