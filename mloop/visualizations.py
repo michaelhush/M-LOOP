@@ -11,10 +11,12 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import warnings
 
 figure_counter = 0
 cmap = plt.get_cmap('hsv')
 run_label = 'Run number'
+fit_label = 'Fit number'
 cost_label = 'Cost'
 generation_label = 'Generation number'
 scale_param_label = 'Min (0) to max (1) parameters'
@@ -898,12 +900,12 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             
         if plot_hyperparameters_vs_run:
             for parameter_chunk in parameter_chunks:
-                self.plot_hyperparameters_vs_run(
+                self.plot_hyperparameters_vs_fit(
                     parameter_subset=parameter_chunk,
                 )
         
         if plot_noise_level_vs_run:
-            self.plot_noise_level_vs_run()
+            self.plot_noise_level_vs_fit()
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
         _ensure_parameter_subset_valid(self, parameter_subset)
@@ -1001,18 +1003,31 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
         plt.legend(artists, [str(x) for x in range(self.num_params)], loc=legend_loc)
     '''
-    
-    def plot_hyperparameters_vs_run(self, parameter_subset=None):
+
+    def plot_hyperparameters_vs_run(self, *args, **kwargs):
         '''
-        Produce a figure of the hyperparameters as a function of run number.
-    
+        Deprecated. Use `plot_hyperparameters_vs_fit()` instead.
+        '''
+        msg = ("plot_hyperparameters_vs_run() is deprecated; "
+               "use plot_hyperparameters_vs_fit() instead.")
+        warnings.warn(msg)
+        self.plot_hyperparameters_vs_fit(*args, **kwargs)
+
+    def plot_hyperparameters_vs_fit(self, parameter_subset=None):
+        '''
+        Produce a figure of the hyperparameters as a function of fit number.
+
+        Only one fit is performed per generation, and multiple parameter sets
+        are run each generation. Therefore the number of fits is less than the
+        number of runs.
+
         Args:
             parameter_subset (list-like): The indices of parameters to plot. The
                 indices should be 0-based, i.e. the first parameter is
                 identified with index 0. Generally the values of the indices in
-                parameter_subset should be between 0 and the number of
+                `parameter_subset` should be between 0 and the number of
                 parameters minus one, inclusively. If set to `None`, then all
-                parameters will be plotted. Default None.
+                parameters will be plotted. Default `None`.
         '''
         # Get default value for parameter_subset if necessary.
         if parameter_subset is None:
@@ -1035,7 +1050,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         num_params = len(parameter_subset)
         param_colors = _color_list_from_num_of_params(num_params)
         
-        global figure_counter, run_label, legend_loc, log_length_scale_label
+        global figure_counter, fit_label, legend_loc, log_length_scale_label
         figure_counter += 1
         plt.figure(figure_counter)
         
@@ -1061,25 +1076,38 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plt.legend(artists, legend_labels ,loc=legend_loc)
             plt.title('GP Learner: Log of length scales vs fit number.')
         
-        plt.xlabel(run_label)
+        plt.xlabel(fit_label)
         plt.ylabel(log_length_scale_label)
-    
-    def plot_noise_level_vs_run(self):
-        '''
-        This method plots the fitted noise level as a function of run number.
 
-        The noise_level approximates the variance of values that would be
-        measured if the cost was repeatedly measured for the same set of
+    def plot_noise_level_vs_run(self, *args, **kwargs):
+        '''
+        Deprecated. Use `plot_noise_level_vs_fit()` instead.
+        '''
+        msg = ("plot_noise_level_vs_run() is deprecated; "
+               "use plot_noise_level_vs_fit() instead.")
+        warnings.warn(msg)
+        self.plot_noise_level_vs_fit(*args, **kwargs)
+
+    def plot_noise_level_vs_fit(self):
+        '''
+        This method plots the fitted noise level as a function of fit number.
+
+        The `noise_level` approximates the variance of values that would be
+        measured if the cost were repeatedly measured for the same set of
         parameters. Note that this is the variance in those costs; not the
         standard deviation.
 
-        This plot is only relevant to optimizations for which cost_has_noise is
-        True. If cost_has_noise is False then this method does nothing and
-        silently returns.
+        This plot is only relevant to optimizations for which `cost_has_noise`
+        is `True`. If `cost_has_noise` is `False` then this method does nothing
+        and silently returns.
+
+        Only one fit is performed per generation, and multiple parameter sets
+        are run each generation. Therefore the number of fits is less than the
+        number of runs.
         '''
         # Make plot of noise level vs run number if cost has noise. 
         if self.cost_has_noise:
-            global figure_counter, run_label, noise_label
+            global figure_counter, fit_label, noise_label
             
             if self.used_update_hyperparameters:
                 fit_numbers = self.fit_numbers
@@ -1094,7 +1122,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             figure_counter += 1
             plt.figure(figure_counter)
             plt.plot(fit_numbers, noise_level_history,'o',color='k')
-            plt.xlabel(run_label)
+            plt.xlabel(fit_label)
             plt.ylabel(noise_label)
             plt.title('GP Learner: Noise level vs fit number.')     
             
