@@ -793,7 +793,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         self.param_numbers = np.arange(self.num_params)
         self.log_length_scale_history = np.log10(np.array(self.length_scale_history, dtype=float))
         self.noise_level_history = np.array(self.noise_level_history) 
-        self.fit_numbers = np.arange(1,self.fit_count+1)
         
         if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.max_boundary)):
             self.finite_flag = True
@@ -1026,8 +1025,8 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # update_hyperparameters was set to False, then we'll say that there
         # were zero fits of the hyperparameters.
         if self.used_update_hyperparameters:
-            fit_numbers = self.fit_numbers
             log_length_scale_history = self.log_length_scale_history
+            fit_numbers = np.arange(1, len(log_length_scale_history)+1)
         else:
             fit_numbers = [0]
             log_length_scale_history = np.log10(np.array([self.length_scale], dtype=float))
@@ -1083,8 +1082,8 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             global figure_counter, run_label, noise_label
             
             if self.used_update_hyperparameters:
-                fit_numbers = self.fit_numbers
                 noise_level_history = self.noise_level_history
+                fit_numbers = np.arange(1, len(noise_level_history)+1)
             else:
                 # As in self.plot_hyperparameters_vs_run(), if
                 # update_hyperparameters was set to False, we'll say there were
