@@ -862,49 +862,66 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     
     def create_visualizations(self,
                               plot_cross_sections=True,
-                              plot_hyperparameters_vs_run=True,
-                              plot_noise_level_vs_run=True,
-                              max_parameters_per_plot=None):
+                              plot_hyperparameters_vs_fit=True,
+                              plot_noise_level_vs_fit=True,
+                              max_parameters_per_plot=None,
+                              **kwargs):
         '''
         Runs the plots from a gaussian process learner file.
             
         Keyword Args:
-            plot_cross_sections (Optional [bool]): If True plot predicted
-                landscape cross sections, else do not. Default True. 
-            plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
-                hyperparameters as a function of run number, else do not.
-                Default True.
-            plot_noise_level_vs_run (Optional [bool]): If True plot the fitted
-                noise level as a function of run number, else do not. If there
-                is no fitted noise level (i.e. cost_has_noise was set to False),
-                then this plot will not be made regardless of the value passed
-                for plot_noise_level_vs_run. Default True.
+            plot_cross_sections (Optional [bool]): If `True` plot predicted
+                landscape cross sections, else do not. Default `True`. 
+            plot_hyperparameters_vs_fit (Optional [bool]): If `True` plot fitted
+                hyperparameters as a function of fit number, else do not.
+                Default `True`.
+            plot_noise_level_vs_fit (Optional [bool]): If `True` plot the fitted
+                noise level as a function of fit number, else do not. If there
+                is no fitted noise level (i.e. `cost_has_noise` was set to
+                `False`), then this plot will not be made regardless of the
+                value passed for `plot_noise_level_vs_fit`. Default `True`.
             max_parameters_per_plot (Optional [int]): The maximum number of
                 parameters to include in plots that display the values of
                 parameters. If the number of parameters is larger than
-                parameters_per_plot, then the parameters will be divided into
+                `parameters_per_plot`, then the parameters will be divided into
                 groups and each group will be plotted in its own figure. If set
-                to None, then all parameters will be included in the same plot
-                regardless of how many there are. Default None.
+                to `None`, then all parameters will be included in the same plot
+                regardless of how many there are. Default `None`.
         '''
+        # Check for deprecated argument names.
+        if 'plot_hyperparameters_vs_run' in kwargs:
+            msg = ("create_visualizations() argument "
+                   "plot_hyperparameters_vs_run is deprecated; "
+                   "use plot_hyperparameters_vs_fit instead.")
+            warnings.warn(msg)
+            plot_hyperparameters_vs_fit = kwargs['plot_hyperparameters_vs_run']
+        if 'plot_noise_level_vs_run' in kwargs:
+            msg = ("create_visualizations() argument "
+                   "plot_noise_level_vs_run is deprecated; "
+                   "use plot_noise_level_vs_fit instead.")
+            warnings.warn(msg)
+            plot_noise_level_vs_fit = kwargs['plot_noise_level_vs_run']
+
+        # Determine which parameters belong on plots together.
         parameter_chunks = mlu.chunk_list(
             self.param_numbers,
             max_parameters_per_plot,
         )
         
+        # Generate the requested plots.
         if plot_cross_sections:
             for parameter_chunk in parameter_chunks:
                 self.plot_cross_sections(
                     parameter_subset=parameter_chunk,
                 )
             
-        if plot_hyperparameters_vs_run:
+        if plot_hyperparameters_vs_fit:
             for parameter_chunk in parameter_chunks:
                 self.plot_hyperparameters_vs_fit(
                     parameter_subset=parameter_chunk,
                 )
         
-        if plot_noise_level_vs_run:
+        if plot_noise_level_vs_fit:
             self.plot_noise_level_vs_fit()
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
