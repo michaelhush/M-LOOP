@@ -1129,7 +1129,7 @@ class MachineLearner(Learner):
             [any]: The value for the parameter, taken from either `kwargs_` or
                 `training_value`, or both if they are the same.
         '''
-        if name not in kwargs_ or kwargs_[name] is None:
+        if kwargs_.get(name) is None:
             # No non-default value provided in kwargs_, so use the training
             # value.
             return training_value
@@ -1142,7 +1142,7 @@ class MachineLearner(Learner):
             # If they are the same, then return their common value. If they are
             # different raise an error to alert the user.
             if isinstance(kwargs_[name], np.ndarray) or isinstance(training_value, np.ndarray):
-                same = np.all(kwargs_[name] == training_value)
+                same = np.array_equal(kwargs_[name], training_value)
             else:
                 same = (kwargs_[name] == training_value)
             if same:
