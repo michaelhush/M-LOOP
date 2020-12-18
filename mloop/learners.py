@@ -1142,7 +1142,7 @@ class MachineLearner(Learner):
             # If they are the same, then return their common value. If they are
             # different raise an error to alert the user.
             if isinstance(kwargs_[name], np.ndarray) or isinstance(training_value, np.ndarray):
-                same = np.all(kwargs_[name] == training_value)
+                same = np.array_equal(kwargs_[name], training_value)
             else:
                 same = (kwargs_[name] == training_value)
             if same:
