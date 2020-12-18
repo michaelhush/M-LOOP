@@ -107,7 +107,7 @@ Neural Net
   In M-LOOP this is measured as the mean of the square of the deviation between the predicted and measured values, plus a contribution from the regularization loss which is used to reduce overfitting.
   Each neural net records its loss every ten training epochs.
   This plot displays those recorded losses.
-  Note that a "epoch" here is not the same as a run of the experiment.
+  Note that an "epoch" here is not the same as a run of the experiment.
   One epoch corresponds to one iteration over the full data set while fitting a neural net.
   Generally the fitting routine will go through many epochs during one fit, and the number of epochs per fit will vary.
   
