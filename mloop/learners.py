@@ -1854,13 +1854,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                 **kwargs
             )
             self.nn_training_file_dir = self.training_file_dir
-            
-            # Configuration of the fake neural net learner
-            # TODO: length_scale and noise_level aren't used by neural net
-            # learner; probably a copy/paste from gaussian process learner.
-            # Maybe they should be deleted?
-            self.length_scale = mlu.safe_cast_to_array(self.training_dict['length_scale'])
-            self.noise_level = float(self.training_dict['noise_level'])
 
             self.cost_scaler_init_index = self.training_dict['cost_scaler_init_index']
             if not self.cost_scaler_init_index is None:
@@ -1869,12 +1862,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         else:
             super(NeuralNetLearner,self).__init__(**kwargs)
             self.nn_training_file_dir = None
-            
-            #Storage variables, archived
-            # TODO: noise_level_history isn't used by neural net learner;
-            # probably a copy/paste from gaussian process learner. Maybe it
-            # should be deleted?
-            self.noise_level_history = []
 
             # The scaler will be initialised when we're ready to fit it
             self.cost_scaler = None
@@ -1883,23 +1870,12 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         #Constants, limits and tolerances
         self.num_nets = 3
         self.generation_num = 3
-        # TODO: hyperparameter_seraches isn't used by neural net learner;
-        # probably a copy/paste from gaussian process learner. Maybe delete it?
-        self.hyperparameter_searches = max(10,self.num_params)
- 
-        # TODO: length_scale, cost_has_noise, and noise_level aren't used by
-        # neural net learner; probably a copy/paste from gaussian process
-        # learner. Maybe they should be deleted?
-        self.length_scale = 1
-        self.cost_has_noise = True
-        self.noise_level = 1
 
         self.archive_dict.update({'archive_type':self._ARCHIVE_TYPE,
                                   'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
                                   'parameter_searches':self.parameter_searches,
-                                  'hyperparameter_searches':self.hyperparameter_searches,
                                   'bad_uncer_frac':self.bad_uncer_frac,
                                   'trust_region':self.trust_region,
                                   'has_trust_region':self.has_trust_region,
@@ -2137,8 +2113,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                                   'cost_range':self.cost_range,
                                   'costs_count':self.costs_count,
                                   'params_count':self.params_count,
-                                  'length_scale':self.length_scale,
-                                  'noise_level':self.noise_level,
                                   'cost_scaler_init_index':self.cost_scaler_init_index})
         if self.neural_net:
             for i,n in enumerate(self.neural_net):
