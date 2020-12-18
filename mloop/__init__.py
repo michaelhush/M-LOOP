@@ -1,5 +1,5 @@
 '''
-M-LOOP: Machine-Learning Online Optimization Packaage
+M-LOOP: Machine-Learning Online Optimization Package
 
 Python package for performing automated, online optimization of scientific experiments or anything that can be computer controlled. The package employs machine learning algorithms to rapidly find optimal parameters for systems under control. 
 

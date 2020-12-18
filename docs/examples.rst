@@ -110,12 +110,12 @@ There are two example files for the differential evolution controller: *differen
    :literal:
    
    
-Nelder Mead
+Nelder–Mead
 -----------
 
-The Nelder Mead controller implements the `Nelder-Mead method <https://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method>`_ for optimization. You can control the starting point and size of the initial simplex of the method with the configuration file.
+The Nelder–Mead controller implements the `Nelder–Mead method <https://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method>`_ for optimization. You can control the starting point and size of the initial simplex of the method with the configuration file.
 
-There are two example files for the Nelder-Mead controller: *nelder_mead_simple_config.txt* which contains the basic options.
+There are two example files for the Nelder–Mead controller: *nelder_mead_simple_config.txt* which contains the basic options.
 
 .. include:: ../examples/nelder_mead_simple_config.txt
    :literal:

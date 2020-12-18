@@ -121,11 +121,11 @@ Differential Evolution
   This plot displays the measured costs for each generation.
   Because there are multiple runs per generation, there are many different values for the cost plotted for each generation.
 
-Nelder Mead
+Nelder–Mead
 -----------
 
-As of yet there is no visualization class implemented for the Nelder Mead learner.
-The controller's archive may still be plotted though when Nelder Mead is used.
+As of yet there is no visualization class implemented for the Nelder–Mead learner.
+The controller's archive may still be plotted though when Nelder–Mead is used.
 
 Random
 ------

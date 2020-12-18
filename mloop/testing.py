@@ -67,7 +67,7 @@ class TestLandscape():
         
         Keyword Args:
             minimum (Optional [array]): Location of the minimum. If set to None is at the origin. Default None.
-            scales (Optional [array]): scaling of quadratic along the dimention specified. If set to None the scaling is one.
+            scales (Optional [array]): scaling of quadratic along the dimension specified. If set to None the scaling is one.
         '''
         if minimum is None:
             minimum = np.zeros((self.num_params,))
@@ -109,7 +109,7 @@ class TestLandscape():
         Adds a region to landscape that is reported as bad.
         
         Args:
-            min_boundary (array): mininum boundary for bad region
+            min_boundary (array): minimum boundary for bad region
             max_boundary (array): maximum boundary for bad region
         
         
@@ -123,7 +123,7 @@ class TestLandscape():
             self.bad_uncer = bad_uncer
             self.bad_function  = lambda p,c,u : (self.bad_cost,self.bad_uncer, True) if np.all(p >= self.bad_min_boundary)&np.all(self.bad_max_boundary >= p) else (c,u,False)
         else:
-            self.log.error('When defining bad region behavoir bad_cost and bad_uncer must both be None or neither of them are none. bad_cost:' + repr(bad_cost) +'. bad_uncer' + repr(bad_uncer) )
+            self.log.error('When defining bad region behavior bad_cost and bad_uncer must both be None or neither of them are none. bad_cost:' + repr(bad_cost) +'. bad_uncer' + repr(bad_uncer) )
             raise ValueError
     
     def get_cost_dict(self,params):

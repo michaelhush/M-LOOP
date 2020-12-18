@@ -36,7 +36,7 @@ class SingleNeuralNet():
             will train for longer). Alternatively, you can think of this as the smallest gradient
             we'll allow before deciding that the loss isn't improving any more.
         batch_size: The training batch size.
-        keep_prob: The dropoout keep probability.
+        keep_prob: The dropout keep probability.
         regularisation_coefficient: The regularisation coefficient.
         losses_list: A list to which this object will append training losses.
         learner_archive_dir (Optional str): The path to a directory in which to
@@ -175,11 +175,11 @@ class SingleNeuralNet():
         Imports the net from an archive dictionary. You must call exactly one of this and init() before calling any other methods.
         
         Args:
-            archive (dict): An archive dictionary containg the data from a
+            archive (dict): An archive dictionary containing the data from a
                 neural net learner archive, typically created using
                 get_dict_from_file() from utilities.py.
             extra_search_dirs (Optional list of str): If the neural net archive
-                is not in at the location sepcified for it in the archive
+                is not in at the location specified for it in the archive
                 dictionary, then the directories in extra_search_dirs will be
                 checked for a file of the saved name. If found, that file will
                 be used. If set to None, no other directories will be checked.
@@ -568,11 +568,11 @@ class NeuralNet():
         constructor parameters.
         
         Args:
-            archive (dict): An archive dictionary containg the data from a
+            archive (dict): An archive dictionary containing the data from a
                 neural net learner archive, typically created using
                 get_dict_from_file() from utilities.py.
             extra_search_dirs (Optional list of str): If the neural net archive
-                is not in at the location sepcified for it in the archive
+                is not in at the location specified for it in the archive
                 dictionary, then the directories in extra_search_dirs will be
                 checked for a file of the saved name. If found, that file will
                 be used. If set to None, no other directories will be checked.
