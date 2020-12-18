@@ -1129,7 +1129,7 @@ class MachineLearner(Learner):
             [any]: The value for the parameter, taken from either `kwargs_` or
                 `training_value`, or both if they are the same.
         '''
-        if name not in kwargs_ or kwargs_[name] is None:
+        if kwargs_.get(name) is None:
             # No non-default value provided in kwargs_, so use the training
             # value.
             return training_value
