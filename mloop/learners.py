@@ -164,7 +164,7 @@ class Learner():
                              'start_datetime':mlu.datetime_to_string(self.start_datetime),
                              'param_names':self.param_names}
 
-        self.log.debug('Learner init completed.')   
+        self.log.debug('Learner init completed.')
 
     def _prepare_logger(self):
         '''
@@ -901,7 +901,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 class MachineLearner(Learner):
     '''
     A parent class for more specific machine learer classes.
-    
+
     This class is not intended to be used directly.
 
     Keyword Args:
@@ -912,7 +912,7 @@ class MachineLearner(Learner):
             distance the learner will venture as a percentage of the boundaries.
             If it is an array, it must have the same size as the number of
             parameters and the numbers define the maximum absolute distance that
-            can be moved along each direction. 
+            can be moved along each direction.
         default_bad_cost (Optional [float]): If a run is reported as bad and
             `default_bad_cost` is provided, the cost for the bad run is set to
             this default value. If `default_bad_cost` is `None`, then the worst
@@ -931,28 +931,28 @@ class MachineLearner(Learner):
         training_filename (Optional [str]): The name of a learner archive from a
             previous optimization from which to extract past results for use in
             the current optimization. If `None`, no past results will be used.
-            Default `None`. 
+            Default `None`.
         training_file_type (Optional [str]): File type of the training archive.
             Can be `'txt'`, `'pkl'`, `'mat'`, or `None`. If set to `None`, then
             the file type will be determined automatically. This argument has no
-            effect if `training_filename` is set to `None`. Default `None`. 
+            effect if `training_filename` is set to `None`. Default `None`.
 
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
         all_uncers (array): Array containing all uncertainties sent to learner.
-        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1. Needed for training the learner. 
+        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1. Needed for training the learner.
         bad_run_indexs (list): list of indexes to all runs that were marked as bad.
         best_cost (float): Minimum received cost, updated during execution.
         best_params (array): Parameters of best run. (reference to element in params array).
-        best_index (int): index of the best cost and params. 
+        best_index (int): index of the best cost and params.
         worst_cost (float): Maximum received cost, updated during execution.
         worst_index (int): index to run with worst cost.
         cost_range (float): Difference between worst_cost and best_cost
-        params_count (int): Counter for the number of parameters asked to be evaluated by the learner.  
-        has_trust_region (bool): Whether the learner has a trust region. 
+        params_count (int): Counter for the number of parameters asked to be evaluated by the learner.
+        has_trust_region (bool): Whether the learner has a trust region.
     '''
-    
+
     def __init__(self,
                  trust_region=None,
                  default_bad_cost = None,
@@ -1026,7 +1026,7 @@ class MachineLearner(Learner):
             self.all_params = np.array(self.training_dict['all_params'], dtype=float)
             self.all_costs = mlu.safe_cast_to_array(self.training_dict['all_costs'])
             self.all_uncers = mlu.safe_cast_to_array(self.training_dict['all_uncers'])
-            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])            
+            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])
 
             #Derived properties
             self.best_cost = float(self.training_dict['best_cost'])
@@ -1071,7 +1071,7 @@ class MachineLearner(Learner):
         # Constants, limits and tolerances
         self.search_precision = 1.0e-6
         self.parameter_searches = max(10, self.num_params)
-        self.bad_uncer_frac = 0.1 # Fraction of cost range to set a bad run uncertainty 
+        self.bad_uncer_frac = 0.1 # Fraction of cost range to set a bad run uncertainty
 
         # Optional user set variables
         self._set_trust_region(trust_region)
@@ -1175,7 +1175,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         cost_has_noise (Optional [bool]): If true the learner assumes there is common additive white noise that corrupts the costs provided. This noise is assumed to be on top of the uncertainty in the costs (if it is provided). If false, it is assumed that there is no noise in the cost (or if uncertainties are provided no extra noise beyond the uncertainty). Default True.
         noise_level (Optional [float]): The initial guess for the noise level (variance, not standard deviation) in the costs, is only used if cost_has_noise is true. If None, it will be set to the variance of the training data costs. Default None.
         noise_level_bounds (Optional [array]): The limits on the fitted noise_level values, specified as a single pair of numbers [min, max]. This only has an effect if update_hyperparameters and cost_has_noise are both set to True. If set to None, the value [1e-5 * var, 1e5 * var] will be used where var is the variance of the training data costs. Default None.
-        gp_training_filename (Optional [str]): The name of a learner archive from a previous optimization from which to extract past results for use in the current optimization. If `None`, no past results will be used. Default `None`. 
+        gp_training_filename (Optional [str]): The name of a learner archive from a previous optimization from which to extract past results for use in the current optimization. If `None`, no past results will be used. Default `None`.
         gp_training_file_type (Optional [str]): File type of the training
             archive. Can be `'txt'`, `'pkl'`, `'mat'`, or `None`. If set to
             `None`, then the file type will be determined automatically. This
@@ -1254,7 +1254,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                     length_scale_bounds = mlu.safe_cast_to_array(self.training_dict['length_scale_bounds'])
                 if 'noise_level_bounds' in self.training_dict:
                     noise_level_bounds = mlu.safe_cast_to_array(self.training_dict['noise_level_bounds'])
-            
+
             #Storage variables, archived
             self.length_scale_history = list(self.training_dict['length_scale_history'])
             self.noise_level_history = mlu.safe_cast_to_list(self.training_dict['noise_level_history'])
@@ -1808,12 +1808,12 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         nn_training_filename (Optional [str]): The name of a learner archive
             from a previous optimization from which to extract past results for
             use in the current optimization. If `None`, no past results will be
-            used. Default `None`. 
+            used. Default `None`.
         nn_training_file_type (Optional [str]): File type of the training
             archive. Can be `'txt'`, `'pkl'`, `'mat'`, or `None`. If set to
             `None`, then the file type will be determined automatically. This
             argument has no effect if `nn_training_filename` is set to `None`.
-            Default `None`. 
+            Default `None`.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction.
         default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
         default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
@@ -1867,7 +1867,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             # The scaler will be initialised when we're ready to fit it
             self.cost_scaler = None
             self.cost_scaler_init_index = None
- 
+
         #Constants, limits and tolerances
         self.num_nets = 3
         self.generation_num = 3

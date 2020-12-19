@@ -8,7 +8,7 @@ M-LOOP includes a series of example configuration files for each of the controll
 
 The options available are also comprehensively documented in the :ref:`sec-api` as keywords for each of the classes. However, the quickest and easiest way to learn what options are available, if you are not familiar with python, is to just look at the provided examples.
 
-Each of the example files is used when running tests of M-LOOP. So please copy and modify them elsewhere if you use them as a starting point for your configuration file. 
+Each of the example files is used when running tests of M-LOOP. So please copy and modify them elsewhere if you use them as a starting point for your configuration file.
 
 Interfaces
 ==========
@@ -35,7 +35,7 @@ The shell interface is for experiments that can be run through a command execute
 .. include:: ../examples/shell_interface_config.txt
    :literal:
 
-   
+
 Controllers
 ===========
 
@@ -49,19 +49,19 @@ Each of the controllers and their specific options are described below. There is
 
 .. include:: ../examples/controller_config.txt
    :literal:
-   
+
 Gaussian process
 ----------------
 
 The Gaussian process controller is the default controller.
 It uses a `Gaussian process <http://scikit-learn.org/dev/modules/gaussian_process.html>`_ to develop a model for how the parameters relate to the measured cost, effectively creating a model for how the experiment operates.
-This model is then used when picking new points to test. 
+This model is then used when picking new points to test.
 
 There are two example files for the Gaussian-process controller: *gaussian_process_simple_config.txt* which contains the basic options.
 
 .. include:: ../examples/gaussian_process_simple_config.txt
    :literal:
-   
+
 *gaussian_process_complete_config.txt* which contains a comprehensive list of options.
 
 .. include:: ../examples/gaussian_process_complete_config.txt
@@ -71,7 +71,7 @@ Note that ``noise_level`` corresponds to a variance, not a standard deviation.
 In particular ``noise_level`` estimates the variance if the cost for a given set of parameters were measured many times.
 This is in contrast to the cost uncertainty that the user optionally passes to M-LOOP with the cost itself; that should be the standard deviation.
 In other words the cost uncertainty should estimate the standard deviation if the cost for a given set of parameters were measured many times.
-   
+
 Neural net
 ----------------
 
@@ -88,7 +88,7 @@ There are two example files for the neural net controller: *neural_net_simple_co
 
 .. include:: ../examples/neural_net_simple_config.txt
    :literal:
-   
+
 *neural_net_complete_config.txt* which contains a comprehensive list of options.
 
 .. include:: ../examples/neural_net_complete_config.txt
@@ -97,19 +97,19 @@ There are two example files for the neural net controller: *neural_net_simple_co
 Differential evolution
 ----------------------
 
-The differential evolution (DE) controller uses a `DE algorithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so. 
+The differential evolution (DE) controller uses a `DE algorithm <https://en.wikipedia.org/wiki/Differential_evolution>`_ for optimization. DE is a type of evolutionary algorithm, and is historically the most commonly used in automated optimization. DE will eventually find a global solution, however it can take many experiments before it does so.
 
 There are two example files for the differential evolution controller: *differential_evolution_simple_config.txt* which contains the basic options.
 
 .. include:: ../examples/differential_evolution_simple_config.txt
    :literal:
-   
+
 *differential_evolution_complete_config.txt* which contains a comprehensive list of options.
 
 .. include:: ../examples/differential_evolution_complete_config.txt
    :literal:
-   
-   
+
+
 Nelder–Mead
 -----------
 
@@ -119,27 +119,27 @@ There are two example files for the Nelder–Mead controller: *nelder_mead_simpl
 
 .. include:: ../examples/nelder_mead_simple_config.txt
    :literal:
-   
+
 *nelder_mead_complete_config.txt* which contains a comprehensive list of options.
 
 .. include:: ../examples/nelder_mead_complete_config.txt
    :literal:
-   
+
 Random
 ------
 
-The random optimization algorithm picks parameters randomly from a uniform distribution from within the parameter bounds or trust region. 
+The random optimization algorithm picks parameters randomly from a uniform distribution from within the parameter bounds or trust region.
 
 There are two example files for the random controller: *random_simple_config.txt* which contains the basic options.
 
 .. include:: ../examples/random_simple_config.txt
    :literal:
-   
+
 *random_complete_config.txt* which contains a comprehensive list of options.
 
 .. include:: ../examples/random_complete_config.txt
    :literal:
-   
+
 Logging
 =======
 
