@@ -11,7 +11,7 @@ import mloop.visualizations as mlv
 import numpy as np
 import time
 
-#Declare your custom class that inherets from the Interface class
+#Declare your custom class that inherits from the Interface class
 class CustomInterface(mli.Interface):
     
     #Initialization of the interface, including this method is optional

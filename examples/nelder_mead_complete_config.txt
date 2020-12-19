@@ -1,4 +1,4 @@
-#Nelder-Mead Complete Options
+#Nelder–Mead Complete Options
 #----------------------------
 
 #General options

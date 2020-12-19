@@ -103,7 +103,7 @@ In the current example the region size is 2 by 2, with a trust region of 40% .
 Thus the maximum allowed change for the second run will be [0 +/- 0.8, 0 +/- 0.8].
 Alternatively you can provide a list of values for trust_region, which should have one entry for each parameter.
 In that case each entry specifies the maximum change for the corresponding parameter.
-When specified as a list, the elements are interpretted as the absolute amplitude of the change, *not* the change as a fraction of the allowed range.
+When specified as a list, the elements are interpreted as the absolute amplitude of the change, *not* the change as a fraction of the allowed range.
 Setting trust_region to [0.4, 0.4] would make the maximum allowed change for the second run be [0 +/- 0.4, 0 +/- 0.4].
 Generally, specifying the trust_region is only needed if your experiment produces bad results when the parameters are changed significantly between runs.
 Simply delete this keyword if your experiment works with any set of parameters within the boundaries.
@@ -271,7 +271,7 @@ The start of the script imports the libraries that are necessary for M-LOOP to w
 
 .. literalinclude:: ../examples/python_controlled_experiment.py
    :language: python
-   :end-before: #Declare your custom class that inherets from the Interface class
+   :end-before: #Declare your custom class that inherits from the Interface class
 
 The first group of imports are just for python 2 compatibility. M-LOOP is targeted at python3, but has been designed to be bilingual. These imports ensure backward compatibility.
 

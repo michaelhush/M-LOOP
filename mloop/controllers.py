@@ -35,7 +35,7 @@ def create_controller(interface,
         controller_type (Optional [str]): Defines the type of controller can be 'random', 'nelder', 'gaussian_process' or 'neural_net'. Defaults to 'gaussian_process'.
         **controller_config_dict : Options to be passed to controller.
     Returns:
-        Controller : threadible object which must be started with start() to get the controller running.
+        Controller : threadable object which must be started with start() to get the controller running.
     Raises:
         ValueError : if controller_type is an unrecognized string
     '''
@@ -60,7 +60,7 @@ def create_controller(interface,
 
 class Controller():
     '''
-    Abstract class for controllers. The controller controls the entire M-LOOP process. The controller for each algorithm all inherit from this class. The class stores a variety of data which all algorithms use and also all of the achiving and saving features.
+    Abstract class for controllers. The controller controls the entire M-LOOP process. The controller for each algorithm all inherit from this class. The class stores a variety of data which all algorithms use and also all of the archiving and saving features.
     In order to implement your own controller class the minimum requirement is to add a learner to the learner variable. And implement the next_parameters method, where you provide the appropriate information to the learner and get the next parameters.
     See the RandomController for a simple implementation of a controller.
     Note the first three keywords are all possible halting conditions for the controller. If any of them are satisfied the controller will halt (meaning an and condition is used).
@@ -70,7 +70,7 @@ class Controller():
     Keyword Args:
         max_num_runs (Optional [float]): The number of runs before the controller stops. If set to float('+inf') the controller will run forever. Default float('inf'), meaning the controller will run until another condition is met.
         target_cost (Optional [float]): The target cost for the run. If a run achieves a cost lower than the target, the controller is stopped. Default float('-inf'), meaning the controller will run until another condition is met.
-        max_num_runs_without_better_params (Otional [float]): Puts a limit on the number of runs are allowed before a new better set of parameters is found. Default float('inf'), meaning the controller will run until another condition is met.
+        max_num_runs_without_better_params (Optional [float]): Puts a limit on the number of runs are allowed before a new better set of parameters is found. Default float('inf'), meaning the controller will run until another condition is met.
         controller_archive_filename (Optional [string]): Filename for archive. Contains costs, parameter history and other details depending on the controller type. Default 'ControllerArchive.mat'
         controller_archive_file_type (Optional [string]): File type for archive. Can be either 'txt' a human readable text file, 'pkl' a python dill file, 'mat' a matlab file or None if there is no archive. Default 'mat'.
         archive_extra_dict (Optional [dict]): A dictionary with any extra variables that are to be saved to the archive. If None, nothing is added. Default None.
@@ -88,10 +88,10 @@ class Controller():
         out_params (list): List of all parameters sent out by controller.
         out_extras (list): Any extras associated with the output parameters.
         in_costs (list): List of costs received by controller.
-        in_uncers (list): List of uncertainties receieved by controller.
+        in_uncers (list): List of uncertainties received by controller.
         best_cost (float): The lowest, and best, cost received by the learner.
         best_uncer (float): The uncertainty associated with the best cost.
-        best_params (array): The best parameters recieved by the learner.
+        best_params (array): The best parameters received by the learner.
         best_index (float): The run number that produced the best cost.
     '''
 
@@ -148,7 +148,7 @@ class Controller():
         if isinstance(interface, mli.Interface):
             self.interface = interface
         else:
-            self.log.error('interface is not a Interface as defined in the MLOOP package.')
+            self.log.error('interface is not a Interface as defined in the M-LOOP package.')
             raise TypeError
 
         self.params_out_queue = interface.params_out_queue
@@ -366,7 +366,7 @@ class Controller():
         self.end_learner.set()
         self.log.debug('Interface end event set.')
         self.end_interface.set()
-        #After 3 or 4 executions of mloop in same python environment, sometimes excution can be trapped here
+        #After 3 or 4 executions of mloop in same python environment, sometimes execution can be trapped here
         #Likely to be a bug with multiprocessing in python, but difficult to isolate.
         #current solution is to join with a timeout and kill if that fails
         self.learner.join()
@@ -458,11 +458,11 @@ class RandomController(Controller):
 
 class NelderMeadController(Controller):
     '''
-    Controller for the Nelder-Mead solver. Suggests new parameters based on the Nelder-Mead algorithm. Can take no boundaries or hard boundaries. More details for the Nelder-Mead options are in the learners section.
+    Controller for the Nelder–Mead solver. Suggests new parameters based on the Nelder–Mead algorithm. Can take no boundaries or hard boundaries. More details for the Nelder–Mead options are in the learners section.
     Args:
         params_out_queue (queue): Queue for parameters to next be run by experiment.
         costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
-        **kwargs (Optional [dict]): Dictionary of options to be passed to Controller parent class and Nelder-Mead learner.
+        **kwargs (Optional [dict]): Dictionary of options to be passed to Controller parent class and Nelder–Mead learner.
     '''
     def __init__(self, interface,
                 **kwargs):
@@ -476,7 +476,7 @@ class NelderMeadController(Controller):
 
     def _next_params(self):
         '''
-        Gets next parameters from Nelder-Mead learner.
+        Gets next parameters from Nelder–Mead learner.
         '''
         if self.curr_bad:
             cost = float('inf')
@@ -522,7 +522,7 @@ class MachineLearnerController(Controller):
         interface (Interface): The interface to the experiment under optimization.
         **kwargs (Optional [dict]): Dictionary of options to be passed to Controller parent class and initial training learner.
     Keyword Args:
-        training_type (Optional [string]): The type for the initial training source can be 'random' for the random learner, 'nelder_mead' for the Nelder-Mead learner or 'differential_evolution' for the Differential Evolution learner. This learner is also called if the machine learning learner is too slow and a new point is needed. Default 'differential_evolution'.
+        training_type (Optional [string]): The type for the initial training source can be 'random' for the random learner, 'nelder_mead' for the Nelder–Mead learner or 'differential_evolution' for the Differential Evolution learner. This learner is also called if the machine learning learner is too slow and a new point is needed. Default 'differential_evolution'.
         num_training_runs (Optional [int]): The number of training runs to before starting the learner. If None, will be ten or double the number of parameters, whatever is larger.
         no_delay (Optional [bool]): If True, there is never any delay between a returned cost and the next parameters to run for the experiment. In practice, this means if the machine learning learner has not prepared the next parameters in time the learner defined by the initial training source is used instead. If false, the controller will wait for the machine learning learner to predict the next parameters and there may be a delay between runs.
     '''
@@ -613,7 +613,7 @@ class MachineLearnerController(Controller):
 
     def _put_params_and_out_dict(self, params):
         '''
-        Override _put_params_and_out_dict function, used when the training learner creates parameters. Makes the defualt param_type the training type and sets last_training_run_flag.
+        Override _put_params_and_out_dict function, used when the training learner creates parameters. Makes the default param_type the training type and sets last_training_run_flag.
         '''
         super(MachineLearnerController,self)._put_params_and_out_dict(params, param_type=self.training_type)
         self.last_training_run_flag = True

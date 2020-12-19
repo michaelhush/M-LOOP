@@ -112,7 +112,7 @@ class Interface(threading.Thread):
         
     def get_next_cost_dict(self,params_dict):
         '''
-        Abstract method. This is the only method that needs to be implemented to make a working interface. Given the parameters the interface must then produce a new cost. This may occur by running an experiment or program. If you wish to abruptly end this interface for whatever rease please raise the exception InterfaceInterrupt, which will then be safely caught.
+        Abstract method. This is the only method that needs to be implemented to make a working interface. Given the parameters the interface must then produce a new cost. This may occur by running an experiment or program. If you wish to abruptly end this interface for whatever reason please raise the exception InterfaceInterrupt, which will then be safely caught.
         
         Args:
             params_dict (dictionary): A dictionary containing the parameters. Use params_dict['params'] to access them.
@@ -133,7 +133,7 @@ class FileInterface(Interface):
     Keyword Args:
         interface_out_filename (Optional [string]): filename for file written with parameters.
         interface_in_filename (Optional [string]): filename for file written with parameters.
-        interface_file_type (Optional [string]): file type to be written either 'mat' for matlab or 'txt' for readible text file. Defaults to 'txt'.
+        interface_file_type (Optional [string]): file type to be written either 'mat' for matlab or 'txt' for readable text file. Defaults to 'txt'.
     '''
     
     def __init__(self,

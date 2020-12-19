@@ -93,7 +93,7 @@ def show_all_default_visualizations(controller,
         max_parameters_per_plot=max_parameters_per_plot,
     )
         
-    log.info('Showing visualizations, close all to end MLOOP.')
+    log.info('Showing visualizations, close all to end M-LOOP.')
     if show_plots:
         plt.show()
 
@@ -109,9 +109,9 @@ def show_all_default_visualizations_from_archive(controller_filename,
     Plots all visualizations available for a controller and its learner from their archives.
     
     Args:
-        controller_filename (str): The filename, inlcuding path, of the
+        controller_filename (str): The filename, including path, of the
             controller archive.
-        learner_filename (str): The filename, inlcuding path, of the learner
+        learner_filename (str): The filename, including path, of the learner
             archive.
         
     Keyword Args:
@@ -169,7 +169,7 @@ def show_all_default_visualizations_from_archive(controller_filename,
         learner_visualizer_init_kwargs=learner_visualizer_init_kwargs,
     )
 
-    log.info('Showing visualizations, close all to end MLOOP.')
+    log.info('Showing visualizations, close all to end M-LOOP.')
     if show_plots:
         plt.show()
 
@@ -263,7 +263,7 @@ def create_learner_visualizations(filename,
 
 def _color_from_controller_name(controller_name):
     '''
-    Gives a color (as a number betweeen zero an one) corresponding to each controller name string.
+    Gives a color (as a number between zero an one) corresponding to each controller name string.
     '''
     global cmap
     return cmap(float(mlc.controller_dict[controller_name])/float(mlc.number_of_controllers))

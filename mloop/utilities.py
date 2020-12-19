@@ -55,9 +55,9 @@ def _config_logger(log_filename = default_log_filename,
     Configure and the root logger.
     
     Keyword Args:
-        log_filename (Optional [string]) : Filename prefix for log. Default MLOOP run . If None, no file handler is created
+        log_filename (Optional [string]) : Filename prefix for log. Default M-LOOP run . If None, no file handler is created
         file_log_level (Optional[int]) : Level of log output for file, default is logging.DEBUG = 10
-        console_log_level (Optional[int]) :Level of log output for console, defalut is logging.INFO = 20
+        console_log_level (Optional[int]) :Level of log output for console, default is logging.INFO = 20
     
     Returns:
         dictionary: Dict with extra keywords not used by the logging configuration.
@@ -83,8 +83,8 @@ def _config_logger(log_filename = default_log_filename,
         ch.setLevel(console_log_level)
         ch.setFormatter(logging.Formatter('%(levelname)-8s %(message)s'))
         log.addHandler(ch)
-        log.info('MLOOP version ' + mloop.__version__)
-        log.debug('MLOOP Logger configured.')
+        log.info('M-LOOP version ' + mloop.__version__)
+        log.debug('M-LOOP Logger configured.')
     
     return kwargs
 
