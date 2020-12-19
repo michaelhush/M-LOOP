@@ -173,7 +173,7 @@ class SingleNeuralNet():
     def load(self, archive, extra_search_dirs=None):
         '''
         Imports the net from an archive dictionary. You must call exactly one of this and init() before calling any other methods.
-        
+
         Args:
             archive (dict): An archive dictionary containing the data from a
                 neural net learner archive, typically created using
@@ -188,7 +188,7 @@ class SingleNeuralNet():
         # Set default value of extra_search_dirs if necessary.
         if extra_search_dirs is None:
             extra_search_dirs = []
-        
+
         # Get the saved filename and construct a list of directories to in which
         # to look for it.
         self.log.info("Loading neural network")
@@ -196,7 +196,7 @@ class SingleNeuralNet():
         saved_dirname, filename = os.path.split(saver_path)
         saved_dirname = os.path.join('.', saved_dirname)
         search_dirs = [saved_dirname] + extra_search_dirs
-        
+
         # Check each directory for the file.
         for dirname in search_dirs:
             try:
@@ -205,7 +205,7 @@ class SingleNeuralNet():
                 return
             except ValueError:
                 pass
-        
+
         # If the method hasn't returned by now then it's run out of places to
         # look.
         message = "Could not find neural net archive {filename}.".format(filename=filename)
@@ -566,7 +566,7 @@ class NeuralNet():
 
         You must only load a net from an archive if that archive corresponds to a net with the same
         constructor parameters.
-        
+
         Args:
             archive (dict): An archive dictionary containing the data from a
                 neural net learner archive, typically created using
