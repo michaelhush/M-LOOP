@@ -1205,21 +1205,70 @@ class MachineLearner(Learner):
 
 class GaussianProcessLearner(MachineLearner, mp.Process):
     '''
-    Gaussian process learner. Generates new parameters based on a gaussian process fitted to all previous data.
+    Gaussian process learner.
+
+    Generates new parameters based on a gaussian process fitted to all previous
+    data.
 
     Args:
         params_out_queue (queue): Queue for parameters sent to controller.
-        costs_in_queue (queue): Queue for costs for gaussian process. This must be tuple
+        costs_in_queue (queue): Queue for costs for gaussian process. This must
+            be tuple.
         end_event (event): Event to trigger end of learner.
 
     Keyword Args:
-        length_scale (Optional [array]): The initial guess for length scale(s) of the gaussian process. The array can either of size one or the number of parameters or None. If it is size one, it is assumed all the correlation lengths are the same. If it is the number of the parameters then all the parameters have their own independent length scale. If it is None, it is assumed all the length scales should be independent and they are all given an initial value of 1. Default None.
-        length_scale_bounds (Optional [array]): The limits on the fitted length scale values, specified as a single pair of numbers e.g. [min, max], or a list of pairs of numbers, e.g. [[min_0, max_0], ..., [min_N, max_N]]. This only has an effect if update_hyperparameters is set to True. If one pair is provided, the same limits will be used for all length scales. Alternatively one pair of [min, max] can be provided for each length scale. For example, possible valid values include [1e-5, 1e5] and [[1e-2, 1e2], [5, 5], [1.6e-4, 1e3]] for optimizations with three parameters. If set to None, the value [1e-5, 1e5] will be used. Default None.
-        update_hyperparameters (Optional [bool]): Whether the length scales and noise estimate should be updated when new data is provided. Is set to true by default.
-        cost_has_noise (Optional [bool]): If true the learner assumes there is common additive white noise that corrupts the costs provided. This noise is assumed to be on top of the uncertainty in the costs (if it is provided). If false, it is assumed that there is no noise in the cost (or if uncertainties are provided no extra noise beyond the uncertainty). Default True.
-        noise_level (Optional [float]): The initial guess for the noise level (variance, not standard deviation) in the costs, is only used if cost_has_noise is true. If None, it will be set to the variance of the training data costs. Default None.
-        noise_level_bounds (Optional [array]): The limits on the fitted noise_level values, specified as a single pair of numbers [min, max]. This only has an effect if update_hyperparameters and cost_has_noise are both set to True. If set to None, the value [1e-5 * var, 1e5 * var] will be used where var is the variance of the training data costs. Default None.
-        gp_training_filename (Optional [str]): The name of a learner archive from a previous optimization from which to extract past results for use in the current optimization. If `None`, no past results will be used. Default `None`.
+        length_scale (Optional [array]): The initial guess for length scale(s)
+            of the gaussian process. The array can either of size one or the
+            number of parameters or `None`. If it is size one, it is assumed
+            that all of the correlation lengths are the same. If it is an array
+            with length equal to the number of the parameters then all the
+            parameters have their own independent length scale. If it is set to
+            `None` and a learner archive from a Gaussian process optimization
+            is provided for `gp_training_filename`, then it will be set to the
+            value recorded for `length_scale` in that learner archive. If set to
+            `None` but `gp_training_filename` does not specify a learner archive
+            from a Guassian process optimization, then it is assumed that all of
+            the length scales should be independent and they are all given an
+            initial value of `1`. Default `None`.
+        length_scale_bounds (Optional [array]): The limits on the fitted length
+            scale values, specified as a single pair of numbers e.g.
+            `[min, max]`, or a list of pairs of numbers, e.g.
+            `[[min_0, max_0], ..., [min_N, max_N]]`. This only has an effect if
+            `update_hyperparameters` is set to `True`. If one pair is provided,
+            the same limits will be used for all length scales. Alternatively
+            one pair of `[min, max]` can be provided for each length scale. For
+            example, possible valid values include `[1e-5, 1e5]` and
+            `[[1e-2, 1e2], [5, 5], [1.6e-4, 1e3]]` for optimizations with three
+            parameters. If set to `None`, the value `[1e-5, 1e5]` will be used.
+            Default `None`.
+        update_hyperparameters (Optional [bool]): Whether the length scales and
+            noise estimate should be updated when new data is provided. Default
+            `True`.
+        cost_has_noise (Optional [bool]): If `True` the learner assumes there is
+            common additive white noise that corrupts the costs provided. This
+            noise is assumed to be on top of the uncertainty in the costs (if it
+            is provided). If `False`, it is assumed that there is no noise in
+            the cost (or if uncertainties are provided no extra noise beyond the
+            uncertainty). Default `True`.
+        noise_level (Optional [float]): The initial guess for the noise level
+            (variance, not standard deviation) in the costs. This is only used
+            if `cost_has_noise` is `True`. If it is set to `None` and a learner
+            archive from a Gaussian process optimization is provided for
+            `gp_training_filename`, then it will be set to the value recorded
+            for `noise_level` in that learner archive. If set to `None` but
+            `gp_training_filename` does not specify a learner archive from a
+            Guassian process optimization, then it will automatically be set to
+            the variance of the training data costs.
+        noise_level_bounds (Optional [array]): The limits on the fitted
+            `noise_level` values, specified as a single pair of numbers
+            `[min, max]`. This only has an effect if `update_hyperparameters`
+            and `cost_has_noise` are both set to `True`. If set to `None`, the
+            value `[1e-5 * var, 1e5 * var]` will be used where `var` is the
+            variance of the training data costs. Default `None`.
+        gp_training_filename (Optional [str]): The name of a learner archive
+            from a previous optimization from which to extract past results for
+            use in the current optimization. If `None`, no past results will be
+            used. Default `None`.
         gp_training_file_type (Optional [str]): File type of the training
             archive. Can be `'txt'`, `'pkl'`, `'mat'`, or `None`. If set to
             `None`, then the file type will be determined automatically. This
@@ -1227,37 +1276,58 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             Default `None`.
         trust_region (Optional [float or array]): The trust region defines the
             maximum distance the learner will travel from the current best set
-            of parameters. If None, the learner will search everywhere. If a
+            of parameters. If `None`, the learner will search everywhere. If a
             float, this number must be between 0 and 1 and defines maximum
             distance the learner will venture as a percentage of the boundaries.
             If it is an array, it must have the same size as the number of
             parameters and the numbers define the maximum absolute distance that
             can be moved along each direction.
-        default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
-        default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
-        minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
-        predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
+        default_bad_cost (Optional [float]): If a run is reported as bad and
+            `default_bad_cost` is provided, the cost for the bad run is set to
+            this default value. If `default_bad_cost` is `None`, then the worst
+            cost received is set to all the bad runs. Default `None`.
+        default_bad_uncertainty (Optional [float]): If a run is reported as bad
+            and `default_bad_uncertainty` is provided, the uncertainty for the
+            bad run is set to this default value. If `default_bad_uncertainty`
+            is `None`, then the uncertainty is set to a tenth of the best to
+            worst cost range. Default `None`.
+        minimum_uncertainty (Optional [float]): The minimum uncertainty
+            associated with provided costs. Must be above zero to avoid fitting
+            errors. Default `1e-8`.
+        predict_global_minima_at_end (Optional [bool]): If `True` attempts to
+            find the global minima when the learner is ended. Does not if
+            `False`. Default `True`.
 
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
         all_uncers (array): Array containing all uncertainties sent to learner.
-        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1. Needed for training the gaussian process.
-        bad_run_indexs (list): list of indexes to all runs that were marked as bad.
+        scaled_costs (array): Array contaning all the costs scaled to have zero
+            mean and a standard deviation of 1. Needed for training the gaussian
+            process.
+        bad_run_indexs (list): list of indexes to all runs that were marked as
+            bad.
         best_cost (float): Minimum received cost, updated during execution.
-        best_params (array): Parameters of best run. (reference to element in params array).
+        best_params (array): Parameters of best run. (reference to element in
+            params array).
         best_index (int): index of the best cost and params.
         worst_cost (float): Maximum received cost, updated during execution.
         worst_index (int): index to run with worst cost.
-        cost_range (float): Difference between worst_cost and best_cost
-        generation_num (int): Number of sets of parameters to generate each generation. Set to 5.
+        cost_range (float): Difference between `worst_cost` and `best_cost`.
+        generation_num (int): Number of sets of parameters to generate each
+            generation. Set to `4`.
         length_scale_history (list): List of length scales found after each fit.
         noise_level_history (list): List of noise levels found after each fit.
-        fit_count (int): Counter for the number of times the gaussian process has been fit.
-        cost_count (int): Counter for the number of costs, parameters and uncertainties added to learner.
-        params_count (int): Counter for the number of parameters asked to be evaluated by the learner.
-        gaussian_process (GaussianProcessRegressor): Gaussian process that is fitted to data and used to make predictions
-        cost_scaler (StandardScaler): Scaler used to normalize the provided costs.
+        fit_count (int): Counter for the number of times the gaussian process
+            has been fit.
+        cost_count (int): Counter for the number of costs, parameters and
+            uncertainties added to learner.
+        params_count (int): Counter for the number of parameters asked to be
+            evaluated by the learner.
+        gaussian_process (GaussianProcessRegressor): Gaussian process that is
+            fitted to data and used to make predictions
+        cost_scaler (StandardScaler): Scaler used to normalize the provided
+            costs.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
     _ARCHIVE_TYPE = 'gaussian_process_learner'
