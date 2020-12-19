@@ -785,10 +785,18 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
                                                         **kwargs)
 
         self.log = logging.getLogger(__name__)
+        training_dict = self.training_dict
 
+        # Optimization options not loaded by parent class.
+        self.cost_has_noise = bool(training_dict['cost_has_noise'])
         #Trust region
-        self.has_trust_region = bool(np.array(self.training_dict['has_trust_region']))
-        self.trust_region = np.squeeze(np.array(self.training_dict['trust_region'], dtype=float))
+        self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
+        self.trust_region = np.squeeze(np.array(training_dict['trust_region'], dtype=float))
+        # Try to extract options not present in archives from M-LOOP <= 3.1.1
+        if 'length_scale_bounds' in training_dict:
+            self.length_scale_bounds = mlu.safe_cast_to_array(training_dict['length_scale_bounds'])
+        if 'noise_level_bounds' in training_dict:
+            self.noise_level_bounds = mlu.safe_cast_to_array(training_dict['noise_level_bounds'])
 
         self.fit_gaussian_process()
 
@@ -809,7 +817,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # Record value of update_hyperparameters used for optimization. Note that
         # self.update_hyperparameters is always set to False here above
         # regardless of its value during the optimization.
-        self.used_update_hyperparameters = self.training_dict['update_hyperparameters']
+        self.used_update_hyperparameters = training_dict['update_hyperparameters']
 
     def run(self):
         '''
@@ -1186,10 +1194,16 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                                                   **kwargs)
 
         self.log = logging.getLogger(__name__)
+        training_dict = self.training_dict
 
+        # Archive data not loaded by parent class
         #Trust region
-        self.has_trust_region = bool(np.array(self.training_dict['has_trust_region']))
-        self.trust_region = np.squeeze(np.array(self.training_dict['trust_region'], dtype=float))
+        self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
+        self.trust_region = np.squeeze(np.array(training_dict['trust_region'], dtype=float))
+        self.nn_training_file_dir = self.training_file_dir
+        self.cost_scaler_init_index = training_dict['cost_scaler_init_index']
+        if not self.cost_scaler_init_index is None:
+            self._init_cost_scaler()
 
         self.import_neural_net()
 

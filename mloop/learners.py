@@ -967,7 +967,7 @@ class MachineLearner(Learner):
         self._prepare_logger()
 
         if training_filename is not None:
-            # Automatically determine gp_training_file_type if necessary.
+            # Automatically determine training_file_type if necessary.
             training_filename = str(training_filename)
             if training_file_type is None:
                 training_file_type = mlu.get_file_type(training_filename)
@@ -979,71 +979,87 @@ class MachineLearner(Learner):
             self.training_file_dir = os.path.dirname(training_filename)
 
             # Get the training dictionary.
-            self.training_dict = mlu.get_dict_from_file(training_filename, training_file_type)
+            training_dict = mlu.get_dict_from_file(
+                training_filename,
+                training_file_type,
+            )
+            self.training_dict = training_dict
 
-            # Ensure the archive is of the correct type.
-            if self.training_dict['archive_type'] != self._ARCHIVE_TYPE:
-                msg = ("Training archive must have "
-                       "'archive_type'='{correct_type}' but has "
-                       "'archive_type'='{actual_type}'.").format(
-                           correct_type=self._ARCHIVE_TYPE,
-                           actual_type=self.training_dict['archive_type'],
-                       )
-                self.log.error(msg)
-                raise NotImplementedError(msg)
-
-            # Basic optimization settings that get passed to parent.
-            num_params = int(self.training_dict['num_params'])
+            # Parameters that must match the values in the training archive.
+            num_params = int(training_dict['num_params'])
             kwargs['num_params'] = self._reconcile_kwarg_and_training_val(
                 kwargs,
                 'num_params',
                 num_params,
             )
-            min_boundary = mlu.safe_cast_to_array(self.training_dict['min_boundary'])
-            kwargs['min_boundary'] = self._reconcile_kwarg_and_training_val(
-                kwargs,
-                'min_boundary',
-                min_boundary,
-            )
-            max_boundary = mlu.safe_cast_to_array(self.training_dict['max_boundary'])
-            kwargs['max_boundary'] = self._reconcile_kwarg_and_training_val(
-                kwargs,
-                'max_boundary',
-                max_boundary,
-            )
-            param_names = mlu._param_names_from_file_dict(self.training_dict)
-            kwargs['param_names'] = self._reconcile_kwarg_and_training_val(
-                kwargs,
-                'param_names',
-                param_names,
-            )
 
-            #Counters
-            self.costs_count = int(self.training_dict['costs_count'])
-            self.params_count = int(self.training_dict['params_count'])
+            # Data that must be present in any archive type.
+            self.all_params = np.array(training_dict['all_params'], dtype=float)
+            self.all_costs = mlu.safe_cast_to_array(training_dict['all_costs'])
+            self.all_uncers = mlu.safe_cast_to_array(training_dict['all_uncers'])
+            self.bad_run_indexs = mlu.safe_cast_to_list(training_dict['bad_run_indexs'])
 
-            #Data from previous experiment
-            self.all_params = np.array(self.training_dict['all_params'], dtype=float)
-            self.all_costs = mlu.safe_cast_to_array(self.training_dict['all_costs'])
-            self.all_uncers = mlu.safe_cast_to_array(self.training_dict['all_uncers'])
-            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])
+            # Data that may be in the archive, but can easily be calculated if
+            # necessary.
+            # costs_count
+            self.costs_count = int(training_dict.get('costs_count'))
+            if self.costs_count is None:
+                self.costs_count = len(self.all_costs)
+            # best_index
+            self.best_index = int(training_dict.get('best_index'))
+            if self.best_index is None:
+                self.best_index = np.argmin(self.all_costs)
+            # best_cost
+            self.best_cost = float(training_dict.get('best_cost'))
+            if self.best_cost is None:
+                self.best_cost = self.all_costs[self.best_index]
+            # best_params
+            self.best_params = mlu.safe_cast_to_array(training_dict.get('best_params'))
+            if self.best_params is None:
+                self.best_params = self.all_params[self.best_index]
+            # worst_index
+            self.worst_index = int(training_dict.get('worst_index'))
+            if self.worst_index is None:
+                self.worst_index = np.argmax(self.all_costs)
+            # worst_cost
+            self.worst_cost = float(training_dict.get('worst_cost'))
+            if self.worst_cost is None:
+                self.worst_cost = self.all_costs[self.worst_index]
+            # cost_range
+            self.cost_range = float(training_dict.get('cost_range'))
+            if self.cost_range is None:
+                self.cost_range = self.worst_cost - self.best_cost
 
-            #Derived properties
-            self.best_cost = float(self.training_dict['best_cost'])
-            self.best_params = mlu.safe_cast_to_array(self.training_dict['best_params'])
-            self.best_index = int(self.training_dict['best_index'])
-            self.worst_cost = float(self.training_dict['worst_cost'])
-            self.worst_index = int(self.training_dict['worst_index'])
-            self.cost_range = float(self.training_dict['cost_range'])
-            try:
-                self.predicted_best_parameters = mlu.safe_cast_to_array(self.training_dict['predicted_best_parameters'])
-                self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
-                self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
-                self.has_global_minima = True
-            except KeyError:
-                self.has_global_minima = False
-            super(MachineLearner, self).__init__(**kwargs)
+            # Parameters that must be the same in keyword arguments and in the
+            # training archive in order to load some of the data.
+            # learner type
+            self._learner_type_matches_training_archive = True
+            learner_type_train = self.training_dict['archive_type']
+            if learner_type_train != self._ARCHIVE_TYPE:
+                self._learner_type_matches_training_archive = False
+            # min_boundary
+            self._boundaries_match_training_archive = True
+            min_boundary_train = self.training_dict['min_boundary']
+            min_boundary_train = mlu.safe_cast_to_array(min_boundary_train)
+            are_same = np.array_equal(
+                kwargs.get('min_boundary'),
+                min_boundary_train,
+            )
+            if not are_same:
+                self._boundaries_match_training_archive = False
+            # max_boundary
+            max_boundary_train = self.training_dict['max_boundary']
+            max_boundary_train = mlu.safe_cast_to_array(max_boundary_train)
+            are_same = np.array_equal(
+                kwargs.get('max_boundary'),
+                max_boundary_train,
+            )
+            if not are_same:
+                self._boundaries_match_training_archive = False
+
         else:
+            self._learner_type_matches_training_archive = False
+            self._boundaries_match_training_archive = False
             #Storage variables, archived
             self.all_params = np.array([], dtype=float)
             self.all_costs = np.array([], dtype=float)
@@ -1056,10 +1072,38 @@ class MachineLearner(Learner):
             self.worst_index = 0
             self.cost_range = float('inf')
             self.costs_count = 0
+
+        # Parameters that should only be loaded if a training archive was
+        # provided and it has the same learner type and min/max boundaries.
+        same_learner_type = self._learner_type_matches_training_archive
+        same_boundaries = self._boundaries_match_training_archive
+        if same_learner_type and same_boundaries:
+            training_dict = self.training_dict
+            # Counters
+            self.params_count = int(training_dict['params_count'])
+
+            # Predicted optimum
+            try:
+                self.predicted_best_parameters = mlu.safe_cast_to_array(
+                    training_dict['predicted_best_parameters']
+                )
+                self.predicted_best_cost = float(
+                    training_dict['predicted_best_cost']
+                )
+                self.predicted_best_uncertainty = float(
+                    training_dict['predicted_best_uncertainty']
+                )
+                self.has_global_minima = True
+            except KeyError:
+                self.has_global_minima = False
+        else:
+            # Counters
             self.params_count = 0
+
+            # Predicted optimum
             self.has_global_minima = False
 
-            super(MachineLearner, self).__init__(**kwargs)
+        super(MachineLearner, self).__init__(**kwargs)
 
         # Multiprocessor controls
         self.new_params_event = mp.Event()
@@ -1181,13 +1225,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             `None`, then the file type will be determined automatically. This
             argument has no effect if `gp_training_filename` is set to `None`.
             Default `None`.
-        gp_training_override_kwargs (Optional [bool]): Sets whether to use the
-            values in the training file or the values in the keyword arguments
-            to set the learner's options, e.g. `cost_has_noise`. If set to
-            `True` then the values in the training file will be used. If set to
-            `False` then the values specified by the keyword arguments will be
-            used. This argument has no effect if `gp_training_filename` is set
-            to `None`. Default `False`.
         trust_region (Optional [float or array]): The trust region defines the
             maximum distance the learner will travel from the current best set
             of parameters. If None, the learner will search everywhere. If a
@@ -1234,7 +1271,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                  noise_level_bounds=None,
                  gp_training_filename =None,
                  gp_training_file_type = None,
-                 gp_training_override_kwargs=False,
                  **kwargs):
 
         if gp_training_filename is not None:
@@ -1243,24 +1279,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                 training_file_type=gp_training_file_type,
                 **kwargs
             )
-
-            #Configuration of the learner
-            if gp_training_override_kwargs:
-                cost_has_noise = bool(self.training_dict['cost_has_noise'])
-                length_scale = mlu.safe_cast_to_array(self.training_dict['length_scale'])
-                noise_level = float(self.training_dict['noise_level'])
-                # Try to extract options not present in archives from M-LOOP <= 3.1.1
-                if 'length_scale_bounds' in self.training_dict:
-                    length_scale_bounds = mlu.safe_cast_to_array(self.training_dict['length_scale_bounds'])
-                if 'noise_level_bounds' in self.training_dict:
-                    noise_level_bounds = mlu.safe_cast_to_array(self.training_dict['noise_level_bounds'])
-
-            #Storage variables, archived
-            self.length_scale_history = list(self.training_dict['length_scale_history'])
-            self.noise_level_history = mlu.safe_cast_to_list(self.training_dict['noise_level_history'])
-
-            #Counters
-            self.fit_count = int(self.training_dict['fit_count'])
 
             # Maintain backwards compatability with archives generated by
             # previous versions of M-LOOP.
@@ -1276,16 +1294,37 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         else:
             super(GaussianProcessLearner,self).__init__(**kwargs)
 
-            #Storage variables, archived
-            self.length_scale_history = []
-            self.noise_level_history = []
-
-            #Counters
-            self.fit_count = 0
-
             # Maintain backwards compatability with archives generated by
             # previous versions of M-LOOP.
             self._scale_deprecated_noise_levels = False
+
+        # Parameters that should only be loaded if a training archive was
+        # provided and it has the same learner type.
+        if self._learner_type_matches_training_archive:
+            training_dict = self.training_dict
+            # Storage variables, archived
+            self.length_scale_history = list(
+                training_dict['length_scale_history']
+            )
+            self.noise_level_history = mlu.safe_cast_to_list(
+                training_dict['noise_level_history']
+            )
+
+            # Counters
+            self.fit_count = int(training_dict['fit_count'])
+
+            # Fit parameters that can be overriden by user keyword options.
+            if length_scale is None:
+                length_scale = mlu.safe_cast_to_array(training_dict['length_scale'])
+            if noise_level is None:
+                noise_level = float(training_dict['noise_level'])
+        else:
+            # Storage variables, archived
+            self.length_scale_history = []
+            self.noise_level_history = []
+
+            # Counters
+            self.fit_count = 0
 
         #Storage variables and counters
         self.scaled_uncers = None
@@ -1854,19 +1893,26 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                 training_file_type=nn_training_file_type,
                 **kwargs
             )
-            self.nn_training_file_dir = self.training_file_dir
-
-            self.cost_scaler_init_index = self.training_dict['cost_scaler_init_index']
-            if not self.cost_scaler_init_index is None:
-                self._init_cost_scaler()
-
         else:
             super(NeuralNetLearner,self).__init__(**kwargs)
-            self.nn_training_file_dir = None
 
-            # The scaler will be initialised when we're ready to fit it
-            self.cost_scaler = None
-            self.cost_scaler_init_index = None
+        # Parameters that should only be loaded if a training archive was
+        # provided and it has the same learner type and min/max boundaries.
+        same_learner_type = self._learner_type_matches_training_archive
+        same_boundaries = self._boundaries_match_training_archive
+        if same_learner_type and same_boundaries:
+            pass  # Will load parameters here later.
+        else:
+            pass  # Will set default parameter values here later.
+
+        # Set training file directory to None for now since no nets will be
+        # loaded here. The NeuralNetVisualizer will overwrite this when it needs
+        # to load the nets.
+        self.nn_training_file_dir = None
+
+        # The scaler will be initialised when we're ready to fit it
+        self.cost_scaler = None
+        self.cost_scaler_init_index = None
 
         #Constants, limits and tolerances
         self.num_nets = 3
