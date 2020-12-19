@@ -11,10 +11,12 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import warnings
 
 figure_counter = 0
 cmap = plt.get_cmap('hsv')
 run_label = 'Run number'
+fit_label = 'Fit number'
 cost_label = 'Cost'
 generation_label = 'Generation number'
 scale_param_label = 'Min (0) to max (1) parameters'
@@ -778,6 +780,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         
         super(GaussianProcessVisualizer, self).__init__(gp_training_filename = filename,
                                                         gp_training_file_type = file_type,
+                                                        gp_training_override_kwargs=True,
                                                         update_hyperparameters = False,
                                                         **kwargs)
         
@@ -792,7 +795,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         self.param_numbers = np.arange(self.num_params)
         self.log_length_scale_history = np.log10(np.array(self.length_scale_history, dtype=float))
         self.noise_level_history = np.array(self.noise_level_history) 
-        self.fit_numbers = np.arange(1,self.fit_count+1)
         
         if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.max_boundary)):
             self.finite_flag = True
@@ -860,50 +862,67 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     
     def create_visualizations(self,
                               plot_cross_sections=True,
-                              plot_hyperparameters_vs_run=True,
-                              plot_noise_level_vs_run=True,
-                              max_parameters_per_plot=None):
+                              plot_hyperparameters_vs_fit=True,
+                              plot_noise_level_vs_fit=True,
+                              max_parameters_per_plot=None,
+                              **kwargs):
         '''
         Runs the plots from a gaussian process learner file.
             
         Keyword Args:
-            plot_cross_sections (Optional [bool]): If True plot predicted
-                landscape cross sections, else do not. Default True. 
-            plot_hyperparameters_vs_run (Optional [bool]): If True plot fitted
-                hyperparameters as a function of run number, else do not.
-                Default True.
-            plot_noise_level_vs_run (Optional [bool]): If True plot the fitted
-                noise level as a function of run number, else do not. If there
-                is no fitted noise level (i.e. cost_has_noise was set to False),
-                then this plot will not be made regardless of the value passed
-                for plot_noise_level_vs_run. Default True.
+            plot_cross_sections (Optional [bool]): If `True` plot predicted
+                landscape cross sections, else do not. Default `True`. 
+            plot_hyperparameters_vs_fit (Optional [bool]): If `True` plot fitted
+                hyperparameters as a function of fit number, else do not.
+                Default `True`.
+            plot_noise_level_vs_fit (Optional [bool]): If `True` plot the fitted
+                noise level as a function of fit number, else do not. If there
+                is no fitted noise level (i.e. `cost_has_noise` was set to
+                `False`), then this plot will not be made regardless of the
+                value passed for `plot_noise_level_vs_fit`. Default `True`.
             max_parameters_per_plot (Optional [int]): The maximum number of
                 parameters to include in plots that display the values of
                 parameters. If the number of parameters is larger than
-                parameters_per_plot, then the parameters will be divided into
+                `parameters_per_plot`, then the parameters will be divided into
                 groups and each group will be plotted in its own figure. If set
-                to None, then all parameters will be included in the same plot
-                regardless of how many there are. Default None.
+                to `None`, then all parameters will be included in the same plot
+                regardless of how many there are. Default `None`.
         '''
+        # Check for deprecated argument names.
+        if 'plot_hyperparameters_vs_run' in kwargs:
+            msg = ("create_visualizations() argument "
+                   "plot_hyperparameters_vs_run is deprecated; "
+                   "use plot_hyperparameters_vs_fit instead.")
+            warnings.warn(msg)
+            plot_hyperparameters_vs_fit = kwargs['plot_hyperparameters_vs_run']
+        if 'plot_noise_level_vs_run' in kwargs:
+            msg = ("create_visualizations() argument "
+                   "plot_noise_level_vs_run is deprecated; "
+                   "use plot_noise_level_vs_fit instead.")
+            warnings.warn(msg)
+            plot_noise_level_vs_fit = kwargs['plot_noise_level_vs_run']
+
+        # Determine which parameters belong on plots together.
         parameter_chunks = mlu.chunk_list(
             self.param_numbers,
             max_parameters_per_plot,
         )
         
+        # Generate the requested plots.
         if plot_cross_sections:
             for parameter_chunk in parameter_chunks:
                 self.plot_cross_sections(
                     parameter_subset=parameter_chunk,
                 )
             
-        if plot_hyperparameters_vs_run:
+        if plot_hyperparameters_vs_fit:
             for parameter_chunk in parameter_chunks:
-                self.plot_hyperparameters_vs_run(
+                self.plot_hyperparameters_vs_fit(
                     parameter_subset=parameter_chunk,
                 )
         
-        if plot_noise_level_vs_run:
-            self.plot_noise_level_vs_run()
+        if plot_noise_level_vs_fit:
+            self.plot_noise_level_vs_fit()
     
     def _ensure_parameter_subset_valid(self, parameter_subset):
         _ensure_parameter_subset_valid(self, parameter_subset)
@@ -1001,18 +1020,31 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             artists.append(plt.Line2D((0,1),(0,0), color=self.param_colors[ind],marker='o',linestyle=''))
         plt.legend(artists, [str(x) for x in range(self.num_params)], loc=legend_loc)
     '''
-    
-    def plot_hyperparameters_vs_run(self, parameter_subset=None):
+
+    def plot_hyperparameters_vs_run(self, *args, **kwargs):
         '''
-        Produce a figure of the hyperparameters as a function of run number.
-    
+        Deprecated. Use `plot_hyperparameters_vs_fit()` instead.
+        '''
+        msg = ("plot_hyperparameters_vs_run() is deprecated; "
+               "use plot_hyperparameters_vs_fit() instead.")
+        warnings.warn(msg)
+        self.plot_hyperparameters_vs_fit(*args, **kwargs)
+
+    def plot_hyperparameters_vs_fit(self, parameter_subset=None):
+        '''
+        Produce a figure of the hyperparameters as a function of fit number.
+
+        Only one fit is performed per generation, and multiple parameter sets
+        are run each generation. Therefore the number of fits is less than the
+        number of runs.
+
         Args:
             parameter_subset (list-like): The indices of parameters to plot. The
                 indices should be 0-based, i.e. the first parameter is
                 identified with index 0. Generally the values of the indices in
-                parameter_subset should be between 0 and the number of
+                `parameter_subset` should be between 0 and the number of
                 parameters minus one, inclusively. If set to `None`, then all
-                parameters will be plotted. Default None.
+                parameters will be plotted. Default `None`.
         '''
         # Get default value for parameter_subset if necessary.
         if parameter_subset is None:
@@ -1025,8 +1057,8 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # update_hyperparameters was set to False, then we'll say that there
         # were zero fits of the hyperparameters.
         if self.used_update_hyperparameters:
-            fit_numbers = self.fit_numbers
             log_length_scale_history = self.log_length_scale_history
+            fit_numbers = np.arange(1, len(log_length_scale_history)+1)
         else:
             fit_numbers = [0]
             log_length_scale_history = np.log10(np.array([self.length_scale], dtype=float))
@@ -1035,7 +1067,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         num_params = len(parameter_subset)
         param_colors = _color_list_from_num_of_params(num_params)
         
-        global figure_counter, run_label, legend_loc, log_length_scale_label
+        global figure_counter, fit_label, legend_loc, log_length_scale_label
         figure_counter += 1
         plt.figure(figure_counter)
         
@@ -1061,29 +1093,42 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             plt.legend(artists, legend_labels ,loc=legend_loc)
             plt.title('GP Learner: Log of length scales vs fit number.')
         
-        plt.xlabel(run_label)
+        plt.xlabel(fit_label)
         plt.ylabel(log_length_scale_label)
-    
-    def plot_noise_level_vs_run(self):
-        '''
-        This method plots the fitted noise level as a function of run number.
 
-        The noise_level approximates the variance of values that would be
-        measured if the cost was repeatedly measured for the same set of
+    def plot_noise_level_vs_run(self, *args, **kwargs):
+        '''
+        Deprecated. Use `plot_noise_level_vs_fit()` instead.
+        '''
+        msg = ("plot_noise_level_vs_run() is deprecated; "
+               "use plot_noise_level_vs_fit() instead.")
+        warnings.warn(msg)
+        self.plot_noise_level_vs_fit(*args, **kwargs)
+
+    def plot_noise_level_vs_fit(self):
+        '''
+        This method plots the fitted noise level as a function of fit number.
+
+        The `noise_level` approximates the variance of values that would be
+        measured if the cost were repeatedly measured for the same set of
         parameters. Note that this is the variance in those costs; not the
         standard deviation.
 
-        This plot is only relevant to optimizations for which cost_has_noise is
-        True. If cost_has_noise is False then this method does nothing and
-        silently returns.
+        This plot is only relevant to optimizations for which `cost_has_noise`
+        is `True`. If `cost_has_noise` is `False` then this method does nothing
+        and silently returns.
+
+        Only one fit is performed per generation, and multiple parameter sets
+        are run each generation. Therefore the number of fits is less than the
+        number of runs.
         '''
         # Make plot of noise level vs run number if cost has noise. 
         if self.cost_has_noise:
-            global figure_counter, run_label, noise_label
+            global figure_counter, fit_label, noise_label
             
             if self.used_update_hyperparameters:
-                fit_numbers = self.fit_numbers
                 noise_level_history = self.noise_level_history
+                fit_numbers = np.arange(1, len(noise_level_history)+1)
             else:
                 # As in self.plot_hyperparameters_vs_run(), if
                 # update_hyperparameters was set to False, we'll say there were
@@ -1094,7 +1139,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             figure_counter += 1
             plt.figure(figure_counter)
             plt.plot(fit_numbers, noise_level_history,'o',color='k')
-            plt.xlabel(run_label)
+            plt.xlabel(fit_label)
             plt.ylabel(noise_label)
             plt.title('GP Learner: Noise level vs fit number.')     
             
@@ -1377,7 +1422,21 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
 
     def plot_losses(self):
         '''
-        Produce a figure of the loss as a function of training run for each net.
+        Produce a figure of the loss as a function of epoch for each net.
+        
+        The loss is the mean-squared fitting error of the neural net plus the
+        regularization loss, which is the regularization coefficient times the
+        mean L2 norm of the neural net weight arrays (without the square root).
+        Note that the fitting error is calculated after normalizing the data, so
+        it is in arbitrary units.
+
+        As the neural nets are fit, the loss is recorded every 10 epochs. The
+        number of epochs per fit varies, and may be different for different
+        nets. The loss will generally increase at the begining of each fit as
+        new data points will have been added.
+        
+        Also note that a lower loss isn't always better; a loss that is too low
+        can be a sign of overfitting.
         '''
         global figure_counter
         figure_counter += 1
@@ -1393,12 +1452,13 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         legend_labels=[]
         for ind, losses in enumerate(all_losses):
             color = net_colors[ind]
-            plt.plot(range(len(losses)), losses, color=color, marker='o', linestyle='')
+            epoch_numbers = 10 * np.arange(len(losses))
+            plt.plot(epoch_numbers, losses, color=color, marker='o', linestyle='')
             artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
             legend_labels.append('Net {net_index}'.format(net_index=ind))
 
         plt.yscale('log')
-        plt.xlabel("Training Run")
-        plt.ylabel("Training cost")
-        plt.title('Loss vs training run.')
+        plt.xlabel("Epoch")
+        plt.ylabel("Fitting Loss")
+        plt.title('Loss vs Epoch')
         plt.legend(artists, legend_labels, loc=legend_loc)
