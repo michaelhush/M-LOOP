@@ -255,27 +255,20 @@ class Learner():
                 break
         else:
             self.log.debug('Learner end signal received. Ending')
+            # Check for one more message which may have been was lost in a race
+            # with the end_event being set.
+            try:
+                message = self.costs_in_queue.get(True, self.learner_wait)
+            except mlu.empty_exception:
+                pass
+            else:
+                params, cost, uncer, bad = self._parse_cost_message(message)
+                self._update_run_data_attributes(params, cost, uncer, bad)
             raise LearnerInterrupt
         #self.log.debug('Learner cost='+repr(cost))
         # Record values.
         params, cost, uncer, bad = self._parse_cost_message(message)
-        if self.all_params.size==0:
-            self.all_params = np.array([params], dtype=float)
-            self.all_costs = np.array([cost], dtype=float)
-            self.all_uncers = np.array([uncer], dtype=float)
-        else:
-            # params
-            params_array = np.array([params], dtype=float)
-            self.all_params = np.append(self.all_params, params_array, axis=0)
-            # cost
-            cost_array = np.array([cost], dtype=float)
-            self.all_costs = np.append(self.all_costs, cost_array, axis=0)
-            # uncer
-            uncer_array = np.array([uncer], dtype=float)
-            self.all_uncers = np.append(self.all_uncers, uncer_array, axis=0)
-        if bad:
-            cost_index = len(self.all_costs) - 1
-            self.bad_run_indexs.append(cost_index)
+        self._update_run_data_attributes(params, cost, uncer, bad)
         return cost
 
     def _parse_cost_message(self, message):
@@ -296,6 +289,34 @@ class Learner():
         if uncer < 0:
             self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
         return params, cost, uncer, bad
+
+    def _update_run_data_attributes(self, params, cost, uncer, bad):
+        '''
+        Update attributes that store the results returned by the controller.
+
+        Args:
+            params (array): Array of control parameter values.
+            cost (float): The cost measured for `params`.
+            uncer (float): The uncertainty measured for `params`.
+            bad (bool): Whether or not the run was bad.
+        '''
+        if self.all_params.size==0:
+            self.all_params = np.array([params], dtype=float)
+            self.all_costs = np.array([cost], dtype=float)
+            self.all_uncers = np.array([uncer], dtype=float)
+        else:
+            # params
+            params_array = np.array([params], dtype=float)
+            self.all_params = np.append(self.all_params, params_array, axis=0)
+            # cost
+            cost_array = np.array([cost], dtype=float)
+            self.all_costs = np.append(self.all_costs, cost_array, axis=0)
+            # uncer
+            uncer_array = np.array([uncer], dtype=float)
+            self.all_uncers = np.append(self.all_uncers, uncer_array, axis=0)
+        if bad:
+            cost_index = len(self.all_costs) - 1
+            self.bad_run_indexs.append(cost_index)
 
     def save_archive(self):
         '''

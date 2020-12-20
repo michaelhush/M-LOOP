@@ -408,6 +408,9 @@ class Controller():
             self.save_archive()
             self._get_cost_and_in_dict()
         self.log.debug('End controller loop.')
+        # Send result of last run to learner to make sure that it makes it to
+        # the learner archive.
+        self._send_to_learner()
 
     def _first_params(self):
         '''
@@ -417,9 +420,9 @@ class Controller():
         '''
         return self.learner_params_queue.get()
 
-    def _next_params(self):
+    def _send_to_learner(self):
         '''
-        Send latest cost info and get next parameters from the learner.
+        Send the latest cost info the the learner.
         '''
         if self.curr_bad:
             cost = float('inf')
@@ -432,6 +435,12 @@ class Controller():
             self.curr_bad,
         )
         self.learner_costs_queue.put(message)
+
+    def _next_params(self):
+        '''
+        Send latest cost info and get next parameters from the learner.
+        '''
+        self._send_to_learner()
         return self.learner_params_queue.get()
 
 class RandomController(Controller):
