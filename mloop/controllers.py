@@ -189,7 +189,7 @@ class Controller():
             )
             filename = controller_archive_filename + filename_suffix
             self.total_archive_filename = os.path.join(mlu.archive_foldername, filename)
-            
+
             # Include any path info from controller_archive_filename when
             # creating directory for archive files.]
             archive_dir = os.path.dirname(self.total_archive_filename)
@@ -419,12 +419,20 @@ class Controller():
 
     def _next_params(self):
         '''
-        Abstract method.
-        When implemented should send appropriate information to learner and get next parameters.
-        Returns:
-            Parameters for next experiment.
+        Send latest cost info and get next parameters from the learner.
         '''
-        pass
+        if self.curr_bad:
+            cost = float('inf')
+        else:
+            cost = self.curr_cost
+        message = (
+            self.curr_params,
+            cost,
+            self.curr_uncer,
+            self.curr_bad,
+        )
+        self.learner_costs_queue.put(message)
+        return self.learner_params_queue.get()
 
 class RandomController(Controller):
     '''
@@ -438,22 +446,12 @@ class RandomController(Controller):
 
         super(RandomController,self).__init__(interface, **kwargs)
         self.learner = mll.RandomLearner(start_datetime = self.start_datetime,
-                                         learner_archive_filename=None,
                                          **self.remaining_kwargs)
 
         self._update_controller_with_learner_attributes()
         self.out_type.append('random')
 
         self.log.debug('Random controller init completed.')
-
-    def _next_params(self):
-        '''
-        Sends cost uncer and bad tuple to learner then gets next parameters.
-        Returns:
-            Parameters for next experiment.
-        '''
-        self.learner_costs_queue.put(self.best_params)
-        return self.learner_params_queue.get()
 
 
 class NelderMeadController(Controller):
@@ -474,16 +472,6 @@ class NelderMeadController(Controller):
         self._update_controller_with_learner_attributes()
         self.out_type.append('nelder_mead')
 
-    def _next_params(self):
-        '''
-        Gets next parameters from Nelder–Mead learner.
-        '''
-        if self.curr_bad:
-            cost = float('inf')
-        else:
-            cost = self.curr_cost
-        self.learner_costs_queue.put(cost)
-        return self.learner_params_queue.get()
 
 class DifferentialEvolutionController(Controller):
     '''
@@ -502,17 +490,6 @@ class DifferentialEvolutionController(Controller):
 
         self._update_controller_with_learner_attributes()
         self.out_type.append('differential_evolution')
-
-    def _next_params(self):
-        '''
-        Gets next parameters from differential evolution learner.
-        '''
-        if self.curr_bad:
-            cost = float('inf')
-        else:
-            cost = self.curr_cost
-        self.learner_costs_queue.put(cost)
-        return self.learner_params_queue.get()
 
 
 class MachineLearnerController(Controller):
@@ -540,10 +517,10 @@ class MachineLearnerController(Controller):
                  learner_archive_file_type = mll.default_learner_archive_file_type,
                  param_names=None,
                  **kwargs):
-        
-        super(MachineLearnerController,self).__init__(interface, **kwargs)   
+
+        super(MachineLearnerController,self).__init__(interface, **kwargs)
         self.machine_learner_type = machine_learner_type
-        
+
         self.last_training_cost = None
         self.last_training_bad = None
         self.last_training_run_flag = False
@@ -632,28 +609,6 @@ class MachineLearnerController(Controller):
                                          self.curr_uncer,
                                          self.curr_bad))
 
-    def _next_params(self):
-        '''
-        Gets next parameters from training learner.
-        '''
-        if self.training_type == 'differential_evolution' or self.training_type == 'nelder_mead':
-            #Copied from NelderMeadController
-            if self.last_training_bad:
-                cost = float('inf')
-            else:
-                cost = self.last_training_cost
-            self.learner_costs_queue.put(cost)
-            temp = self.learner_params_queue.get()
-
-        elif self.training_type == 'random':
-            #Copied from RandomController
-            self.learner_costs_queue.put(self.best_params)
-            temp = self.learner_params_queue.get()
-
-        else:
-            self.log.error('Unknown training type called. THIS SHOULD NOT HAPPEN')
-        return temp
-
     def _start_up(self):
         '''
         Runs pararent method and also starts training_learner.
@@ -673,14 +628,14 @@ class MachineLearnerController(Controller):
         self._put_params_and_out_dict(next_params)
         self.save_archive()
         self._get_cost_and_in_dict()
-        
+
         while (self.num_in_costs < self.num_training_runs) and self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1) + ' (training)')
             next_params = self._next_params()
             self._put_params_and_out_dict(next_params)
             self.save_archive()
             self._get_cost_and_in_dict()
-        
+
         if self.check_end_conditions():
             #Start last training run
             self.log.info('Run:' + str(self.num_in_costs +1) + ' (training)')
@@ -718,7 +673,7 @@ class MachineLearnerController(Controller):
             if ml_count==self.generation_num:
                 self.new_params_event.set()
                 ml_count = 0
-                
+
 
 
     def _shut_down(self):
@@ -832,8 +787,8 @@ class NeuralNetController(MachineLearnerController):
                  learner_archive_file_type = mll.default_learner_archive_file_type,
                  param_names=None,
                  **kwargs):
-        
-        super(NeuralNetController,self).__init__(interface, 
+
+        super(NeuralNetController,self).__init__(interface,
                                                 machine_learner_type='neural_net',
                                                 num_params=num_params,
                                                 min_boundary=min_boundary,
@@ -841,8 +796,8 @@ class NeuralNetController(MachineLearnerController):
                                                 trust_region=trust_region,
                                                 learner_archive_filename=learner_archive_filename,
                                                 learner_archive_file_type=learner_archive_file_type,
-                                                param_names=param_names, 
-                                                **kwargs)   
+                                                param_names=param_names,
+                                                **kwargs)
 
         self.ml_learner = mll.NeuralNetLearner(start_datetime=self.start_datetime,
                                                num_params=num_params,

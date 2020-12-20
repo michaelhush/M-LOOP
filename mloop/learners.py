@@ -60,6 +60,11 @@ class Learner():
         params_out_queue (queue): Queue for parameters created by learner.
         costs_in_queue (queue): Queue for costs to be used by learner.
         end_event (event): Event to trigger end of learner.
+        all_params (array): Array containing all parameters sent to learner.
+        all_costs (array): Array containing all costs sent to learner.
+        all_uncers (array): Array containing all uncertainties sent to learner.
+        bad_run_indexs (list): list of indexes to all runs that were marked as
+            bad.
     '''
 
     def __init__(self,
@@ -156,6 +161,12 @@ class Learner():
         # Ensure that all of the entries are strings.
         self.param_names = [str(name) for name in self.param_names]
 
+        #Storage variables, archived
+        self.all_params = np.array([], dtype=float)
+        self.all_costs = np.array([], dtype=float)
+        self.all_uncers = np.array([], dtype=float)
+        self.bad_run_indexs = []
+
         self.archive_dict = {'mloop_version':__version__,
                              'archive_type':'learner',
                              'num_params':self.num_params,
@@ -215,7 +226,9 @@ class Learner():
 
     def put_params_and_get_cost(self, params, **kwargs):
         '''
-        Send parameters to queue and whatever additional keywords. Saves sent variables in appropriate storage arrays.
+        Send parameters to queue and whatever additional keywords.
+
+        Also saves sent and received variables in appropriate storage arrays.
 
         Args:
             params (array) : array of values to be sent to file
@@ -235,7 +248,7 @@ class Learner():
         self.save_archive()
         while not self.end_event.is_set():
             try:
-                cost = self.costs_in_queue.get(True, self.learner_wait)
+                message = self.costs_in_queue.get(True, self.learner_wait)
             except mlu.empty_exception:
                 continue
             else:
@@ -244,7 +257,45 @@ class Learner():
             self.log.debug('Learner end signal received. Ending')
             raise LearnerInterrupt
         #self.log.debug('Learner cost='+repr(cost))
+        # Record values.
+        params, cost, uncer, bad = self._parse_cost_message(message)
+        if self.all_params.size==0:
+            self.all_params = np.array([params], dtype=float)
+            self.all_costs = np.array([cost], dtype=float)
+            self.all_uncers = np.array([uncer], dtype=float)
+        else:
+            # params
+            params_array = np.array([params], dtype=float)
+            self.all_params = np.append(self.all_params, params_array, axis=0)
+            # cost
+            cost_array = np.array([cost], dtype=float)
+            self.all_costs = np.append(self.all_costs, cost_array, axis=0)
+            # uncer
+            uncer_array = np.array([uncer], dtype=float)
+            self.all_uncers = np.append(self.all_uncers, uncer_array, axis=0)
+        if bad:
+            cost_index = len(self.all_costs) - 1
+            self.bad_run_indexs.append(cost_index)
         return cost
+
+    def _parse_cost_message(self, message):
+        params, cost, uncer, bad = message
+        params = np.array(params, dtype=float)
+        if not self.check_num_params(params):
+            msg = ('Expected {num_params} parameters, but parameters were: '
+                   '{params}.').format(
+                       num_params=self.num_params,
+                       params=repr(params),
+                   )
+            self.log.error(msg)
+            raise ValueError(msg)
+        if not self.check_in_boundary(params):
+            self.log.warning('Parameters provided to learner not in boundaries:' + repr(params))
+        cost = float(cost)
+        uncer = float(uncer)
+        if uncer < 0:
+            self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
+        return params, cost, uncer, bad
 
     def save_archive(self):
         '''
@@ -256,9 +307,19 @@ class Learner():
 
     def update_archive(self):
         '''
-        Abstract method for update to the archive. To be implemented by child class.
+        Update the dictionary of parameters and values to save to the archive.
+
+        Child classes should call this method and also updated
+        `self.archive_dict` with any other parameters and values that need to be
+        saved to the learner archive.
         '''
-        pass
+        new_values_dict = {
+            'all_params':self.all_params,
+            'all_costs':self.all_costs,
+            'all_uncers':self.all_uncers,
+            'bad_run_indexs':self.bad_run_indexs,
+        }
+        self.archive_dict.update(new_values_dict)
 
     def _set_trust_region(self,trust_region):
         '''
@@ -338,6 +399,10 @@ class RandomLearner(Learner, threading.Thread):
                 self.log.error('first_params is not in the boundary:' + repr(self.first_params))
                 raise ValueError
 
+        # Keep track of best parameters to implement trust region.
+        self.best_cost = None
+        self.best_parameters = None
+
         self._set_trust_region(trust_region)
 
         self.archive_dict.update({'archive_type':'random_learner'})
@@ -355,13 +420,17 @@ class RandomLearner(Learner, threading.Thread):
             next_params = self.first_params
         while not self.end_event.is_set():
             try:
-                centre_params = self.put_params_and_get_cost(next_params)
+                cost = self.put_params_and_get_cost(next_params)
             except LearnerInterrupt:
                 break
             else:
+                # Update best parameters if necessary.
+                if self.best_cost is None or cost < self.best_cost:
+                    self.best_cost = cost
+                    self.best_params = self.all_params[-1]
                 if self.has_trust_region:
-                    temp_min = np.maximum(self.min_boundary,centre_params - self.trust_region)
-                    temp_max = np.minimum(self.max_boundary,centre_params + self.trust_region)
+                    temp_min = np.maximum(self.min_boundary, self.best_params - self.trust_region)
+                    temp_max = np.minimum(self.max_boundary, self.best_params + self.trust_region)
                     next_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
                 else:
                     next_params =  self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
@@ -603,8 +672,12 @@ class NelderMeadLearner(Learner, threading.Thread):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'simplex_parameters':self.simplex_params,
-                                  'simplex_costs':self.simplex_costs})
+        super(NelderMeadLearner, self).update_archive()
+        new_values_dict = {
+            'simplex_parameters':self.simplex_params,
+            'simplex_costs':self.simplex_costs,
+        }
+        self.archive_dict.update(new_values_dict)
 
 class DifferentialEvolutionLearner(Learner, threading.Thread):
     '''
@@ -889,13 +962,17 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'params_generations':self.params_generations,
-                                  'costs_generations':self.costs_generations,
-                                  'population':self.population,
-                                  'population_costs':self.population_costs,
-                                  'init_std':self.init_std,
-                                  'curr_std':self.curr_std,
-                                  'generation_count':self.generation_count})
+        super(DifferentialEvolutionLearner, self).update_archive()
+        new_values_dict = {
+            'params_generations':self.params_generations,
+            'costs_generations':self.costs_generations,
+            'population':self.population,
+            'population_costs':self.population_costs,
+            'init_std':self.init_std,
+            'curr_std':self.curr_std,
+            'generation_count':self.generation_count,
+        }
+        self.archive_dict.update(new_values_dict)
 
 
 class MachineLearner(Learner):
@@ -993,6 +1070,11 @@ class MachineLearner(Learner):
                 num_params,
             )
 
+            # Run parent's __init__() now so that it gets the updated value for
+            # num_params but its empty values for all_params, etc., get
+            # overwritten below.
+            super(MachineLearner, self).__init__(**kwargs)
+
             # Data that must be present in any archive type.
             self.all_params = np.array(training_dict['all_params'], dtype=float)
             self.all_costs = mlu.safe_cast_to_array(training_dict['all_costs'])
@@ -1002,33 +1084,47 @@ class MachineLearner(Learner):
             # Data that may be in the archive, but can easily be calculated if
             # necessary.
             # costs_count
-            self.costs_count = int(training_dict.get('costs_count'))
-            if self.costs_count is None:
-                self.costs_count = len(self.all_costs)
+            costs_count = training_dict.get(
+                'costs_count',
+                len(self.all_costs),
+            )
+            self.costs_count = int(costs_count)
             # best_index
-            self.best_index = int(training_dict.get('best_index'))
-            if self.best_index is None:
-                self.best_index = np.argmin(self.all_costs)
+            best_index = training_dict.get(
+                'best_index',
+                np.argmin(self.all_costs),
+            )
+            self.best_index = int(best_index)
             # best_cost
-            self.best_cost = float(training_dict.get('best_cost'))
-            if self.best_cost is None:
-                self.best_cost = self.all_costs[self.best_index]
+            best_cost = training_dict.get(
+                'best_cost',
+                self.all_costs[self.best_index],
+            )
+            self.best_cost = float(best_cost)
             # best_params
-            self.best_params = mlu.safe_cast_to_array(training_dict.get('best_params'))
-            if self.best_params is None:
-                self.best_params = self.all_params[self.best_index]
+            best_params = training_dict.get(
+                'best_params',
+                self.all_params[self.best_index],
+            )
+            self.best_params = mlu.safe_cast_to_array(best_params)
             # worst_index
-            self.worst_index = int(training_dict.get('worst_index'))
-            if self.worst_index is None:
-                self.worst_index = np.argmax(self.all_costs)
+            worst_index = training_dict.get(
+                'worst_index',
+                np.argmax(self.all_costs),
+            )
+            self.worst_index = int(worst_index)
             # worst_cost
-            self.worst_cost = float(training_dict.get('worst_cost'))
-            if self.worst_cost is None:
-                self.worst_cost = self.all_costs[self.worst_index]
+            worst_cost = training_dict.get(
+                'worst_cost',
+                self.all_costs[self.worst_index],
+            )
+            self.worst_cost = float(worst_cost)
             # cost_range
-            self.cost_range = float(training_dict.get('cost_range'))
-            if self.cost_range is None:
-                self.cost_range = self.worst_cost - self.best_cost
+            cost_range = training_dict.get(
+                'cost_range',
+                (self.worst_cost - self.best_cost),
+            )
+            self.cost_range = float(cost_range)
 
             # Parameters that must be the same in keyword arguments and in the
             # training archive in order to load some of the data.
@@ -1058,13 +1154,10 @@ class MachineLearner(Learner):
                 self._boundaries_match_training_archive = False
 
         else:
+            super(MachineLearner, self).__init__(**kwargs)
             self._learner_type_matches_training_archive = False
             self._boundaries_match_training_archive = False
             #Storage variables, archived
-            self.all_params = np.array([], dtype=float)
-            self.all_costs = np.array([], dtype=float)
-            self.all_uncers = np.array([], dtype=float)
-            self.bad_run_indexs = []
             self.best_cost = float('inf')
             self.best_params = float('nan')
             self.best_index = 0
@@ -1102,8 +1195,6 @@ class MachineLearner(Learner):
 
             # Predicted optimum
             self.has_global_minima = False
-
-        super(MachineLearner, self).__init__(**kwargs)
 
         # Multiprocessor controls
         self.new_params_event = mp.Event()
@@ -1201,6 +1292,23 @@ class MachineLearner(Learner):
                        )
                 self.log.error(msg)
                 raise ValueError(msg)
+
+    def update_archive(self):
+        '''
+        Update the archive.
+        '''
+        super(MachineLearner, self).update_archive()
+        new_values_dict = {
+            'best_cost':self.best_cost,
+            'best_params':self.best_params,
+            'best_index':self.best_index,
+            'worst_cost':self.worst_cost,
+            'worst_index':self.worst_index,
+            'cost_range':self.cost_range,
+            'costs_count':self.costs_count,
+            'params_count':self.params_count,
+        }
+        self.archive_dict.update(new_values_dict)
 
 
 class GaussianProcessLearner(MachineLearner, mp.Process):
@@ -1468,7 +1576,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                                   'length_scale_bounds':self.length_scale_bounds,
                                   'noise_level_history':self.noise_level_history,
                                   'noise_level_bounds':self.noise_level_bounds,
-                                  'bad_run_indexs':self.bad_run_indexs,
                                   'bias_func_cycle':self.bias_func_cycle,
                                   'bias_func_cost_factor':self.bias_func_cost_factor,
                                   'bias_func_uncer_factor':self.bias_func_uncer_factor,
@@ -1622,16 +1729,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                     cost = self.worst_cost
                     uncer = self.cost_range*self.bad_uncer_frac
 
-            param = np.array(param, dtype=float)
-            if not self.check_num_params(param):
-                self.log.error('Incorrect number of parameters provided to Gaussian process learner:' + repr(param) + '. Number of parameters:' + str(self.num_params))
-                raise ValueError
-            if not self.check_in_boundary(param):
-                self.log.warning('Parameters provided to Gaussian process learner not in boundaries:' + repr(param))
-            cost = float(cost)
-            uncer = float(uncer)
-            if uncer < 0:
-                self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
+            message = (param, cost, uncer, bad)
+            param, cost, uncer, bad = self._parse_cost_message(message)
+
             uncer = max(uncer, self.minimum_uncertainty)
 
             cost_change_flag = False
@@ -1708,23 +1808,14 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'all_params':self.all_params,
-                                  'all_costs':self.all_costs,
-                                  'all_uncers':self.all_uncers,
-                                  'best_cost':self.best_cost,
-                                  'best_params':self.best_params,
-                                  'best_index':self.best_index,
-                                  'worst_cost':self.worst_cost,
-                                  'worst_index':self.worst_index,
-                                  'cost_range':self.cost_range,
-                                  'fit_count':self.fit_count,
-                                  'costs_count':self.costs_count,
-                                  'params_count':self.params_count,
-                                  'update_hyperparameters':self.update_hyperparameters,
-                                  'length_scale':self.length_scale,
-                                  'noise_level':self.noise_level})
-
-
+        super(GaussianProcessLearner, self).update_archive()
+        new_values_dict = {
+            'fit_count':self.fit_count,
+            'update_hyperparameters':self.update_hyperparameters,
+            'length_scale':self.length_scale,
+            'noise_level':self.noise_level,
+        }
+        self.archive_dict.update(new_values_dict)
 
     def fit_gaussian_process(self):
         '''
@@ -1989,7 +2080,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         self.generation_num = 3
 
         self.archive_dict.update({'archive_type':self._ARCHIVE_TYPE,
-                                  'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
                                   'parameter_searches':self.parameter_searches,
@@ -2133,16 +2223,9 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                     cost = self.worst_cost
                     uncer = self.cost_range*self.bad_uncer_frac
 
-            param = np.array(param, dtype=float)
-            if not self.check_num_params(param):
-                self.log.error('Incorrect number of parameters provided to neural network learner:' + repr(param) + '. Number of parameters:' + str(self.num_params))
-                raise ValueError
-            if not self.check_in_boundary(param):
-                self.log.warning('Parameters provided to neural network learner not in boundaries:' + repr(param))
-            cost = float(cost)
-            uncer = float(uncer)
-            if uncer < 0:
-                self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
+            message = (param, cost, uncer, bad)
+            param, cost, uncer, bad = self._parse_cost_message(message)
+
             uncer = max(uncer, self.minimum_uncertainty)
 
             cost_change_flag = False
@@ -2219,18 +2302,11 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'all_params':self.all_params,
-                                  'all_costs':self.all_costs,
-                                  'all_uncers':self.all_uncers,
-                                  'best_cost':self.best_cost,
-                                  'best_params':self.best_params,
-                                  'best_index':self.best_index,
-                                  'worst_cost':self.worst_cost,
-                                  'worst_index':self.worst_index,
-                                  'cost_range':self.cost_range,
-                                  'costs_count':self.costs_count,
-                                  'params_count':self.params_count,
-                                  'cost_scaler_init_index':self.cost_scaler_init_index})
+        super(NeuralNetLearner, self).update_archive()
+        new_values_dict = {
+            'cost_scaler_init_index':self.cost_scaler_init_index,
+        }
+        self.archive_dict.update(new_values_dict)
         if self.neural_net:
             for i,n in enumerate(self.neural_net):
                 self.archive_dict.update({'net_'+str(i):n.save()})
