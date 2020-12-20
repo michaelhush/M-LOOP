@@ -272,6 +272,27 @@ class Learner():
         return cost
 
     def _parse_cost_message(self, message):
+        '''
+        Parse a message sent from the controller via `self.costs_in_queue`.
+
+        Args:
+            message (tuple): A tuple put in `self.costs_in_queue` by the
+                controller. It should be of the form
+                `(params, cost, uncer, bad)` where `params` is an array
+                specifying the parameter values used, `cost` is the measured
+                cost for those parameter values, `uncer` is the uncertainty
+                measured for those parameter values, and `bad` is a boolean
+                indicating whether the run was bad.
+
+        Raises:
+            ValueError: A `ValueError` is raised if the number of parameters in
+                the provided `params` doesn't match `self.num_params`.
+
+        Returns:
+            tuple: A tuple of the form `(params, cost, uncer, bad)`. For more
+                information on the meaning of those parameters, see the entry
+                for the `message` argument above.
+        '''
         params, cost, uncer, bad = message
         params = np.array(params, dtype=float)
         if not self.check_num_params(params):
