@@ -1122,6 +1122,14 @@ class MachineLearner(Learner):
             self.all_costs = mlu.safe_cast_to_array(training_dict['all_costs'])
             self.all_uncers = mlu.safe_cast_to_array(training_dict['all_uncers'])
             self.bad_run_indexs = mlu.safe_cast_to_list(training_dict['bad_run_indexs'])
+            # Learner archives from GaussianProcessLearner and NeuralNetLearner
+            # made with versions of M-LOOP <= 3.1.1 had a bug where
+            # bad_run_indexs was a list of lists. Flatten the list if it has
+            # that formatting.
+            if self.bad_run_indexs and isinstance(self.bad_run_indexs[0], list):
+                self.bad_run_indexs = [
+                    index for sublist in self.bad_run_indexs for index in sublist
+                ]
 
             # Data that may be in the archive, but can easily be calculated if
             # necessary.
@@ -1442,7 +1450,7 @@ class MachineLearner(Learner):
             self.all_costs = np.concatenate((self.all_costs, np.array(new_costs, dtype=float)))
             self.all_uncers = np.concatenate((self.all_uncers, np.array(new_uncers, dtype=float)))
 
-        self.bad_run_indexs.append(new_bads)
+        self.bad_run_indexs.extend(new_bads)
 
         if self.all_params.shape != (self.costs_count,self.num_params):
             self.log('Saved params are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_params))
