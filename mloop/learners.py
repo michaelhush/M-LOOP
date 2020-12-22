@@ -60,6 +60,11 @@ class Learner():
         params_out_queue (queue): Queue for parameters created by learner.
         costs_in_queue (queue): Queue for costs to be used by learner.
         end_event (event): Event to trigger end of learner.
+        all_params (array): Array containing all parameters sent to learner.
+        all_costs (array): Array containing all costs sent to learner.
+        all_uncers (array): Array containing all uncertainties sent to learner.
+        bad_run_indexs (list): list of indexes to all runs that were marked as
+            bad.
     '''
 
     def __init__(self,
@@ -156,6 +161,12 @@ class Learner():
         # Ensure that all of the entries are strings.
         self.param_names = [str(name) for name in self.param_names]
 
+        #Storage variables, archived
+        self.all_params = np.array([], dtype=float)
+        self.all_costs = np.array([], dtype=float)
+        self.all_uncers = np.array([], dtype=float)
+        self.bad_run_indexs = []
+
         self.archive_dict = {'mloop_version':__version__,
                              'archive_type':'learner',
                              'num_params':self.num_params,
@@ -215,7 +226,9 @@ class Learner():
 
     def put_params_and_get_cost(self, params, **kwargs):
         '''
-        Send parameters to queue and whatever additional keywords. Saves sent variables in appropriate storage arrays.
+        Send parameters to queue and whatever additional keywords.
+
+        Also saves sent and received variables in appropriate storage arrays.
 
         Args:
             params (array) : array of values to be sent to file
@@ -235,16 +248,96 @@ class Learner():
         self.save_archive()
         while not self.end_event.is_set():
             try:
-                cost = self.costs_in_queue.get(True, self.learner_wait)
+                message = self.costs_in_queue.get(True, self.learner_wait)
             except mlu.empty_exception:
                 continue
             else:
                 break
         else:
             self.log.debug('Learner end signal received. Ending')
+            # Check for one more message which may have been was lost in a race
+            # with the end_event being set.
+            try:
+                message = self.costs_in_queue.get(True, self.learner_wait)
+            except mlu.empty_exception:
+                pass
+            else:
+                params, cost, uncer, bad = self._parse_cost_message(message)
+                self._update_run_data_attributes(params, cost, uncer, bad)
             raise LearnerInterrupt
         #self.log.debug('Learner cost='+repr(cost))
+        # Record values.
+        params, cost, uncer, bad = self._parse_cost_message(message)
+        self._update_run_data_attributes(params, cost, uncer, bad)
         return cost
+
+    def _parse_cost_message(self, message):
+        '''
+        Parse a message sent from the controller via `self.costs_in_queue`.
+
+        Args:
+            message (tuple): A tuple put in `self.costs_in_queue` by the
+                controller. It should be of the form
+                `(params, cost, uncer, bad)` where `params` is an array
+                specifying the parameter values used, `cost` is the measured
+                cost for those parameter values, `uncer` is the uncertainty
+                measured for those parameter values, and `bad` is a boolean
+                indicating whether the run was bad.
+
+        Raises:
+            ValueError: A `ValueError` is raised if the number of parameters in
+                the provided `params` doesn't match `self.num_params`.
+
+        Returns:
+            tuple: A tuple of the form `(params, cost, uncer, bad)`. For more
+                information on the meaning of those parameters, see the entry
+                for the `message` argument above.
+        '''
+        params, cost, uncer, bad = message
+        params = np.array(params, dtype=float)
+        if not self.check_num_params(params):
+            msg = ('Expected {num_params} parameters, but parameters were: '
+                   '{params}.').format(
+                       num_params=self.num_params,
+                       params=repr(params),
+                   )
+            self.log.error(msg)
+            raise ValueError(msg)
+        if not self.check_in_boundary(params):
+            self.log.warning('Parameters provided to learner not in boundaries:' + repr(params))
+        cost = float(cost)
+        uncer = float(uncer)
+        if uncer < 0:
+            self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
+        return params, cost, uncer, bad
+
+    def _update_run_data_attributes(self, params, cost, uncer, bad):
+        '''
+        Update attributes that store the results returned by the controller.
+
+        Args:
+            params (array): Array of control parameter values.
+            cost (float): The cost measured for `params`.
+            uncer (float): The uncertainty measured for `params`.
+            bad (bool): Whether or not the run was bad.
+        '''
+        if self.all_params.size==0:
+            self.all_params = np.array([params], dtype=float)
+            self.all_costs = np.array([cost], dtype=float)
+            self.all_uncers = np.array([uncer], dtype=float)
+        else:
+            # params
+            params_array = np.array([params], dtype=float)
+            self.all_params = np.append(self.all_params, params_array, axis=0)
+            # cost
+            cost_array = np.array([cost], dtype=float)
+            self.all_costs = np.append(self.all_costs, cost_array, axis=0)
+            # uncer
+            uncer_array = np.array([uncer], dtype=float)
+            self.all_uncers = np.append(self.all_uncers, uncer_array, axis=0)
+        if bad:
+            cost_index = len(self.all_costs) - 1
+            self.bad_run_indexs.append(cost_index)
 
     def save_archive(self):
         '''
@@ -256,9 +349,19 @@ class Learner():
 
     def update_archive(self):
         '''
-        Abstract method for update to the archive. To be implemented by child class.
+        Update the dictionary of parameters and values to save to the archive.
+
+        Child classes should call this method and also updated
+        `self.archive_dict` with any other parameters and values that need to be
+        saved to the learner archive.
         '''
-        pass
+        new_values_dict = {
+            'all_params':self.all_params,
+            'all_costs':self.all_costs,
+            'all_uncers':self.all_uncers,
+            'bad_run_indexs':self.bad_run_indexs,
+        }
+        self.archive_dict.update(new_values_dict)
 
     def _set_trust_region(self,trust_region):
         '''
@@ -338,6 +441,10 @@ class RandomLearner(Learner, threading.Thread):
                 self.log.error('first_params is not in the boundary:' + repr(self.first_params))
                 raise ValueError
 
+        # Keep track of best parameters to implement trust region.
+        self.best_cost = None
+        self.best_parameters = None
+
         self._set_trust_region(trust_region)
 
         self.archive_dict.update({'archive_type':'random_learner'})
@@ -355,13 +462,17 @@ class RandomLearner(Learner, threading.Thread):
             next_params = self.first_params
         while not self.end_event.is_set():
             try:
-                centre_params = self.put_params_and_get_cost(next_params)
+                cost = self.put_params_and_get_cost(next_params)
             except LearnerInterrupt:
                 break
             else:
+                # Update best parameters if necessary.
+                if self.best_cost is None or cost < self.best_cost:
+                    self.best_cost = cost
+                    self.best_params = self.all_params[-1]
                 if self.has_trust_region:
-                    temp_min = np.maximum(self.min_boundary,centre_params - self.trust_region)
-                    temp_max = np.minimum(self.max_boundary,centre_params + self.trust_region)
+                    temp_min = np.maximum(self.min_boundary, self.best_params - self.trust_region)
+                    temp_max = np.minimum(self.max_boundary, self.best_params + self.trust_region)
                     next_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
                 else:
                     next_params =  self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
@@ -603,8 +714,12 @@ class NelderMeadLearner(Learner, threading.Thread):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'simplex_parameters':self.simplex_params,
-                                  'simplex_costs':self.simplex_costs})
+        super(NelderMeadLearner, self).update_archive()
+        new_values_dict = {
+            'simplex_parameters':self.simplex_params,
+            'simplex_costs':self.simplex_costs,
+        }
+        self.archive_dict.update(new_values_dict)
 
 class DifferentialEvolutionLearner(Learner, threading.Thread):
     '''
@@ -889,13 +1004,17 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'params_generations':self.params_generations,
-                                  'costs_generations':self.costs_generations,
-                                  'population':self.population,
-                                  'population_costs':self.population_costs,
-                                  'init_std':self.init_std,
-                                  'curr_std':self.curr_std,
-                                  'generation_count':self.generation_count})
+        super(DifferentialEvolutionLearner, self).update_archive()
+        new_values_dict = {
+            'params_generations':self.params_generations,
+            'costs_generations':self.costs_generations,
+            'population':self.population,
+            'population_costs':self.population_costs,
+            'init_std':self.init_std,
+            'curr_std':self.curr_std,
+            'generation_count':self.generation_count,
+        }
+        self.archive_dict.update(new_values_dict)
 
 
 class MachineLearner(Learner):
@@ -967,7 +1086,7 @@ class MachineLearner(Learner):
         self._prepare_logger()
 
         if training_filename is not None:
-            # Automatically determine gp_training_file_type if necessary.
+            # Automatically determine training_file_type if necessary.
             training_filename = str(training_filename)
             if training_file_type is None:
                 training_file_type = mlu.get_file_type(training_filename)
@@ -979,76 +1098,108 @@ class MachineLearner(Learner):
             self.training_file_dir = os.path.dirname(training_filename)
 
             # Get the training dictionary.
-            self.training_dict = mlu.get_dict_from_file(training_filename, training_file_type)
+            training_dict = mlu.get_dict_from_file(
+                training_filename,
+                training_file_type,
+            )
+            self.training_dict = training_dict
 
-            # Ensure the archive is of the correct type.
-            if self.training_dict['archive_type'] != self._ARCHIVE_TYPE:
-                msg = ("Training archive must have "
-                       "'archive_type'='{correct_type}' but has "
-                       "'archive_type'='{actual_type}'.").format(
-                           correct_type=self._ARCHIVE_TYPE,
-                           actual_type=self.training_dict['archive_type'],
-                       )
-                self.log.error(msg)
-                raise NotImplementedError(msg)
-
-            # Basic optimization settings that get passed to parent.
-            num_params = int(self.training_dict['num_params'])
+            # Parameters that must match the values in the training archive.
+            num_params = int(training_dict['num_params'])
             kwargs['num_params'] = self._reconcile_kwarg_and_training_val(
                 kwargs,
                 'num_params',
                 num_params,
             )
-            min_boundary = mlu.safe_cast_to_array(self.training_dict['min_boundary'])
-            kwargs['min_boundary'] = self._reconcile_kwarg_and_training_val(
-                kwargs,
-                'min_boundary',
-                min_boundary,
-            )
-            max_boundary = mlu.safe_cast_to_array(self.training_dict['max_boundary'])
-            kwargs['max_boundary'] = self._reconcile_kwarg_and_training_val(
-                kwargs,
-                'max_boundary',
-                max_boundary,
-            )
-            param_names = mlu._param_names_from_file_dict(self.training_dict)
-            kwargs['param_names'] = self._reconcile_kwarg_and_training_val(
-                kwargs,
-                'param_names',
-                param_names,
-            )
 
-            #Counters
-            self.costs_count = int(self.training_dict['costs_count'])
-            self.params_count = int(self.training_dict['params_count'])
-
-            #Data from previous experiment
-            self.all_params = np.array(self.training_dict['all_params'], dtype=float)
-            self.all_costs = mlu.safe_cast_to_array(self.training_dict['all_costs'])
-            self.all_uncers = mlu.safe_cast_to_array(self.training_dict['all_uncers'])
-            self.bad_run_indexs = mlu.safe_cast_to_list(self.training_dict['bad_run_indexs'])
-
-            #Derived properties
-            self.best_cost = float(self.training_dict['best_cost'])
-            self.best_params = mlu.safe_cast_to_array(self.training_dict['best_params'])
-            self.best_index = int(self.training_dict['best_index'])
-            self.worst_cost = float(self.training_dict['worst_cost'])
-            self.worst_index = int(self.training_dict['worst_index'])
-            self.cost_range = float(self.training_dict['cost_range'])
-            try:
-                self.predicted_best_parameters = mlu.safe_cast_to_array(self.training_dict['predicted_best_parameters'])
-                self.predicted_best_cost = float(self.training_dict['predicted_best_cost'])
-                self.predicted_best_uncertainty = float(self.training_dict['predicted_best_uncertainty'])
-                self.has_global_minima = True
-            except KeyError:
-                self.has_global_minima = False
+            # Run parent's __init__() now so that it gets the updated value for
+            # num_params but its empty values for all_params, etc., get
+            # overwritten below.
             super(MachineLearner, self).__init__(**kwargs)
+
+            # Data that must be present in any archive type.
+            self.all_params = np.array(training_dict['all_params'], dtype=float)
+            self.all_costs = mlu.safe_cast_to_array(training_dict['all_costs'])
+            self.all_uncers = mlu.safe_cast_to_array(training_dict['all_uncers'])
+            self.bad_run_indexs = mlu.safe_cast_to_list(training_dict['bad_run_indexs'])
+
+            # Data that may be in the archive, but can easily be calculated if
+            # necessary.
+            # costs_count
+            costs_count = training_dict.get(
+                'costs_count',
+                len(self.all_costs),
+            )
+            self.costs_count = int(costs_count)
+            # best_index
+            best_index = training_dict.get(
+                'best_index',
+                np.argmin(self.all_costs),
+            )
+            self.best_index = int(best_index)
+            # best_cost
+            best_cost = training_dict.get(
+                'best_cost',
+                self.all_costs[self.best_index],
+            )
+            self.best_cost = float(best_cost)
+            # best_params
+            best_params = training_dict.get(
+                'best_params',
+                self.all_params[self.best_index],
+            )
+            self.best_params = mlu.safe_cast_to_array(best_params)
+            # worst_index
+            worst_index = training_dict.get(
+                'worst_index',
+                np.argmax(self.all_costs),
+            )
+            self.worst_index = int(worst_index)
+            # worst_cost
+            worst_cost = training_dict.get(
+                'worst_cost',
+                self.all_costs[self.worst_index],
+            )
+            self.worst_cost = float(worst_cost)
+            # cost_range
+            cost_range = training_dict.get(
+                'cost_range',
+                (self.worst_cost - self.best_cost),
+            )
+            self.cost_range = float(cost_range)
+
+            # Parameters that must be the same in keyword arguments and in the
+            # training archive in order to load some of the data.
+            # learner type
+            self._learner_type_matches_training_archive = True
+            learner_type_train = self.training_dict['archive_type']
+            if learner_type_train != self._ARCHIVE_TYPE:
+                self._learner_type_matches_training_archive = False
+            # min_boundary
+            self._boundaries_match_training_archive = True
+            min_boundary_train = self.training_dict['min_boundary']
+            min_boundary_train = mlu.safe_cast_to_array(min_boundary_train)
+            are_same = np.array_equal(
+                kwargs.get('min_boundary'),
+                min_boundary_train,
+            )
+            if not are_same:
+                self._boundaries_match_training_archive = False
+            # max_boundary
+            max_boundary_train = self.training_dict['max_boundary']
+            max_boundary_train = mlu.safe_cast_to_array(max_boundary_train)
+            are_same = np.array_equal(
+                kwargs.get('max_boundary'),
+                max_boundary_train,
+            )
+            if not are_same:
+                self._boundaries_match_training_archive = False
+
         else:
+            super(MachineLearner, self).__init__(**kwargs)
+            self._learner_type_matches_training_archive = False
+            self._boundaries_match_training_archive = False
             #Storage variables, archived
-            self.all_params = np.array([], dtype=float)
-            self.all_costs = np.array([], dtype=float)
-            self.all_uncers = np.array([], dtype=float)
-            self.bad_run_indexs = []
             self.best_cost = float('inf')
             self.best_params = float('nan')
             self.best_index = 0
@@ -1056,10 +1207,36 @@ class MachineLearner(Learner):
             self.worst_index = 0
             self.cost_range = float('inf')
             self.costs_count = 0
-            self.params_count = 0
-            self.has_global_minima = False
 
-            super(MachineLearner, self).__init__(**kwargs)
+        # Parameters that should only be loaded if a training archive was
+        # provided and it has the same learner type and min/max boundaries.
+        same_learner_type = self._learner_type_matches_training_archive
+        same_boundaries = self._boundaries_match_training_archive
+        if same_learner_type and same_boundaries:
+            training_dict = self.training_dict
+            # Counters
+            self.params_count = int(training_dict['params_count'])
+
+            # Predicted optimum
+            try:
+                self.predicted_best_parameters = mlu.safe_cast_to_array(
+                    training_dict['predicted_best_parameters']
+                )
+                self.predicted_best_cost = float(
+                    training_dict['predicted_best_cost']
+                )
+                self.predicted_best_uncertainty = float(
+                    training_dict['predicted_best_uncertainty']
+                )
+                self.has_global_minima = True
+            except KeyError:
+                self.has_global_minima = False
+        else:
+            # Counters
+            self.params_count = 0
+
+            # Predicted optimum
+            self.has_global_minima = False
 
         # Multiprocessor controls
         self.new_params_event = mp.Event()
@@ -1158,69 +1335,149 @@ class MachineLearner(Learner):
                 self.log.error(msg)
                 raise ValueError(msg)
 
+    def update_archive(self):
+        '''
+        Update the archive.
+        '''
+        super(MachineLearner, self).update_archive()
+        new_values_dict = {
+            'best_cost':self.best_cost,
+            'best_params':self.best_params,
+            'best_index':self.best_index,
+            'worst_cost':self.worst_cost,
+            'worst_index':self.worst_index,
+            'cost_range':self.cost_range,
+            'costs_count':self.costs_count,
+            'params_count':self.params_count,
+        }
+        self.archive_dict.update(new_values_dict)
+
 
 class GaussianProcessLearner(MachineLearner, mp.Process):
     '''
-    Gaussian process learner. Generates new parameters based on a gaussian process fitted to all previous data.
+    Gaussian process learner.
+
+    Generates new parameters based on a gaussian process fitted to all previous
+    data.
 
     Args:
         params_out_queue (queue): Queue for parameters sent to controller.
-        costs_in_queue (queue): Queue for costs for gaussian process. This must be tuple
+        costs_in_queue (queue): Queue for costs for gaussian process. This must
+            be tuple.
         end_event (event): Event to trigger end of learner.
 
     Keyword Args:
-        length_scale (Optional [array]): The initial guess for length scale(s) of the gaussian process. The array can either of size one or the number of parameters or None. If it is size one, it is assumed all the correlation lengths are the same. If it is the number of the parameters then all the parameters have their own independent length scale. If it is None, it is assumed all the length scales should be independent and they are all given an initial value of 1. Default None.
-        length_scale_bounds (Optional [array]): The limits on the fitted length scale values, specified as a single pair of numbers e.g. [min, max], or a list of pairs of numbers, e.g. [[min_0, max_0], ..., [min_N, max_N]]. This only has an effect if update_hyperparameters is set to True. If one pair is provided, the same limits will be used for all length scales. Alternatively one pair of [min, max] can be provided for each length scale. For example, possible valid values include [1e-5, 1e5] and [[1e-2, 1e2], [5, 5], [1.6e-4, 1e3]] for optimizations with three parameters. If set to None, the value [1e-5, 1e5] will be used. Default None.
-        update_hyperparameters (Optional [bool]): Whether the length scales and noise estimate should be updated when new data is provided. Is set to true by default.
-        cost_has_noise (Optional [bool]): If true the learner assumes there is common additive white noise that corrupts the costs provided. This noise is assumed to be on top of the uncertainty in the costs (if it is provided). If false, it is assumed that there is no noise in the cost (or if uncertainties are provided no extra noise beyond the uncertainty). Default True.
-        noise_level (Optional [float]): The initial guess for the noise level (variance, not standard deviation) in the costs, is only used if cost_has_noise is true. If None, it will be set to the variance of the training data costs. Default None.
-        noise_level_bounds (Optional [array]): The limits on the fitted noise_level values, specified as a single pair of numbers [min, max]. This only has an effect if update_hyperparameters and cost_has_noise are both set to True. If set to None, the value [1e-5 * var, 1e5 * var] will be used where var is the variance of the training data costs. Default None.
-        gp_training_filename (Optional [str]): The name of a learner archive from a previous optimization from which to extract past results for use in the current optimization. If `None`, no past results will be used. Default `None`.
+        length_scale (Optional [array]): The initial guess for length scale(s)
+            of the gaussian process. The array can either of size one or the
+            number of parameters or `None`. If it is size one, it is assumed
+            that all of the correlation lengths are the same. If it is an array
+            with length equal to the number of the parameters then all the
+            parameters have their own independent length scale. If it is set to
+            `None` and a learner archive from a Gaussian process optimization
+            is provided for `gp_training_filename`, then it will be set to the
+            value recorded for `length_scale` in that learner archive. If set to
+            `None` but `gp_training_filename` does not specify a learner archive
+            from a Guassian process optimization, then it is assumed that all of
+            the length scales should be independent and they are all given an
+            initial value of `1`. Default `None`.
+        length_scale_bounds (Optional [array]): The limits on the fitted length
+            scale values, specified as a single pair of numbers e.g.
+            `[min, max]`, or a list of pairs of numbers, e.g.
+            `[[min_0, max_0], ..., [min_N, max_N]]`. This only has an effect if
+            `update_hyperparameters` is set to `True`. If one pair is provided,
+            the same limits will be used for all length scales. Alternatively
+            one pair of `[min, max]` can be provided for each length scale. For
+            example, possible valid values include `[1e-5, 1e5]` and
+            `[[1e-2, 1e2], [5, 5], [1.6e-4, 1e3]]` for optimizations with three
+            parameters. If set to `None`, the value `[1e-5, 1e5]` will be used.
+            Default `None`.
+        update_hyperparameters (Optional [bool]): Whether the length scales and
+            noise estimate should be updated when new data is provided. Default
+            `True`.
+        cost_has_noise (Optional [bool]): If `True` the learner assumes there is
+            common additive white noise that corrupts the costs provided. This
+            noise is assumed to be on top of the uncertainty in the costs (if it
+            is provided). If `False`, it is assumed that there is no noise in
+            the cost (or if uncertainties are provided no extra noise beyond the
+            uncertainty). Default `True`.
+        noise_level (Optional [float]): The initial guess for the noise level
+            (variance, not standard deviation) in the costs. This is only used
+            if `cost_has_noise` is `True`. If it is set to `None` and a learner
+            archive from a Gaussian process optimization is provided for
+            `gp_training_filename`, then it will be set to the value recorded
+            for `noise_level` in that learner archive. If set to `None` but
+            `gp_training_filename` does not specify a learner archive from a
+            Guassian process optimization, then it will automatically be set to
+            the variance of the training data costs.
+        noise_level_bounds (Optional [array]): The limits on the fitted
+            `noise_level` values, specified as a single pair of numbers
+            `[min, max]`. This only has an effect if `update_hyperparameters`
+            and `cost_has_noise` are both set to `True`. If set to `None`, the
+            value `[1e-5 * var, 1e5 * var]` will be used where `var` is the
+            variance of the training data costs. Default `None`.
+        gp_training_filename (Optional [str]): The name of a learner archive
+            from a previous optimization from which to extract past results for
+            use in the current optimization. If `None`, no past results will be
+            used. Default `None`.
         gp_training_file_type (Optional [str]): File type of the training
             archive. Can be `'txt'`, `'pkl'`, `'mat'`, or `None`. If set to
             `None`, then the file type will be determined automatically. This
             argument has no effect if `gp_training_filename` is set to `None`.
             Default `None`.
-        gp_training_override_kwargs (Optional [bool]): Sets whether to use the
-            values in the training file or the values in the keyword arguments
-            to set the learner's options, e.g. `cost_has_noise`. If set to
-            `True` then the values in the training file will be used. If set to
-            `False` then the values specified by the keyword arguments will be
-            used. This argument has no effect if `gp_training_filename` is set
-            to `None`. Default `False`.
         trust_region (Optional [float or array]): The trust region defines the
             maximum distance the learner will travel from the current best set
-            of parameters. If None, the learner will search everywhere. If a
+            of parameters. If `None`, the learner will search everywhere. If a
             float, this number must be between 0 and 1 and defines maximum
             distance the learner will venture as a percentage of the boundaries.
             If it is an array, it must have the same size as the number of
             parameters and the numbers define the maximum absolute distance that
             can be moved along each direction.
-        default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
-        default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
-        minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
-        predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
+        default_bad_cost (Optional [float]): If a run is reported as bad and
+            `default_bad_cost` is provided, the cost for the bad run is set to
+            this default value. If `default_bad_cost` is `None`, then the worst
+            cost received is set to all the bad runs. Default `None`.
+        default_bad_uncertainty (Optional [float]): If a run is reported as bad
+            and `default_bad_uncertainty` is provided, the uncertainty for the
+            bad run is set to this default value. If `default_bad_uncertainty`
+            is `None`, then the uncertainty is set to a tenth of the best to
+            worst cost range. Default `None`.
+        minimum_uncertainty (Optional [float]): The minimum uncertainty
+            associated with provided costs. Must be above zero to avoid fitting
+            errors. Default `1e-8`.
+        predict_global_minima_at_end (Optional [bool]): If `True` attempts to
+            find the global minima when the learner is ended. Does not if
+            `False`. Default `True`.
 
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
         all_uncers (array): Array containing all uncertainties sent to learner.
-        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1. Needed for training the gaussian process.
-        bad_run_indexs (list): list of indexes to all runs that were marked as bad.
+        scaled_costs (array): Array contaning all the costs scaled to have zero
+            mean and a standard deviation of 1. Needed for training the gaussian
+            process.
+        bad_run_indexs (list): list of indexes to all runs that were marked as
+            bad.
         best_cost (float): Minimum received cost, updated during execution.
-        best_params (array): Parameters of best run. (reference to element in params array).
+        best_params (array): Parameters of best run. (reference to element in
+            params array).
         best_index (int): index of the best cost and params.
         worst_cost (float): Maximum received cost, updated during execution.
         worst_index (int): index to run with worst cost.
-        cost_range (float): Difference between worst_cost and best_cost
-        generation_num (int): Number of sets of parameters to generate each generation. Set to 5.
+        cost_range (float): Difference between `worst_cost` and `best_cost`.
+        generation_num (int): Number of sets of parameters to generate each
+            generation. Set to `4`.
         length_scale_history (list): List of length scales found after each fit.
         noise_level_history (list): List of noise levels found after each fit.
-        fit_count (int): Counter for the number of times the gaussian process has been fit.
-        cost_count (int): Counter for the number of costs, parameters and uncertainties added to learner.
-        params_count (int): Counter for the number of parameters asked to be evaluated by the learner.
-        gaussian_process (GaussianProcessRegressor): Gaussian process that is fitted to data and used to make predictions
-        cost_scaler (StandardScaler): Scaler used to normalize the provided costs.
+        fit_count (int): Counter for the number of times the gaussian process
+            has been fit.
+        cost_count (int): Counter for the number of costs, parameters and
+            uncertainties added to learner.
+        params_count (int): Counter for the number of parameters asked to be
+            evaluated by the learner.
+        gaussian_process (GaussianProcessRegressor): Gaussian process that is
+            fitted to data and used to make predictions
+        cost_scaler (StandardScaler): Scaler used to normalize the provided
+            costs.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
     _ARCHIVE_TYPE = 'gaussian_process_learner'
@@ -1234,7 +1491,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                  noise_level_bounds=None,
                  gp_training_filename =None,
                  gp_training_file_type = None,
-                 gp_training_override_kwargs=False,
                  **kwargs):
 
         if gp_training_filename is not None:
@@ -1243,24 +1499,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                 training_file_type=gp_training_file_type,
                 **kwargs
             )
-
-            #Configuration of the learner
-            if gp_training_override_kwargs:
-                cost_has_noise = bool(self.training_dict['cost_has_noise'])
-                length_scale = mlu.safe_cast_to_array(self.training_dict['length_scale'])
-                noise_level = float(self.training_dict['noise_level'])
-                # Try to extract options not present in archives from M-LOOP <= 3.1.1
-                if 'length_scale_bounds' in self.training_dict:
-                    length_scale_bounds = mlu.safe_cast_to_array(self.training_dict['length_scale_bounds'])
-                if 'noise_level_bounds' in self.training_dict:
-                    noise_level_bounds = mlu.safe_cast_to_array(self.training_dict['noise_level_bounds'])
-
-            #Storage variables, archived
-            self.length_scale_history = list(self.training_dict['length_scale_history'])
-            self.noise_level_history = mlu.safe_cast_to_list(self.training_dict['noise_level_history'])
-
-            #Counters
-            self.fit_count = int(self.training_dict['fit_count'])
 
             # Maintain backwards compatability with archives generated by
             # previous versions of M-LOOP.
@@ -1276,16 +1514,37 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         else:
             super(GaussianProcessLearner,self).__init__(**kwargs)
 
-            #Storage variables, archived
-            self.length_scale_history = []
-            self.noise_level_history = []
-
-            #Counters
-            self.fit_count = 0
-
             # Maintain backwards compatability with archives generated by
             # previous versions of M-LOOP.
             self._scale_deprecated_noise_levels = False
+
+        # Parameters that should only be loaded if a training archive was
+        # provided and it has the same learner type.
+        if self._learner_type_matches_training_archive:
+            training_dict = self.training_dict
+            # Storage variables, archived
+            self.length_scale_history = list(
+                training_dict['length_scale_history']
+            )
+            self.noise_level_history = mlu.safe_cast_to_list(
+                training_dict['noise_level_history']
+            )
+
+            # Counters
+            self.fit_count = int(training_dict['fit_count'])
+
+            # Fit parameters that can be overriden by user keyword options.
+            if length_scale is None:
+                length_scale = mlu.safe_cast_to_array(training_dict['length_scale'])
+            if noise_level is None:
+                noise_level = float(training_dict['noise_level'])
+        else:
+            # Storage variables, archived
+            self.length_scale_history = []
+            self.noise_level_history = []
+
+            # Counters
+            self.fit_count = 0
 
         #Storage variables and counters
         self.scaled_uncers = None
@@ -1359,7 +1618,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                                   'length_scale_bounds':self.length_scale_bounds,
                                   'noise_level_history':self.noise_level_history,
                                   'noise_level_bounds':self.noise_level_bounds,
-                                  'bad_run_indexs':self.bad_run_indexs,
                                   'bias_func_cycle':self.bias_func_cycle,
                                   'bias_func_cost_factor':self.bias_func_cost_factor,
                                   'bias_func_uncer_factor':self.bias_func_uncer_factor,
@@ -1513,16 +1771,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                     cost = self.worst_cost
                     uncer = self.cost_range*self.bad_uncer_frac
 
-            param = np.array(param, dtype=float)
-            if not self.check_num_params(param):
-                self.log.error('Incorrect number of parameters provided to Gaussian process learner:' + repr(param) + '. Number of parameters:' + str(self.num_params))
-                raise ValueError
-            if not self.check_in_boundary(param):
-                self.log.warning('Parameters provided to Gaussian process learner not in boundaries:' + repr(param))
-            cost = float(cost)
-            uncer = float(uncer)
-            if uncer < 0:
-                self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
+            message = (param, cost, uncer, bad)
+            param, cost, uncer, bad = self._parse_cost_message(message)
+
             uncer = max(uncer, self.minimum_uncertainty)
 
             cost_change_flag = False
@@ -1599,23 +1850,14 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'all_params':self.all_params,
-                                  'all_costs':self.all_costs,
-                                  'all_uncers':self.all_uncers,
-                                  'best_cost':self.best_cost,
-                                  'best_params':self.best_params,
-                                  'best_index':self.best_index,
-                                  'worst_cost':self.worst_cost,
-                                  'worst_index':self.worst_index,
-                                  'cost_range':self.cost_range,
-                                  'fit_count':self.fit_count,
-                                  'costs_count':self.costs_count,
-                                  'params_count':self.params_count,
-                                  'update_hyperparameters':self.update_hyperparameters,
-                                  'length_scale':self.length_scale,
-                                  'noise_level':self.noise_level})
-
-
+        super(GaussianProcessLearner, self).update_archive()
+        new_values_dict = {
+            'fit_count':self.fit_count,
+            'update_hyperparameters':self.update_hyperparameters,
+            'length_scale':self.length_scale,
+            'noise_level':self.noise_level,
+        }
+        self.archive_dict.update(new_values_dict)
 
     def fit_gaussian_process(self):
         '''
@@ -1854,26 +2096,32 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                 training_file_type=nn_training_file_type,
                 **kwargs
             )
-            self.nn_training_file_dir = self.training_file_dir
-
-            self.cost_scaler_init_index = self.training_dict['cost_scaler_init_index']
-            if not self.cost_scaler_init_index is None:
-                self._init_cost_scaler()
-
         else:
             super(NeuralNetLearner,self).__init__(**kwargs)
-            self.nn_training_file_dir = None
 
-            # The scaler will be initialised when we're ready to fit it
-            self.cost_scaler = None
-            self.cost_scaler_init_index = None
+        # Parameters that should only be loaded if a training archive was
+        # provided and it has the same learner type and min/max boundaries.
+        same_learner_type = self._learner_type_matches_training_archive
+        same_boundaries = self._boundaries_match_training_archive
+        if same_learner_type and same_boundaries:
+            pass  # Will load parameters here later.
+        else:
+            pass  # Will set default parameter values here later.
+
+        # Set training file directory to None for now since no nets will be
+        # loaded here. The NeuralNetVisualizer will overwrite this when it needs
+        # to load the nets.
+        self.nn_training_file_dir = None
+
+        # The scaler will be initialised when we're ready to fit it
+        self.cost_scaler = None
+        self.cost_scaler_init_index = None
 
         #Constants, limits and tolerances
         self.num_nets = 3
         self.generation_num = 3
 
         self.archive_dict.update({'archive_type':self._ARCHIVE_TYPE,
-                                  'bad_run_indexs':self.bad_run_indexs,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
                                   'parameter_searches':self.parameter_searches,
@@ -2017,16 +2265,9 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                     cost = self.worst_cost
                     uncer = self.cost_range*self.bad_uncer_frac
 
-            param = np.array(param, dtype=float)
-            if not self.check_num_params(param):
-                self.log.error('Incorrect number of parameters provided to neural network learner:' + repr(param) + '. Number of parameters:' + str(self.num_params))
-                raise ValueError
-            if not self.check_in_boundary(param):
-                self.log.warning('Parameters provided to neural network learner not in boundaries:' + repr(param))
-            cost = float(cost)
-            uncer = float(uncer)
-            if uncer < 0:
-                self.log.error('Provided uncertainty must be larger or equal to zero:' + repr(uncer))
+            message = (param, cost, uncer, bad)
+            param, cost, uncer, bad = self._parse_cost_message(message)
+
             uncer = max(uncer, self.minimum_uncertainty)
 
             cost_change_flag = False
@@ -2103,18 +2344,11 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         '''
         Update the archive.
         '''
-        self.archive_dict.update({'all_params':self.all_params,
-                                  'all_costs':self.all_costs,
-                                  'all_uncers':self.all_uncers,
-                                  'best_cost':self.best_cost,
-                                  'best_params':self.best_params,
-                                  'best_index':self.best_index,
-                                  'worst_cost':self.worst_cost,
-                                  'worst_index':self.worst_index,
-                                  'cost_range':self.cost_range,
-                                  'costs_count':self.costs_count,
-                                  'params_count':self.params_count,
-                                  'cost_scaler_init_index':self.cost_scaler_init_index})
+        super(NeuralNetLearner, self).update_archive()
+        new_values_dict = {
+            'cost_scaler_init_index':self.cost_scaler_init_index,
+        }
+        self.archive_dict.update(new_values_dict)
         if self.neural_net:
             for i,n in enumerate(self.neural_net):
                 self.archive_dict.update({'net_'+str(i):n.save()})
