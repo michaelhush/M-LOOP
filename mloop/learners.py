@@ -1393,7 +1393,8 @@ class MachineLearner(Learner):
             if first_dequeue:
                 try:
                     # Block for 1s, because there might be a race with the
-                    # new_params_event being set.
+                    # new_params_event being set. See comment in
+                    # controllers.MachineLearnerController._optimization_routine().
                     (param, cost, uncer, bad) = self.costs_in_queue.get(block=True, timeout=1)
                     first_dequeue = False
                 except mlu.empty_exception:
