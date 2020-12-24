@@ -661,6 +661,12 @@ class NeuralNet():
 
                 # Fit regularisation
 
+                # May as well re-fit the cost and parameter scalers since a new
+                # net will be re-created from scratch. This keeps the scaled
+                # costs and parameters ~1.
+                self.scaler_samples = (all_params.copy(), all_costs.copy())
+                self._fit_scaler()
+
                 # Split the data into training and cross validation randomly
                 training_fraction = 0.9
                 n_observations = len(all_costs)
