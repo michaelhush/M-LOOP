@@ -657,6 +657,7 @@ class NeuralNet():
             n_fits = len(all_params)
             n_hyperfit = int(n_fits / 20.0)  # int() rounds down.
             if n_hyperfit > self.last_hyperfit:
+                self.log.info("Tuning regularization coefficient value.")
                 self.last_hyperfit = n_hyperfit
 
                 # Fit regularisation
@@ -694,6 +695,9 @@ class NeuralNet():
                 cv_losses = []
                 best_cv_loss = np.inf
                 for r in regularizations:
+                    self.log.debug(
+                        "Testing regularization value {r}...".format(r=r)
+                    )
                     net = self._make_net(r)
                     net.init()
                     net.fit(train_params, train_costs, self.initial_epochs)
