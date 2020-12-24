@@ -2402,3 +2402,24 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         for n in self.neural_net:
             all_losses.append(n.get_losses())
         return all_losses
+
+    def get_regularization_histories(self):
+        '''
+        Get the regularization coefficient values used by the nets.
+
+        Returns:
+            list of list of float: The values used by the neural nets for the
+                regularization coefficient. There is one list per net, which
+                includes all of the regularization coefficient values used by
+                that net during the optimization. If the optimization was run
+                with `update_hyperparameters` set to `False`, then each net's
+                list will only have one entry, namely the initial default value
+                for the regularization coefficient. If the optimization was run
+                with `updated_hyperparameters` set to `True` then the list will
+                also include the optimal values for the regularization
+                coefficient determined during each hyperparameter fitting.
+        '''        
+        regularization_histories = []
+        for net in self.neural_net:
+            regularization_histories.append(net.regularization_history)
+        return regularization_histories

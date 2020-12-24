@@ -110,7 +110,16 @@ Neural Net
   Note that an "epoch" here is not the same as a run of the experiment.
   One epoch corresponds to one iteration over the full data set while fitting a neural net.
   Generally the fitting routine will go through many epochs during one fit, and the number of epochs per fit will vary.
-  
+
+- **Neural Net Learner: Regularization History.**
+  The neural nets use L2 regularization to smooth their predicted landscapes in an attempt to avoid overfitting the data.
+  The strength of the regularization is set by the regularization coefficient, which is a hyperparameter that is tuned during the optimization if ``update_hyperparameters`` is set to ``True``.
+  Generally larger regularization coefficient values force the landscape to be smoother while smaller values allow it to vary more quickly.
+  A value too large can lead to underfitting while a value too small can lead to overfitting.
+  The ideal regularization coefficient value will depend on many factors, such as the shape of the actual cost landscape, the SNR of the measured costs, and even the number of measured costs.
+  This method plots the initial regularization coefficient value and the optimal values found for the regularization coefficient when performing the hyperparameter tuning.
+  One curve showing the history of values used for the regularization coefficient is plotted for each neural net.
+  If ``update_hyperparameters`` was set to ``False`` during the optimization, then only the initial default value will be plotted.
 
 Differential Evolution
 ----------------------

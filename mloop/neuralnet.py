@@ -465,6 +465,7 @@ class NeuralNet():
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
         self.last_net_reg = 1e-8
+        self.regularization_history = [self.last_net_reg]
 
         # The samples used to fit the scalers. When set, this will be a tuple of
         # (params samples, cost samples).
@@ -590,6 +591,15 @@ class NeuralNet():
         self.last_net_reg = float(archive['last_net_reg'])
 
         self.losses_list = list(archive['losses_list'])
+        # M-LOOP versions 3.1.1 and below used one fixed regularization
+        # coefficient value and didn't generate/save its history. For backwards
+        # compatibility, if it's missing from the archive default to a list with
+        # just last_net_reg.
+        regularization_history = archive.get(
+            'regularization_history',
+            [self.last_net_reg],
+        )
+        self.regularization_history = list(regularization_history)
 
         self.scaler_samples = archive['scaler_samples']
         if not self.scaler_samples is None:
@@ -604,6 +614,7 @@ class NeuralNet():
         '''
         return {'last_hyperfit': self.last_hyperfit,
                 'last_net_reg': self.last_net_reg,
+                'regularization_history': self.regularization_history,
                 'losses_list': self.losses_list,
                 'scaler_samples': self.scaler_samples,
                 'net': self.net.save(),
@@ -689,6 +700,9 @@ class NeuralNet():
                         self.net = net
                     else:
                         net.destroy()
+
+                # Record results.
+                self.regularization_history.append(self.last_net_reg)
                 self.log.debug(
                     ("Regularizations tried: {regularizations}, corresponding "
                      "cross validation losses: {cv_losses}").format(
