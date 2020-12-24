@@ -652,8 +652,12 @@ class MachineLearnerController(Controller):
             self._put_params_and_out_dict(next_params)
 
             self.log.debug('Starting ML optimization.')
-            # TODO: This is a race. There's no guarantee that this will be available by the time the
-            # event is set.
+            # This may be a race. Although the cost etc. is put in the queue to
+            # the learner before the new_params_event is set, it's not clear if
+            # python guarantees that the other process will see the item in the
+            # queue before the event is set. To work around this,
+            # learners.MachineLearner.get_params_and_costs() blocks with a
+            # timeout while waiting for an item in the queue.
             self._get_cost_and_in_dict()
             self.save_archive()
             self.new_params_event.set()

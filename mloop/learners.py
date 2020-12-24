@@ -1122,6 +1122,14 @@ class MachineLearner(Learner):
             self.all_costs = mlu.safe_cast_to_array(training_dict['all_costs'])
             self.all_uncers = mlu.safe_cast_to_array(training_dict['all_uncers'])
             self.bad_run_indexs = mlu.safe_cast_to_list(training_dict['bad_run_indexs'])
+            # Learner archives from GaussianProcessLearner and NeuralNetLearner
+            # made with versions of M-LOOP <= 3.1.1 had a bug where
+            # bad_run_indexs was a list of lists. Flatten the list if it has
+            # that formatting.
+            if self.bad_run_indexs and isinstance(self.bad_run_indexs[0], list):
+                self.bad_run_indexs = [
+                    index for sublist in self.bad_run_indexs for index in sublist
+                ]
 
             # Data that may be in the archive, but can easily be calculated if
             # necessary.
@@ -1351,6 +1359,138 @@ class MachineLearner(Learner):
             'params_count':self.params_count,
         }
         self.archive_dict.update(new_values_dict)
+
+    def wait_for_new_params_event(self):
+        '''
+        Waits for a new parameters event and starts a new parameter generation cycle.
+
+        Also checks end event and will break if it is triggered.
+        '''
+        while not self.end_event.is_set():
+            if self.new_params_event.wait(timeout=self.learner_wait):
+                self.new_params_event.clear()
+                break
+            else:
+                continue
+        else:
+            self.log.debug('Learner end signal received. Ending')
+            raise LearnerInterrupt
+
+    def get_params_and_costs(self):
+        '''
+        Get the parameters and costs from the queue and place in their appropriate all_[type] arrays.
+
+        Also updates bad costs, best parameters, and search boundaries given trust region.
+        '''
+        new_params = []
+        new_costs = []
+        new_uncers = []
+        new_bads = []
+        update_bads_flag = False
+
+        first_dequeue = True
+        while True:
+            if first_dequeue:
+                try:
+                    # Block for 1s, because there might be a race with the
+                    # new_params_event being set. See comment in
+                    # controllers.MachineLearnerController._optimization_routine().
+                    (param, cost, uncer, bad) = self.costs_in_queue.get(block=True, timeout=1)
+                    first_dequeue = False
+                except mlu.empty_exception:
+                    msg = 'Learner asked for new parameters but no new costs were provided after 1s.'
+                    self.log.error(msg)
+                    raise ValueError(msg)
+            else:
+                try:
+                    (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
+                except mlu.empty_exception:
+                    break
+
+            self.costs_count +=1
+
+            if bad:
+                new_bads.append(self.costs_count-1)
+                if self.bad_defaults_set:
+                    cost = self.default_bad_cost
+                    uncer = self.default_bad_uncertainty
+                else:
+                    cost = self.worst_cost
+                    uncer = self.cost_range*self.bad_uncer_frac
+
+            message = (param, cost, uncer, bad)
+            param, cost, uncer, bad = self._parse_cost_message(message)
+
+            uncer = max(uncer, self.minimum_uncertainty)
+
+            cost_change_flag = False
+            if cost > self.worst_cost:
+                self.worst_cost = cost
+                self.worst_index = self.costs_count-1
+                cost_change_flag = True
+            if cost < self.best_cost:
+                self.best_cost = cost
+                self.best_params = param
+                self.best_index =  self.costs_count-1
+                cost_change_flag = True
+            if cost_change_flag:
+                self.cost_range = self.worst_cost - self.best_cost
+                if not self.bad_defaults_set:
+                    update_bads_flag = True
+
+            new_params.append(param)
+            new_costs.append(cost)
+            new_uncers.append(uncer)
+
+        if self.all_params.size==0:
+            self.all_params = np.array(new_params, dtype=float)
+            self.all_costs = np.array(new_costs, dtype=float)
+            self.all_uncers = np.array(new_uncers, dtype=float)
+        else:
+            self.all_params = np.concatenate((self.all_params, np.array(new_params, dtype=float)))
+            self.all_costs = np.concatenate((self.all_costs, np.array(new_costs, dtype=float)))
+            self.all_uncers = np.concatenate((self.all_uncers, np.array(new_uncers, dtype=float)))
+
+        self.bad_run_indexs.extend(new_bads)
+
+        if self.all_params.shape != (self.costs_count,self.num_params):
+            self.log('Saved params are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_params))
+        if self.all_costs.shape != (self.costs_count,):
+            self.log('Saved costs are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_costs))
+        if self.all_uncers.shape != (self.costs_count,):
+            self.log('Saved uncertainties are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_uncers))
+
+        if update_bads_flag:
+            self.update_bads()
+
+        self.update_search_region()
+
+    def update_bads(self):
+        '''
+        Best and/or worst costs have changed, update the values associated with bad runs accordingly.
+        '''
+        for index in self.bad_run_indexs:
+            self.all_costs[index] = self.worst_cost
+            self.all_uncers[index] = self.cost_range*self.bad_uncer_frac
+
+    def update_search_region(self):
+        '''
+        If trust boundaries is not none, updates the search boundaries based on the defined trust region.
+        '''
+        if self.has_trust_region:
+            self.search_min = np.maximum(self.best_params - self.trust_region, self.min_boundary)
+            self.search_max = np.minimum(self.best_params + self.trust_region, self.max_boundary)
+            self.search_diff = self.search_max - self.search_min
+            self.search_region = list(zip(self.search_min, self.search_max))
+
+    def update_search_params(self):
+        '''
+        Update the list of parameters to use for the next search.
+        '''
+        self.search_params = []
+        self.search_params.append(self.best_params)
+        for _ in range(self.parameter_searches):
+            self.search_params.append(self.search_min + nr.uniform(size=self.num_params) * self.search_diff)
 
 
 class GaussianProcessLearner(MachineLearner, mp.Process):
@@ -1726,126 +1866,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         else:
             self.gaussian_process = skg.GaussianProcessRegressor(alpha=alpha, kernel=gp_kernel,optimizer=None)
 
-    def wait_for_new_params_event(self):
-        '''
-        Waits for a new parameters event and starts a new parameter generation cycle. Also checks end event and will break if it is triggered.
-        '''
-        while not self.end_event.is_set():
-            if self.new_params_event.wait(timeout=self.learner_wait):
-                self.new_params_event.clear()
-                break
-            else:
-                continue
-        else:
-            self.log.debug('GaussianProcessLearner end signal received. Ending')
-            raise LearnerInterrupt
-
-
-    def get_params_and_costs(self):
-        '''
-        Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region.
-        '''
-        if self.costs_in_queue.empty():
-            if self.end_event.is_set():
-                return
-            else:
-                self.log.error('Gaussian process asked for new parameters but no new costs were provided.')
-                raise ValueError
-
-        new_params = []
-        new_costs = []
-        new_uncers = []
-        new_bads = []
-        update_bads_flag = False
-
-        while not self.costs_in_queue.empty():
-            (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
-            self.costs_count +=1
-
-            if bad:
-                new_bads.append(self.costs_count-1)
-                if self.bad_defaults_set:
-                    cost = self.default_bad_cost
-                    uncer = self.default_bad_uncertainty
-                else:
-                    cost = self.worst_cost
-                    uncer = self.cost_range*self.bad_uncer_frac
-
-            message = (param, cost, uncer, bad)
-            param, cost, uncer, bad = self._parse_cost_message(message)
-
-            uncer = max(uncer, self.minimum_uncertainty)
-
-            cost_change_flag = False
-            if cost > self.worst_cost:
-                self.worst_cost = cost
-                self.worst_index = self.costs_count-1
-                cost_change_flag = True
-            if cost < self.best_cost:
-                self.best_cost = cost
-                self.best_params = param
-                self.best_index =  self.costs_count-1
-                cost_change_flag = True
-            if cost_change_flag:
-                self.cost_range = self.worst_cost - self.best_cost
-                if not self.bad_defaults_set:
-                    update_bads_flag = True
-
-            new_params.append(param)
-            new_costs.append(cost)
-            new_uncers.append(uncer)
-
-
-        if self.all_params.size==0:
-            self.all_params = np.array(new_params, dtype=float)
-            self.all_costs = np.array(new_costs, dtype=float)
-            self.all_uncers = np.array(new_uncers, dtype=float)
-        else:
-            self.all_params = np.concatenate((self.all_params, np.array(new_params, dtype=float)))
-            self.all_costs = np.concatenate((self.all_costs, np.array(new_costs, dtype=float)))
-            self.all_uncers = np.concatenate((self.all_uncers, np.array(new_uncers, dtype=float)))
-
-        self.bad_run_indexs.append(new_bads)
-
-        if self.all_params.shape != (self.costs_count,self.num_params):
-            self.log('Saved GP params are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_params))
-        if self.all_costs.shape != (self.costs_count,):
-            self.log('Saved GP costs are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_costs))
-        if self.all_uncers.shape != (self.costs_count,):
-            self.log('Saved GP uncertainties are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_uncers))
-
-        if update_bads_flag:
-            self.update_bads()
-
-        self.update_search_region()
-
-    def update_bads(self):
-        '''
-        Best and/or worst costs have changed, update the values associated with bad runs accordingly.
-        '''
-        for index in self.bad_run_indexs:
-            self.all_costs[index] = self.worst_cost
-            self.all_uncers[index] = self.cost_range*self.bad_uncer_frac
-
-    def update_search_region(self):
-        '''
-        If trust boundaries is not none, updates the search boundaries based on the defined trust region.
-        '''
-        if self.has_trust_region:
-            self.search_min = np.maximum(self.best_params - self.trust_region, self.min_boundary)
-            self.search_max = np.minimum(self.best_params + self.trust_region, self.max_boundary)
-            self.search_diff = self.search_max - self.search_min
-            self.search_region = list(zip(self.search_min, self.search_max))
-
-    def update_search_params(self):
-        '''
-        Update the list of parameters to use for the next search.
-        '''
-        self.search_params = []
-        self.search_params.append(self.best_params)
-        for _ in range(self.parameter_searches):
-            self.search_params.append(self.search_min + nr.uniform(size=self.num_params) * self.search_diff)
-
     def update_archive(self):
         '''
         Update the archive.
@@ -1975,7 +1995,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         end_dict = {}
         if self.predict_global_minima_at_end:
-            self.get_params_and_costs()
+            if not self.costs_in_queue.empty():
+                # There are new parameters, get them.
+                self.get_params_and_costs()
             self.fit_gaussian_process()
             self.find_global_minima()
             end_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
@@ -2211,134 +2233,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         '''
         # TODO: Can do this more efficiently.
         return [self.predict_cost(param,net_index) for param in params]
-
-
-    def wait_for_new_params_event(self):
-        '''
-        Waits for a new parameters event and starts a new parameter generation cycle. Also checks end event and will break if it is triggered.
-        '''
-        while not self.end_event.is_set():
-            if self.new_params_event.wait(timeout=self.learner_wait):
-                self.new_params_event.clear()
-                break
-            else:
-                continue
-        else:
-            self.log.debug('NeuralNetLearner end signal received. Ending')
-            raise LearnerInterrupt
-
-
-    def get_params_and_costs(self):
-        '''
-        Get the parameters and costs from the queue and place in their appropriate all_[type] arrays. Also updates bad costs, best parameters, and search boundaries given trust region.
-        '''
-        new_params = []
-        new_costs = []
-        new_uncers = []
-        new_bads = []
-        update_bads_flag = False
-
-        first_dequeue = True
-        while True:
-            if first_dequeue:
-                try:
-                    # Block for 1s, because there might be a race with the event being set.
-                    (param, cost, uncer, bad) = self.costs_in_queue.get(block=True, timeout=1)
-                    first_dequeue = False
-                except mlu.empty_exception:
-                    self.log.error('Neural network asked for new parameters but no new costs were provided after 1s.')
-                    raise ValueError
-            else:
-                try:
-                    (param, cost, uncer, bad) = self.costs_in_queue.get_nowait()
-                except mlu.empty_exception:
-                    break
-
-            self.costs_count +=1
-
-            if bad:
-                new_bads.append(self.costs_count-1)
-                if self.bad_defaults_set:
-                    cost = self.default_bad_cost
-                    uncer = self.default_bad_uncertainty
-                else:
-                    cost = self.worst_cost
-                    uncer = self.cost_range*self.bad_uncer_frac
-
-            message = (param, cost, uncer, bad)
-            param, cost, uncer, bad = self._parse_cost_message(message)
-
-            uncer = max(uncer, self.minimum_uncertainty)
-
-            cost_change_flag = False
-            if cost > self.worst_cost:
-                self.worst_cost = cost
-                self.worst_index = self.costs_count-1
-                cost_change_flag = True
-            if cost < self.best_cost:
-                self.best_cost = cost
-                self.best_params = param
-                self.best_index =  self.costs_count-1
-                cost_change_flag = True
-            if cost_change_flag:
-                self.cost_range = self.worst_cost - self.best_cost
-                if not self.bad_defaults_set:
-                    update_bads_flag = True
-
-            new_params.append(param)
-            new_costs.append(cost)
-            new_uncers.append(uncer)
-
-
-        if self.all_params.size==0:
-            self.all_params = np.array(new_params, dtype=float)
-            self.all_costs = np.array(new_costs, dtype=float)
-            self.all_uncers = np.array(new_uncers, dtype=float)
-        else:
-            self.all_params = np.concatenate((self.all_params, np.array(new_params, dtype=float)))
-            self.all_costs = np.concatenate((self.all_costs, np.array(new_costs, dtype=float)))
-            self.all_uncers = np.concatenate((self.all_uncers, np.array(new_uncers, dtype=float)))
-
-        self.bad_run_indexs.append(new_bads)
-
-        if self.all_params.shape != (self.costs_count,self.num_params):
-            self.log('Saved NN params are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_params))
-        if self.all_costs.shape != (self.costs_count,):
-            self.log('Saved NN costs are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_costs))
-        if self.all_uncers.shape != (self.costs_count,):
-            self.log('Saved NN uncertainties are the wrong size. THIS SHOULD NOT HAPPEN:' + repr(self.all_uncers))
-
-        if update_bads_flag:
-            self.update_bads()
-
-        self.update_search_region()
-
-    def update_bads(self):
-        '''
-        Best and/or worst costs have changed, update the values associated with bad runs accordingly.
-        '''
-        for index in self.bad_run_indexs:
-            self.all_costs[index] = self.worst_cost
-            self.all_uncers[index] = self.cost_range*self.bad_uncer_frac
-
-    def update_search_region(self):
-        '''
-        If trust boundaries is not none, updates the search boundaries based on the defined trust region.
-        '''
-        if self.has_trust_region:
-            self.search_min = np.maximum(self.best_params - self.trust_region, self.min_boundary)
-            self.search_max = np.minimum(self.best_params + self.trust_region, self.max_boundary)
-            self.search_diff = self.search_max - self.search_min
-            self.search_region = list(zip(self.search_min, self.search_max))
-
-    def update_search_params(self):
-        '''
-        Update the list of parameters to use for the next search.
-        '''
-        self.search_params = []
-        self.search_params.append(self.best_params)
-        for _ in range(self.parameter_searches):
-            self.search_params.append(self.search_min + nr.uniform(size=self.num_params) * self.search_diff)
 
     def update_archive(self):
         '''
