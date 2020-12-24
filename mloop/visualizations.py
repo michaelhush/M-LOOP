@@ -1231,9 +1231,18 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(training_dict['trust_region'], dtype=float))
         self.nn_training_file_dir = self.training_file_dir
+        # Cost scaler
         self.cost_scaler_init_index = training_dict['cost_scaler_init_index']
         if not self.cost_scaler_init_index is None:
             self._init_cost_scaler()
+        # update_hyperparameters wasn't used or saved by M-LOOP versions 3.1.1
+        # and below, but effectively was set to False. Default to that value for
+        # archives that don't have an entry for it.
+        update_hyperparameters = training_dict.get(
+            'update_hyperparameters',
+            False,
+        )
+        self.update_hyperparameters = bool(update_hyperparameters)
 
         self.import_neural_net()
 

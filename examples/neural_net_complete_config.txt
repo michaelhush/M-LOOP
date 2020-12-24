@@ -19,6 +19,7 @@ learner_archive_filename = 'a_word'    #filename of neural net learner archive, 
 learner_archive_file_type = 'mat'      #file type of neural net learner archive
 predict_global_minima_at_end  = True   #find predicted global minima at end 
 no_delay = True                        #whether to wait for the GP to make predictions or not. Default True (do not wait)  
+update_hyperparameters = False         #whether hyperparameters should be tuned to avoid overfitting. Default False.
 
 #Training source options
 training_type = 'random'               #training type can be random, differential_evolution, or nelder_mead
