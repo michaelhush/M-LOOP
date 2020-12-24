@@ -440,6 +440,7 @@ class NeuralNet():
             default value for the SingleNeuralNet class will be used. Default
             None.
     '''
+    _DEFAULT_NET_REG = 1e-8
 
     def __init__(self,
                  num_params = None,
@@ -464,7 +465,7 @@ class NeuralNet():
 
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
-        self.last_net_reg = 1e-8
+        self.last_net_reg = self._DEFAULT_NET_REG
         self.regularization_history = [self.last_net_reg]
 
         # The samples used to fit the scalers. When set, this will be a tuple of
@@ -688,13 +689,12 @@ class NeuralNet():
                 # Try a bunch of different regularisation parameters, switching
                 # to a new one if it does better on the cross validation set
                 # than the old one.
-                previous_regularization = self.last_net_reg
-                regularizations = [0.001, 0.01, 0.1, 1, 10]
-                if previous_regularization not in regularizations:
-                    regularizations.append(previous_regularization)
+                regularizations = [self._DEFAULT_NET_REG]
+                regularizations.extend(np.logspace(-5, 1, 7))
                 cv_losses = []
                 best_cv_loss = np.inf
                 for r in regularizations:
+                    r = float(r)
                     self.log.debug(
                         "Testing regularization value {r}...".format(r=r)
                     )
