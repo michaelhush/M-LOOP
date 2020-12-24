@@ -654,9 +654,10 @@ class NeuralNet():
         all_params, all_costs = self._scale_params_and_cost_list(all_params, all_costs)
 
         if self.fit_hyperparameters:
-            # Every 20 runs, re-fit the hyperparameters.
+            # Re-fit the hyperparameters every runs_per_hyperparameter_fit runs.
+            runs_per_hyperparameter_fit = 100.0
             n_fits = len(all_params)
-            n_hyperfit = int(n_fits / 20.0)  # int() rounds down.
+            n_hyperfit = int(n_fits / runs_per_hyperparameter_fit)  # int() rounds down.
             if n_hyperfit > self.last_hyperfit:
                 self.log.info("Tuning regularization coefficient value.")
                 self.last_hyperfit = n_hyperfit
