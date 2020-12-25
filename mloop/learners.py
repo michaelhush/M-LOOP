@@ -95,26 +95,30 @@ class Learner():
         else:
             self.num_params = int(num_params)
         if self.num_params <= 0:
-            self.log.error('Number of parameters must be greater than zero:' + repr(self.num_params))
-            raise ValueError
+            msg = 'Number of parameters must be greater than zero:' + repr(self.num_params)
+            self.log.error(msg)
+            raise ValueError(msg)
         if min_boundary is None:
             self.min_boundary = np.full((self.num_params,), -1.0)
         else:
             self.min_boundary = np.array(min_boundary, dtype=np.float)
         if self.min_boundary.shape != (self.num_params,):
-            self.log.error('min_boundary array the wrong shape:' + repr(self.min_boundary.shape))
-            raise ValueError
+            msg = 'min_boundary array the wrong shape:' + repr(self.min_boundary.shape)
+            self.log.error(msg)
+            raise ValueError(msg)
         if max_boundary is None:
             self.max_boundary = np.full((self.num_params,), 1.0)
         else:
             self.max_boundary = np.array(max_boundary, dtype=np.float)
         if self.max_boundary.shape != (self.num_params,):
-            self.log.error('max_boundary array the wrong shape:' + self.min_boundary.shape)
-            raise ValueError
+            msg = 'max_boundary array the wrong shape:' + self.min_boundary.shape
+            self.log.error(msg)
+            raise ValueError(msg)
         self.diff_boundary = self.max_boundary - self.min_boundary
         if not np.all(self.diff_boundary>0.0):
-            self.log.error('All elements of max_boundary are not larger than min_boundary')
-            raise ValueError
+            msg = 'Not all elements of max_boundary are larger than min_boundary'
+            self.log.error(msg)
+            raise ValueError(msg)
         if start_datetime is None:
             self.start_datetime = datetime.datetime.now()
         else:
@@ -122,8 +126,9 @@ class Learner():
         if mlu.check_file_type_supported(learner_archive_file_type):
             self.learner_archive_file_type = learner_archive_file_type
         else:
-            self.log.error('File in type is not supported:' + learner_archive_file_type)
-            raise ValueError
+            msg = 'File in type is not supported:' + learner_archive_file_type
+            self.log.error(msg)
+            raise ValueError(msg)
         if learner_archive_filename is None:
             self.learner_archive_filename = None
         else:
@@ -152,12 +157,13 @@ class Learner():
             self.param_names = param_names
         # Ensure that there are the correct number of entries.
         if len(self.param_names) != self.num_params:
-            message = ('param_names has {n_names} elements but there are '
-                       '{n_params} parameters.').format(
-                           n_names=len(self.param_names),
-                           n_params=self.num_params)
-            self.log.error(message)
-            raise ValueError(message)
+            msg = ('param_names has {n_names} elements but there are '
+                   '{n_params} parameters.').format(
+                        n_names=len(self.param_names),
+                        n_params=self.num_params
+                    )
+            self.log.error(msg)
+            raise ValueError(msg)
         # Ensure that all of the entries are strings.
         self.param_names = [str(name) for name in self.param_names]
 
@@ -238,8 +244,9 @@ class Learner():
         '''
         #self.log.debug('Learner params='+repr(params))
         if not self.check_num_params(params):
-            self.log.error('Incorrect number of parameters sent to queue. Params' + repr(params))
-            raise ValueError
+            msg = 'Incorrect number of parameters sent to queue. Params' + repr(params)
+            self.log.error(msg)
+            raise ValueError(msg)
         if not self.check_in_boundary(params):
             self.log.warning('Parameters sent to queue are not within boundaries. Params:' + repr(params))
         #self.log.debug('Learner puts params.')
@@ -379,21 +386,25 @@ class Learner():
                 if trust_region > 0 and trust_region < 1:
                     self.trust_region = trust_region * self.diff_boundary
                 else:
-                    self.log.error('Trust region, when a float, must be between 0 and 1: '+repr(trust_region))
-                    raise ValueError
+                    msg = 'Trust region, when a float, must be between 0 and 1: '+repr(trust_region)
+                    self.log.error(msg)
+                    raise ValueError(msg)
             else:
                 self.trust_region = np.array(trust_region, dtype=float)
 
         if self.has_trust_region:
             if not self.check_num_params(self.trust_region):
-                self.log.error('Shape of the trust_region does not match the number of parameters:' + repr(self.trust_region))
-                raise ValueError
+                msg = 'Shape of the trust_region does not match the number of parameters:' + repr(self.trust_region)
+                self.log.error(msg)
+                raise ValueError(msg)
             if not np.all(self.trust_region>0):
-                self.log.error('All trust_region values must be positive:' + repr(self.trust_region))
-                raise ValueError
+                msg = 'All trust_region values must be positive:' + repr(self.trust_region)
+                self.log.error(msg)
+                raise ValueError(msg)
             if not self.check_in_diff_boundary(self.trust_region):
-                self.log.error('The trust_region must be smaller than the range of the boundaries:' + repr(self.trust_region))
-                raise ValueError
+                msg = 'The trust_region must be smaller than the range of the boundaries:' + repr(self.trust_region)
+                self.log.error(msg)
+                raise ValueError(msg)
 
     def _shut_down(self):
         '''
@@ -425,18 +436,21 @@ class RandomLearner(Learner, threading.Thread):
         super(RandomLearner,self).__init__(**kwargs)
 
         if ((np.all(np.isfinite(self.min_boundary))&np.all(np.isfinite(self.max_boundary)))==False):
-            self.log.error('Minimum and/or maximum boundaries are NaN or inf. Must both be finite for random learner. Min boundary:' + repr(self.min_boundary) +'. Max boundary:' + repr(self.max_boundary))
-            raise ValueError
+            msg = 'Minimum and/or maximum boundaries are NaN or inf. Must both be finite for random learner. Min boundary:' + repr(self.min_boundary) +'. Max boundary:' + repr(self.max_boundary)
+            self.log.error(msg)
+            raise ValueError(msg)
         if first_params is None:
             self.first_params = None
         else:
             self.first_params = np.array(first_params, dtype=float)
             if not self.check_num_params(self.first_params):
-                self.log.error('first_params has the wrong number of parameters:' + repr(self.first_params))
-                raise ValueError
+                msg = 'first_params has the wrong number of parameters:' + repr(self.first_params)
+                self.log.error(msg)
+                raise ValueError(msg)
             if not self.check_in_boundary(self.first_params):
-                self.log.error('first_params is not in the boundary:' + repr(self.first_params))
-                raise ValueError
+                msg = 'first_params is not in the boundary:' + repr(self.first_params)
+                self.log.error(msg)
+                raise ValueError(msg)
 
         # Keep track of best parameters to implement trust region.
         self.best_cost = None
@@ -519,8 +533,9 @@ class NelderMeadLearner(Learner, threading.Thread):
         elif initial_simplex_scale is not None:
             initial_simplex_scale = float(initial_simplex_scale)
             if initial_simplex_scale>1 or initial_simplex_scale<=0:
-                self.log.error('initial_simplex_scale must be bigger than 0 and less than 1')
-                raise ValueError
+                msg = 'initial_simplex_scale must be bigger than 0 and less than 1'
+                self.log.error(msg)
+                raise ValueError(msg)
             self.init_simplex_disp = self.diff_boundary * initial_simplex_scale
         elif initial_simplex_displacements is not None:
             self.init_simplex_disp = np.array(initial_simplex_displacements, dtype=float)
@@ -528,14 +543,17 @@ class NelderMeadLearner(Learner, threading.Thread):
             self.log.error('initial_simplex_displacements and initial_simplex_scale can not both be provided simultaneous.')
 
         if not self.check_num_params(self.init_simplex_disp):
-            self.log.error('There is the wrong number of elements in the initial simplex displacement:' + repr(self.init_simplex_disp))
-            raise ValueError
+            msg = 'There is the wrong number of elements in the initial simplex displacement:' + repr(self.init_simplex_disp)
+            self.log.error(msg)
+            raise ValueError(msg)
         if np.any(self.init_simplex_disp<0):
-            self.log.error('initial simplex displacements generated from configuration must all be positive')
-            raise ValueError
+            msg = 'initial simplex displacements generated from configuration must all be positive'
+            self.log.error(msg)
+            raise ValueError(msg)
         if not self.check_in_diff_boundary(self.init_simplex_disp):
-            self.log.error('Initial simplex displacements must be within boundaries. init_simplex_disp:'+ repr(self.init_simplex_disp) + '. diff_boundary:' +repr(self.diff_boundary))
-            raise ValueError
+            msg = 'Initial simplex displacements must be within boundaries. init_simplex_disp:'+ repr(self.init_simplex_disp) + '. diff_boundary:' +repr(self.diff_boundary)
+            self.log.error(msg)
+            raise ValueError(msg)
 
         if initial_simplex_corner is None:
             diff_roll = (self.diff_boundary - self.init_simplex_disp) * nr.rand(self.num_params)
@@ -549,15 +567,18 @@ class NelderMeadLearner(Learner, threading.Thread):
         if not self.check_num_params(self.init_simplex_corner):
             self.log.error('There is the wrong number of elements in the initial simplex corner:' + repr(self.init_simplex_corner))
         if not self.check_in_boundary(self.init_simplex_corner):
-            self.log.error('Initial simplex corner outside of boundaries:' + repr(self.init_simplex_corner))
-            raise ValueError
+            msg = 'Initial simplex corner outside of boundaries:' + repr(self.init_simplex_corner)
+            self.log.error(msg)
+            raise ValueError(msg)
 
         if not np.all(np.isfinite(self.init_simplex_corner + self.init_simplex_disp)):
-            self.log.error('Initial simplex corner and simplex are not finite numbers. init_simplex_corner:'+ repr(self.init_simplex_corner) + '. init_simplex_disp:' +repr(self.init_simplex_disp))
-            raise ValueError
+            msg = 'Initial simplex corner and simplex are not finite numbers. init_simplex_corner:'+ repr(self.init_simplex_corner) + '. init_simplex_disp:' +repr(self.init_simplex_disp)
+            self.log.error(msg)
+            raise ValueError(msg)
         if not self.check_in_boundary(self.init_simplex_corner + self.init_simplex_disp):
-            self.log.error('Largest boundary of simplex not inside the boundaries:' + repr(self.init_simplex_corner + self.init_simplex_disp))
-            raise ValueError
+            msg = 'Largest boundary of simplex not inside the boundaries:' + repr(self.init_simplex_corner + self.init_simplex_disp)
+            self.log.error(msg)
+            raise ValueError(msg)
 
         self.simplex_params = np.zeros((self.num_params + 1, self.num_params), dtype=float)
         self.simplex_costs = np.zeros((self.num_params + 1,), dtype=float)
@@ -762,11 +783,13 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         else:
             self.first_params = np.array(first_params, dtype=float)
             if not self.check_num_params(self.first_params):
-                self.log.error('first_params has the wrong number of parameters:' + repr(self.first_params))
-                raise ValueError
+                msg = 'first_params has the wrong number of parameters:' + repr(self.first_params)
+                self.log.error(msg)
+                raise ValueError(msg)
             if not self.check_in_boundary(self.first_params):
-                self.log.error('first_params is not in the boundary:' + repr(self.first_params))
-                raise ValueError
+                msg = 'first_params is not in the boundary:' + repr(self.first_params)
+                self.log.error(msg)
+                raise ValueError(msg)
 
         self._set_trust_region(trust_region)
 
@@ -779,8 +802,9 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         elif evolution_strategy == 'rand2':
             self.mutation_func = self._rand2
         else:
-            self.log.error('Please select a valid mutation strategy')
-            raise ValueError
+            msg = 'Please select a valid mutation strategy'
+            self.log.error(msg)
+            raise ValueError(msg)
 
         self.evolution_strategy = evolution_strategy
         self.restart_tolerance = restart_tolerance
@@ -788,8 +812,9 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         if len(mutation_scale) == 2 and (np.any(np.array(mutation_scale) <= 2) or np.any(np.array(mutation_scale) > 0)):
             self.mutation_scale = mutation_scale
         else:
-            self.log.error('Mutation scale must be a tuple with (min,max) between 0 and 2. mutation_scale:' + repr(mutation_scale))
-            raise ValueError
+            msg = 'Mutation scale must be a tuple with (min,max) between 0 and 2. mutation_scale:' + repr(mutation_scale)
+            self.log.error(msg)
+            raise ValueError(msg)
 
         if cross_over_probability <= 1 and cross_over_probability >= 0:
             self.cross_over_probability = cross_over_probability
@@ -1272,11 +1297,13 @@ class MachineLearner(Learner):
         elif (self.default_bad_cost is not None) and (self.default_bad_uncertainty is not None):
             self.bad_defaults_set = True
         else:
-            self.log.error('Both the default cost and uncertainty must be set for a bad run or they must both be set to None.')
-            raise ValueError
+            msg = 'Both the default cost and uncertainty must be set for a bad run or they must both be set to None.'
+            self.log.error(msg)
+            raise ValueError(msg)
         if self.minimum_uncertainty <= 0:
-            self.log.error('Minimum uncertainty must be larger than zero for the learner.')
-            raise ValueError
+            msg = 'Minimum uncertainty must be larger than zero for the learner.'
+            self.log.error(msg)
+            raise ValueError(msg)
 
         #Search bounds
         self.search_min = self.min_boundary
@@ -1705,8 +1732,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.bias_func_uncer_factor =[0.0,1.0,2.0,3.0]
         self.generation_num = self.bias_func_cycle
         if self.generation_num < 3:
-            self.log.error('Number in generation must be larger than 2.')
-            raise ValueError
+            msg = 'Number in generation must be larger than 2.'
+            self.log.error(msg)
+            raise ValueError(msg)
 
         #Constants, limits and tolerances
         self.hyperparameter_searches = max(10,self.num_params)
@@ -1739,20 +1767,24 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         if self.length_scale.size == 1:
             self.length_scale = float(self.length_scale)
         elif not self.check_num_params(self.length_scale):
-            self.log.error('Correlation lengths not the right size and shape, must be one or the number of parameters:' + repr(self.length_scale))
-            raise ValueError
+            msg = 'Correlation lengths not the right size and shape, must be one or the number of parameters:' + repr(self.length_scale)
+            self.log.error(msg)
+            raise ValueError(msg)
         if not np.all(self.length_scale >0):
-            self.log.error('Correlation lengths must all be positive numbers:' + repr(self.length_scale))
-            raise ValueError
+            msg = 'Correlation lengths must all be positive numbers:' + repr(self.length_scale)
+            self.log.error(msg)
+            raise ValueError(msg)
         self._check_length_scale_bounds()
         if self.noise_level < 0:
-            self.log.error('noise_level must be greater or equal to zero:' +repr(self.noise_level))
-            raise ValueError
+            msg = 'noise_level must be greater or equal to zero:' +repr(self.noise_level)
+            self.log.error(msg)
+            raise ValueError(msg)
         self._check_noise_level_bounds()
         if self.default_bad_uncertainty is not None:
             if self.default_bad_uncertainty < 0:
-                self.log.error('Default bad uncertainty must be positive.')
-                raise ValueError
+                msg = 'Default bad uncertainty must be positive.'
+                self.log.error(msg)
+                raise ValueError(msg)
 
         self.gaussian_process = None
 
@@ -1788,9 +1820,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         bounds = self.length_scale_bounds
         # First ensure that all of the limits are positive numbers.
         if not np.all(bounds > 0):
-            message = 'Correlation length bounds must all be positive numbers: ' + repr(self.length_scale_bounds)
-            self.log.error(message)
-            raise ValueError(message)
+            msg = 'Correlation length bounds must all be positive numbers: ' + repr(self.length_scale_bounds)
+            self.log.error(msg)
+            raise ValueError(msg)
         dims_error_message = ('Length scale bounds must a single pair '
                               '(min, max) or a list of pairs [(min_0, max_0), '
                               '..., (min_N, max_N)] with one pair per '
@@ -1837,22 +1869,22 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             return
         # Ensure that all of the limits are positive numbers.
         if not np.all(bounds > 0):
-            message = ('Noise level bounds must all be positive numbers: ' +
-                       repr(bounds))
-            self.log.error(message)
-            raise ValueError(message)
+            msg = ('Noise level bounds must all be positive numbers: ' +
+                   repr(msg))
+            self.log.error(msg)
+            raise ValueError(msg)
         # Ensure that the dimensions are correct.
         if bounds.shape != (2,):
-            message = ('Noise level bounds should have exactly two elements: ' +
-                       repr(bounds))
-            self.log.error(message)
-            raise ValueError(message)
+            msg = ('Noise level bounds should have exactly two elements: ' +
+                   repr(bounds))
+            self.log.error(msg)
+            raise ValueError(msg)
         # Ensure min <= max.
         if bounds[1] < bounds[0]:
-            message = ('Noise level lower bound must be less than or equal to '
-                       'upper bound' + repr(bounds))
-            self.log.error(message)
-            raise ValueError(message)
+            msg = ('Noise level lower bound must be less than or equal to '
+                   'upper bound' + repr(bounds))
+            self.log.error(msg)
+            raise ValueError(msg)
 
     def create_gaussian_process(self):
         '''
@@ -1892,8 +1924,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         '''
         self.log.debug('Fitting Gaussian process.')
         if self.all_params.size==0 or self.all_costs.size==0 or self.all_uncers.size==0:
-            self.log.error('Asked to fit GP but no data is in all_costs, all_params or all_uncers.')
-            raise ValueError
+            msg = 'Asked to fit GP but no data is in all_costs, all_params or all_uncers.'
+            self.log.error(msg)
+            raise ValueError(msg)
         self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
         cost_scaling_factor = float(self.cost_scaler.scale_)
         self.scaled_uncers = self.all_uncers / cost_scaling_factor
@@ -2202,7 +2235,9 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         Imports neural net parameters from the training dictionary provided at construction. Must be called from the same process as fit_neural_net, predict_cost and predict_costs_from_param_array. You must call exactly one of this and create_neural_net before calling other methods.
         '''
         if not self.training_dict:
-            raise ValueError
+            msg = ('A training file must be provided during initialization in '
+                   'order to import saved neural nets.')
+            raise ValueError(msg)
         self._construct_net()
         for i, n in enumerate(self.neural_net):
             n.load(self.training_dict['net_' + str(i)],
