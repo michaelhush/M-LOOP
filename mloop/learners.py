@@ -1773,6 +1773,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             'bias_func_cost_factor': self.bias_func_cost_factor,
             'bias_func_uncer_factor': self.bias_func_uncer_factor,
             'generation_num': self.generation_num,
+            'update_hyperparameters': self.update_hyperparameters,
             'hyperparameter_searches': self.hyperparameter_searches,
             'trust_region': self.trust_region,
             'has_trust_region': self.has_trust_region,
@@ -1882,10 +1883,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         '''
         super(GaussianProcessLearner, self).update_archive()
         new_values_dict = {
-            'fit_count':self.fit_count,
-            'update_hyperparameters':self.update_hyperparameters,
-            'length_scale':self.length_scale,
-            'noise_level':self.noise_level,
+            'fit_count': self.fit_count,
+            'length_scale': self.length_scale,
+            'noise_level': self.noise_level,
         }
         self.archive_dict.update(new_values_dict)
 
