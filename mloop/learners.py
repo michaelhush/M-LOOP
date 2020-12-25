@@ -1287,6 +1287,15 @@ class MachineLearner(Learner):
         self.search_diff = self.search_max - self.search_min
         self.search_region = list(zip(self.search_min, self.search_max))
 
+        # Update archive.
+        new_values_dict = {
+            'search_precision': self.search_precision,
+            'parameter_searches': self.parameter_searches,
+            'bad_uncer_frac': self.bad_uncer_frac,
+            'predict_global_minima_at_end': self.predict_global_minima_at_end,
+        }
+        self.archive_dict.update(new_values_dict)
+
     def _reconcile_kwarg_and_training_val(self, kwargs_, name, training_value):
         '''Utility function for comparing values from kwargs to training values.
 
@@ -1752,23 +1761,24 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         self.cost_scaler = skp.StandardScaler()
 
-        self.archive_dict.update({'archive_type':self._ARCHIVE_TYPE,
-                                  'cost_has_noise':self.cost_has_noise,
-                                  'length_scale_history':self.length_scale_history,
-                                  'length_scale_bounds':self.length_scale_bounds,
-                                  'noise_level_history':self.noise_level_history,
-                                  'noise_level_bounds':self.noise_level_bounds,
-                                  'bias_func_cycle':self.bias_func_cycle,
-                                  'bias_func_cost_factor':self.bias_func_cost_factor,
-                                  'bias_func_uncer_factor':self.bias_func_uncer_factor,
-                                  'generation_num':self.generation_num,
-                                  'search_precision':self.search_precision,
-                                  'parameter_searches':self.parameter_searches,
-                                  'hyperparameter_searches':self.hyperparameter_searches,
-                                  'bad_uncer_frac':self.bad_uncer_frac,
-                                  'trust_region':self.trust_region,
-                                  'has_trust_region':self.has_trust_region,
-                                  'predict_global_minima_at_end':self.predict_global_minima_at_end})
+        # Update archive.
+        new_values_dict = {
+            'archive_type': self._ARCHIVE_TYPE,
+            'cost_has_noise': self.cost_has_noise,
+            'length_scale_history': self.length_scale_history,
+            'length_scale_bounds': self.length_scale_bounds,
+            'noise_level_history': self.noise_level_history,
+            'noise_level_bounds': self.noise_level_bounds,
+            'bias_func_cycle': self.bias_func_cycle,
+            'bias_func_cost_factor': self.bias_func_cost_factor,
+            'bias_func_uncer_factor': self.bias_func_uncer_factor,
+            'generation_num': self.generation_num,
+            'hyperparameter_searches': self.hyperparameter_searches,
+            'trust_region': self.trust_region,
+            'has_trust_region': self.has_trust_region,
+        }
+        self.archive_dict.update(new_values_dict)
+
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
 
@@ -2152,15 +2162,15 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         #Optional user set variables
         self.update_hyperparameters = bool(update_hyperparameters)
 
-        self.archive_dict.update({'archive_type':self._ARCHIVE_TYPE,
-                                  'generation_num':self.generation_num,
-                                  'search_precision':self.search_precision,
-                                  'parameter_searches':self.parameter_searches,
-                                  'bad_uncer_frac':self.bad_uncer_frac,
-                                  'update_hyperparameters':self.update_hyperparameters,
-                                  'trust_region':self.trust_region,
-                                  'has_trust_region':self.has_trust_region,
-                                  'predict_global_minima_at_end':self.predict_global_minima_at_end})
+        # Update archive.
+        new_values_dict = {
+            'archive_type': self._ARCHIVE_TYPE,
+            'generation_num': self.generation_num,
+            'update_hyperparameters': self.update_hyperparameters,
+            'trust_region': self.trust_region,
+            'has_trust_region': self.has_trust_region,
+        }
+        self.archive_dict.update(new_values_dict)
 
         #Remove logger so neural net can be safely picked for multiprocessing on Windows
         self.log = None
