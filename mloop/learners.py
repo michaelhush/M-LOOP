@@ -458,7 +458,12 @@ class RandomLearner(Learner, threading.Thread):
 
         self._set_trust_region(trust_region)
 
-        self.archive_dict.update({'archive_type':'random_learner'})
+        new_values_dict = {
+            'archive_type': 'random_learner',
+            'trust_region': self.trust_region,
+            'has_trust_region': self.has_trust_region,
+        }
+        self.archive_dict.update(new_values_dict)
 
         self.log.debug('Random learner init completed.')
 
