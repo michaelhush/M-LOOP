@@ -424,9 +424,6 @@ class RandomLearner(Learner, threading.Thread):
 
         super(RandomLearner,self).__init__(**kwargs)
 
-        if not np.all(self.diff_boundary>0.0):
-            self.log.error('All elements of max_boundary are not larger than min_boundary')
-            raise ValueError
         if ((np.all(np.isfinite(self.min_boundary))&np.all(np.isfinite(self.max_boundary)))==False):
             self.log.error('Minimum and/or maximum boundaries are NaN or inf. Must both be finite for random learner. Min boundary:' + repr(self.min_boundary) +'. Max boundary:' + repr(self.max_boundary))
             raise ValueError
