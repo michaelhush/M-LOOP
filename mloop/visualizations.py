@@ -810,6 +810,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         training_dict = self.training_dict
 
         # Optimization options not loaded by parent class.
+        self.param_names = mlu._param_names_from_file_dict(training_dict)
         self.cost_has_noise = bool(training_dict['cost_has_noise'])
         #Trust region
         self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
@@ -1227,6 +1228,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         training_dict = self.training_dict
 
         # Archive data not loaded by parent class
+        self.param_names = mlu._param_names_from_file_dict(training_dict)
         #Trust region
         self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(training_dict['trust_region'], dtype=float))
