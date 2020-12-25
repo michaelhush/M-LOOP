@@ -1231,9 +1231,18 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(training_dict['trust_region'], dtype=float))
         self.nn_training_file_dir = self.training_file_dir
+        # Cost scaler
         self.cost_scaler_init_index = training_dict['cost_scaler_init_index']
         if not self.cost_scaler_init_index is None:
             self._init_cost_scaler()
+        # update_hyperparameters wasn't used or saved by M-LOOP versions 3.1.1
+        # and below, but effectively was set to False. Default to that value for
+        # archives that don't have an entry for it.
+        update_hyperparameters = training_dict.get(
+            'update_hyperparameters',
+            False,
+        )
+        self.update_hyperparameters = bool(update_hyperparameters)
 
         self.import_neural_net()
 
@@ -1284,7 +1293,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         self.plot_surface()
         self.plot_density_surface()
         self.plot_losses()
-
+        self.plot_regularization_history()
 
     def return_cross_sections(self, points=100, cross_section_center=None):
         '''
@@ -1505,4 +1514,52 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         plt.xlabel("Epoch")
         plt.ylabel("Fitting Loss")
         plt.title('Loss vs Epoch')
+        plt.legend(artists, legend_labels, loc=legend_loc)
+
+    def plot_regularization_history(self):
+        '''
+        Produces a plot of the regularization coefficient values used.
+
+        The neural nets use L2 regularization to smooth their predicted
+        landscapes in an attempt to avoid overfitting the data. The strength of
+        the regularization is set by the regularization coefficient, which is a
+        hyperparameter that is tuned during the optimization if
+        `update_hyperparameters` is set to `True`. Generally larger
+        regularization coefficient values force the landscape to be smoother
+        while smaller values allow it to vary more quickly. A value too large
+        can lead to underfitting while a value too small can lead to
+        overfitting. The ideal regularization coefficient value will depend on
+        many factors, such as the shape of the actual cost landscape, the SNR of
+        the measured costs, and even the number of measured costs.
+
+        This method plots the initial regularization coefficient value and the
+        optimal values found for the regularization coefficient when performing
+        the hyperparameter tuning. One curve showing the history of values used
+        for the regularization coefficient is plotted for each neural net. If
+        `update_hyperparameters` was set to `False` during the optimization,
+        then only the initial default value will be plotted.
+        '''
+        global figure_counter
+        figure_counter += 1
+        fig = plt.figure(figure_counter)
+
+        regularization_histories = self.get_regularization_histories()
+
+        # Generate set of distinct colors for plotting.
+        num_nets = len(regularization_histories)
+        net_colors = _color_list_from_num_of_params(num_nets)
+
+        artists=[]
+        legend_labels=[]
+        for ind, regularization_history in enumerate(regularization_histories):
+            color = net_colors[ind]
+            hyperparameter_fit_numbers = np.arange(len(regularization_history))
+            plt.plot(hyperparameter_fit_numbers, regularization_history, color=color, marker='o', linestyle='-')
+            artists.append(plt.Line2D((0,1),(0,0), color=color,marker='o',linestyle=''))
+            legend_labels.append('Net {net_index}'.format(net_index=ind))
+
+        plt.yscale('log')
+        plt.xlabel("Hyperparameter Fit Number")
+        plt.ylabel("Regularization Coefficient")
+        plt.title("Regularization Tuning History")
         plt.legend(artists, legend_labels, loc=legend_loc)

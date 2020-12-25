@@ -2069,6 +2069,11 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         end_event (event): Event to trigger end of learner.
 
     Keyword Args:
+        update_hyperparameters (Optional [bool]): Whether the hyperparameters
+            used to prevent overfitting should be tuned by trying out different
+            values. Setting to `True` can reduce overfitting of the model, but
+            can slow down the fitting due to the computational cost of trying
+            different values. Default `False`.
         nn_training_filename (Optional [str]): The name of a learner archive
             from a previous optimization from which to extract past results for
             use in the current optimization. If `None`, no past results will be
@@ -2108,6 +2113,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
     _ARCHIVE_TYPE = 'neural_net_learner'
 
     def __init__(self,
+                 update_hyperparameters=False,
                  nn_training_filename =None,
                  nn_training_file_type =None,
                  **kwargs):
@@ -2143,11 +2149,15 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         self.num_nets = 3
         self.generation_num = 3
 
+        #Optional user set variables
+        self.update_hyperparameters = bool(update_hyperparameters)
+
         self.archive_dict.update({'archive_type':self._ARCHIVE_TYPE,
                                   'generation_num':self.generation_num,
                                   'search_precision':self.search_precision,
                                   'parameter_searches':self.parameter_searches,
                                   'bad_uncer_frac':self.bad_uncer_frac,
+                                  'update_hyperparameters':self.update_hyperparameters,
                                   'trust_region':self.trust_region,
                                   'has_trust_region':self.has_trust_region,
                                   'predict_global_minima_at_end':self.predict_global_minima_at_end})
@@ -2159,6 +2169,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         self.neural_net = [
             mlnn.NeuralNet(
                 num_params=self.num_params,
+                fit_hyperparameters=self.update_hyperparameters,
                 learner_archive_dir=self.learner_archive_dir,
                 start_datetime=self.start_datetime)
             for _ in range(self.num_nets)
@@ -2391,3 +2402,24 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         for n in self.neural_net:
             all_losses.append(n.get_losses())
         return all_losses
+
+    def get_regularization_histories(self):
+        '''
+        Get the regularization coefficient values used by the nets.
+
+        Returns:
+            list of list of float: The values used by the neural nets for the
+                regularization coefficient. There is one list per net, which
+                includes all of the regularization coefficient values used by
+                that net during the optimization. If the optimization was run
+                with `update_hyperparameters` set to `False`, then each net's
+                list will only have one entry, namely the initial default value
+                for the regularization coefficient. If the optimization was run
+                with `updated_hyperparameters` set to `True` then the list will
+                also include the optimal values for the regularization
+                coefficient determined during each hyperparameter fitting.
+        '''        
+        regularization_histories = []
+        for net in self.neural_net:
+            regularization_histories.append(net.regularization_history)
+        return regularization_histories

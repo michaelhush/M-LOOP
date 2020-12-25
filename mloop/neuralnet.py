@@ -149,6 +149,7 @@ class SingleNeuralNet():
 
             ## Define tensors for evaluating the loss on the full input
             self.loss_raw = get_loss_raw(self.output_placeholder, self.output_var)
+            self.loss_reg = loss_reg
             self.loss_total = self.loss_raw + loss_reg
 
             ## Training
@@ -222,10 +223,10 @@ class SingleNeuralNet():
 
     def _loss(self, params, costs):
         '''
-        Returns the loss and unregularised loss for the given params and costs.
+        Returns the loss, unregularised loss, and regularization loss for the given params and costs.
         '''
         return self.tf_session.run(
-            [self.loss_total, self.loss_raw],
+            [self.loss_total, self.loss_raw, self.loss_reg],
             feed_dict={self.input_placeholder: params,
                        self.output_placeholder: [[c] for c in costs],
                        self.regularisation_coefficient_placeholder: self.regularisation_coefficient,
@@ -277,13 +278,16 @@ class SingleNeuralNet():
                                                    self.keep_prob_placeholder: self.keep_prob,
                                                    })
                 if i % 10 == 0:
-                    (l, ul) = self._loss(params, costs)
+                    (l, ul, lr) = self._loss(params, costs)
                     self.losses_list.append(l)
-                    self.log.info('Fit neural network with total training cost ' + str(l)
-                            + ', with unregularized cost ' + str(ul))
+                    self.log.info(
+                        ("Fit neural network with total training cost {l}, "
+                         "with unregularized cost {ul} and regularization cost "
+                         "{lr}").format(l=l, ul=ul, lr=lr)
+                    )
             self.log.debug("Run trained for: " + str(time.time() - run_start))
 
-            (l, ul) = self._loss(params, costs)
+            (l, ul, lr) = self._loss(params, costs)
             al = tot / float(epochs)
             self.log.debug('Loss ' + str(l) + ', average loss ' + str(al))
             if l > threshold:
@@ -298,7 +302,7 @@ class SingleNeuralNet():
             params (array): array of parameter arrays
             costs (array): array of costs (associated with the corresponding parameters)
         '''
-        return self.tf_session.run(self.loss_total,
+        return self.tf_session.run(self.loss_raw,
                                   feed_dict={self.input_placeholder: params,
                                   self.output_placeholder: [[c] for c in costs],
                                   })
@@ -436,6 +440,7 @@ class NeuralNet():
             default value for the SingleNeuralNet class will be used. Default
             None.
     '''
+    _DEFAULT_NET_REG = 1e-8
 
     def __init__(self,
                  num_params = None,
@@ -460,7 +465,8 @@ class NeuralNet():
 
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
-        self.last_net_reg = 1e-8
+        self.last_net_reg = self._DEFAULT_NET_REG
+        self.regularization_history = [self.last_net_reg]
 
         # The samples used to fit the scalers. When set, this will be a tuple of
         # (params samples, cost samples).
@@ -586,6 +592,15 @@ class NeuralNet():
         self.last_net_reg = float(archive['last_net_reg'])
 
         self.losses_list = list(archive['losses_list'])
+        # M-LOOP versions 3.1.1 and below used one fixed regularization
+        # coefficient value and didn't generate/save its history. For backwards
+        # compatibility, if it's missing from the archive default to a list with
+        # just last_net_reg.
+        regularization_history = archive.get(
+            'regularization_history',
+            [self.last_net_reg],
+        )
+        self.regularization_history = list(regularization_history)
 
         self.scaler_samples = archive['scaler_samples']
         if not self.scaler_samples is None:
@@ -600,6 +615,7 @@ class NeuralNet():
         '''
         return {'last_hyperfit': self.last_hyperfit,
                 'last_net_reg': self.last_net_reg,
+                'regularization_history': self.regularization_history,
                 'losses_list': self.losses_list,
                 'scaler_samples': self.scaler_samples,
                 'net': self.net.save(),
@@ -638,42 +654,79 @@ class NeuralNet():
         all_params, all_costs = self._scale_params_and_cost_list(all_params, all_costs)
 
         if self.fit_hyperparameters:
-            # Every 20 runs, re-fit the hyperparameters.
+            # Re-fit the hyperparameters every runs_per_hyperparameter_fit runs.
+            runs_per_hyperparameter_fit = 100.0
             n_fits = len(all_params)
-            n_hyperfit = int(n_fits / 20.0)  # int() rounds down.
+            n_hyperfit = int(n_fits / runs_per_hyperparameter_fit)  # int() rounds down.
             if n_hyperfit > self.last_hyperfit:
+                self.log.info("Tuning regularization coefficient value.")
                 self.last_hyperfit = n_hyperfit
 
                 # Fit regularisation
 
-                # Split the data into training and cross validation
+                # May as well re-fit the cost and parameter scalers since a new
+                # net will be re-created from scratch. This keeps the scaled
+                # costs and parameters ~1.
+                self.scaler_samples = (all_params.copy(), all_costs.copy())
+                self._fit_scaler()
+
+                # Split the data into training and cross validation randomly
                 training_fraction = 0.9
-                split_index = int(training_fraction * len(all_params))
-                train_params = all_params[:split_index]
-                train_costs = all_costs[:split_index]
-                cv_params = all_params[split_index:]
-                cv_costs = all_costs[split_index:]
+                n_observations = len(all_costs)
+                split_index = int(training_fraction * n_observations)
+                indices = np.random.permutation(n_observations)
+                # Extract the training dataset.
+                train_indices = indices[:split_index]
+                train_params = all_params[train_indices]
+                train_costs = all_costs[train_indices]
+                # Extract the cross validation dataset.
+                cv_indices = indices[split_index:]
+                cv_params = all_params[cv_indices]
+                cv_costs = all_costs[cv_indices]
 
                 orig_cv_loss = self.net.cross_validation_loss(cv_params, cv_costs)
                 best_cv_loss = orig_cv_loss
 
-                self.log.debug("Fitting regularisation, current cv loss=" + str(orig_cv_loss))
-
-                # Try a bunch of different regularisation parameters, switching to a new one if it
-                # does significantly better on the cross validation set than the old one.
-                for r in [0.001, 0.01, 0.1, 1, 10]:
+                # Try a bunch of different regularisation parameters, switching
+                # to a new one if it does better on the cross validation set
+                # than the old one.
+                regularizations = [self._DEFAULT_NET_REG]
+                regularizations.extend(np.logspace(-5, 1, 7))
+                cv_losses = []
+                best_cv_loss = np.inf
+                for r in regularizations:
+                    r = float(r)
+                    self.log.debug(
+                        "Testing regularization value {r}...".format(r=r)
+                    )
                     net = self._make_net(r)
                     net.init()
                     net.fit(train_params, train_costs, self.initial_epochs)
                     this_cv_loss = net.cross_validation_loss(cv_params, cv_costs)
-                    if this_cv_loss < best_cv_loss and this_cv_loss < 0.1 * orig_cv_loss:
+                    cv_losses.append(this_cv_loss)
+                    if this_cv_loss < best_cv_loss:
                         best_cv_loss = this_cv_loss
-                        self.log.debug("Switching to reg=" + str(r) + ", cv loss=" + str(best_cv_loss))
                         self.last_net_reg = r
                         self.net.destroy()
                         self.net = net
                     else:
                         net.destroy()
+
+                # Record results.
+                self.regularization_history.append(self.last_net_reg)
+                self.log.debug(
+                    ("Regularizations tried: {regularizations}, corresponding "
+                     "cross validation losses: {cv_losses}").format(
+                         regularizations=regularizations,
+                         cv_losses=cv_losses,
+                     )
+                )
+                self.log.info(
+                    "Using reg={last_net_reg}, cv loss={best_cv_loss}".format(
+                        last_net_reg=self.last_net_reg,
+                        best_cv_loss=best_cv_loss,
+                    )
+                )
 
         self.net.fit(
                 all_params,
