@@ -1316,6 +1316,8 @@ class MachineLearner(Learner):
             'search_precision': self.search_precision,
             'parameter_searches': self.parameter_searches,
             'bad_uncer_frac': self.bad_uncer_frac,
+            'trust_region': self.trust_region,
+            'has_trust_region': self.has_trust_region,
             'predict_global_minima_at_end': self.predict_global_minima_at_end,
         }
         self.archive_dict.update(new_values_dict)
@@ -1804,8 +1806,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             'generation_num': self.generation_num,
             'update_hyperparameters': self.update_hyperparameters,
             'hyperparameter_searches': self.hyperparameter_searches,
-            'trust_region': self.trust_region,
-            'has_trust_region': self.has_trust_region,
         }
         self.archive_dict.update(new_values_dict)
 
@@ -2197,8 +2197,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             'archive_type': self._ARCHIVE_TYPE,
             'generation_num': self.generation_num,
             'update_hyperparameters': self.update_hyperparameters,
-            'trust_region': self.trust_region,
-            'has_trust_region': self.has_trust_region,
         }
         self.archive_dict.update(new_values_dict)
 
