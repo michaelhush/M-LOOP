@@ -2172,14 +2172,26 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         else:
             super(NeuralNetLearner,self).__init__(**kwargs)
 
+        #Constants, limits and tolerances
+        self.num_nets = 3
+        self.generation_num = 3
+
         # Parameters that should only be loaded if a training archive was
         # provided and it has the same learner type and min/max boundaries.
         same_learner_type = self._learner_type_matches_training_archive
         same_boundaries = self._boundaries_match_training_archive
         if same_learner_type and same_boundaries:
-            pass  # Will load parameters here later.
+            training_dict = self.training_dict
+            # Restore last net regularization coefficient values.
+            self.initial_regularizations = []
+            for j in range(self.num_nets):
+                net_dict = training_dict['net_{index}'.format(index=j)]
+                last_net_reg = net_dict['last_net_reg']
+                self.initial_regularizations.append(float(last_net_reg))
         else:
-            pass  # Will set default parameter values here later.
+            # Set initial regularizations to None to let NeuralNet use its
+            # default value.
+            self.initial_regularizations = [None] * self.num_nets
 
         # Set training file directory to None for now since no nets will be
         # loaded here. The NeuralNetVisualizer will overwrite this when it needs
@@ -2189,10 +2201,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         # The scaler will be initialised when we're ready to fit it
         self.cost_scaler = None
         self.cost_scaler_init_index = None
-
-        #Constants, limits and tolerances
-        self.num_nets = 3
-        self.generation_num = 3
 
         #Optional user set variables
         self.update_hyperparameters = bool(update_hyperparameters)
@@ -2214,8 +2222,10 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                 num_params=self.num_params,
                 fit_hyperparameters=self.update_hyperparameters,
                 learner_archive_dir=self.learner_archive_dir,
-                start_datetime=self.start_datetime)
-            for _ in range(self.num_nets)
+                start_datetime=self.start_datetime,
+                regularization_coefficient=self.initial_regularizations[j],
+            )
+            for j in range(self.num_nets)
         ]
 
     def _init_cost_scaler(self):

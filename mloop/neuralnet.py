@@ -439,6 +439,11 @@ class NeuralNet():
             filenames when saving the neural nets. If set to None, then the
             default value for the SingleNeuralNet class will be used. Default
             None.
+        regularization_coefficient (Optional float): The initial value for the
+            coefficient used to weight the regularization cost when calculating
+            the total loss. If set to `None` then the default value of `1e-8`
+            will be used. Note that the coefficient's value will generally
+            change if `fit_hyperparameters` is set to `True`. Default `None`.
     '''
     _DEFAULT_NET_REG = 1e-8
 
@@ -446,7 +451,9 @@ class NeuralNet():
                  num_params = None,
                  fit_hyperparameters = False,
                  learner_archive_dir = None,
-                 start_datetime = None):
+                 start_datetime = None,
+                 regularization_coefficient=None,
+                 ):
 
         self.log = logging.getLogger(__name__)
         self.log.info('Initialising neural network impl')
@@ -465,7 +472,10 @@ class NeuralNet():
 
         # Variables for tracking the current state of hyperparameter fitting.
         self.last_hyperfit = 0
-        self.last_net_reg = self._DEFAULT_NET_REG
+        if regularization_coefficient is None:
+            self.last_net_reg = self._DEFAULT_NET_REG
+        else:
+            self.last_net_reg = regularization_coefficient
         self.regularization_history = [self.last_net_reg]
 
         # The samples used to fit the scalers. When set, this will be a tuple of
