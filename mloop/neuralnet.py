@@ -694,9 +694,6 @@ class NeuralNet():
                 cv_params = all_params[cv_indices]
                 cv_costs = all_costs[cv_indices]
 
-                orig_cv_loss = self.net.cross_validation_loss(cv_params, cv_costs)
-                best_cv_loss = orig_cv_loss
-
                 # Try a bunch of different regularisation parameters, switching
                 # to a new one if it does better on the cross validation set
                 # than the old one.
