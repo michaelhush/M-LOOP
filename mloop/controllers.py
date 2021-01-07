@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import datetime
+from importlib import import_module
 from mloop import __version__
 import mloop.utilities as mlu
 import mloop.learners as mll
@@ -32,7 +33,7 @@ def create_controller(interface,
     Args:
         interface (interface): Interface with queues and events to be passed to controller
     Keyword Args:
-        controller_type (Optional [str]): Defines the type of controller can be 'random', 'nelder', 'gaussian_process' or 'neural_net'. Defaults to 'gaussian_process'.
+        controller_type (Optional [str]): Defines the type of controller can be 'random', 'nelder', 'gaussian_process' or 'neural_net'. Alternatively, the controller can belong to an external module, in which case this parameter should be 'module_name:controller_name'. Defaults to 'gaussian_process'.
         **controller_config_dict : Options to be passed to controller.
     Returns:
         Controller : threadable object which must be started with start() to get the controller running.
@@ -53,8 +54,27 @@ def create_controller(interface,
     elif controller_type=='random':
         controller = RandomController(interface, **controller_config_dict)
     else:
-        log.error('Unknown controller type:' + repr(controller_type))
-        raise ValueError
+        # If `controller_type` doesn't match any of the built-in controllers,
+        # looks for an external controller with matching name.
+        # The `controller_type` should be "module_name:controller_name".
+        parts = controller_type.split(":")
+        if (len(parts)==2) and all([len(part)>0 for part in parts]):
+            try:
+                module = import_module(parts[0])
+                constructor = getattr(module, parts[1])
+            except ModuleNotFoundError:
+                log.error(f"Unknown module: {parts[0]}")
+                raise ValueError
+            except AttributeError:
+                log.error(f"Unknown controller type: {parts[0]}.{parts[1]}")
+                raise ValueError
+            except:
+                log.error('Unknown controller type:' + repr(controller_type))
+                raise ValueError
+            controller = constructor(interface, **controller_config_dict)
+        else:
+            log.error('Unknown controller type:' + repr(controller_type))
+            raise ValueError
 
     return controller
 
