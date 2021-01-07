@@ -33,7 +33,7 @@ def create_controller(interface,
     Args:
         interface (interface): Interface with queues and events to be passed to controller
     Keyword Args:
-        controller_type (Optional [str]): Defines the type of controller can be 'random', 'nelder', 'gaussian_process' or 'neural_net'. It can also be a controller from an external module, in which case it should be 'module_name:controller_name'. Defaults to 'gaussian_process'.
+        controller_type (Optional [str]): Defines the type of controller can be 'random', 'nelder', 'gaussian_process' or 'neural_net'. Alternatively, the controller can belong to an external module, in which case this parameter should be 'module_name:controller_name'. Defaults to 'gaussian_process'.
         **controller_config_dict : Options to be passed to controller.
     Returns:
         Controller : threadable object which must be started with start() to get the controller running.
