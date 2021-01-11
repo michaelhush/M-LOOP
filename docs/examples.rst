@@ -39,9 +39,9 @@ The shell interface is for experiments that can be run through a command execute
 Controllers
 ===========
 
-There are currently five controller types supported: 'gaussian_process', 'neural_net', 'differential_evolution', 'nelder_mead', and 'random'.
-The default is 'gaussian_process'.
-You can set which interface you want to use with the option::
+There are currently five built-in controller types: 'gaussian_process', 'neural_net', 'differential_evolution', 'nelder_mead', and 'random'.
+The default controller is 'gaussian_process'.
+You can set which controller you want to use with the option::
 
    controller_type = [name]
 
@@ -49,6 +49,8 @@ Each of the controllers and their specific options are described below. There is
 
 .. include:: ../examples/controller_config.txt
    :literal:
+
+In addition to the built-in controllers, you can also use controllers provided by external Python packages. In this case, you can set ``controller_type`` to ``'module_name:controller_name'``, where ``module_name`` is the name of the Python module containing the controller and ``controller_name`` is the name of the controller class (or the function that creates the controller object). The parameters for such controllers should be documented by the corresponding external packages.
 
 Gaussian process
 ----------------
