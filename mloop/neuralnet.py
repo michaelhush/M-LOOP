@@ -4,7 +4,6 @@ import math
 import os
 import time
 import base64
-from distutils.version import LooseVersion
 
 import mloop.utilities as mlu
 import numpy as np
