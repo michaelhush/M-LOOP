@@ -111,7 +111,7 @@ class SingleNeuralNet():
                     weight_initializer(shape=[prev_layer_dim, dim], dtype=tf.float32),
                     name="weight_"+str(i)))
                 biases.append(tf.Variable(
-                    bias_initializer(shape=[1], dtype=tf.float32),
+                    bias_initializer(shape=[dim], dtype=tf.float32),
                     name="bias_"+str(i)))
                 prev_layer_dim = dim
 
