@@ -7,8 +7,13 @@ import multiprocessing as mp
 import mloop as ml
 
 from setuptools import setup, find_packages
+from os import path
 
 def main():
+    this_directory = path.abspath(path.dirname(__file__))
+    with open(path.join(this_directory, 'DESCRIPTION.rst'), encoding='utf-8') as f:
+        long_description = f.read()
+
     setup(
         name = 'M-LOOP',
         version = ml.__version__,
@@ -37,6 +42,7 @@ def main():
         author = 'Michael R Hush',
         author_email = 'MichaelRHush@gmail.com',
         description = 'M-LOOP: Machine-learning online optimization package. A python package of automated optimization tools - enhanced with machine-learning - for quantum scientific experiments, computer controlled systems or other optimization tasks.',
+        long_description = long_description,
         license = 'MIT',
         keywords = 'automated machine learning optimization optimisation science experiment quantum',
         url = 'https://github.com/michaelhush/M-LOOP/', 
