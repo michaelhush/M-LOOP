@@ -10,9 +10,12 @@ from setuptools import setup, find_packages
 from os import path
 
 def main():
-    this_directory = path.abspath(path.dirname(__file__))
-    with open(path.join(this_directory, 'DESCRIPTION.rst'), encoding='utf-8') as f:
-        long_description = f.read()
+    long_description = ''
+    here = path.abspath(path.dirname(__file__))
+    description_path = path.join(here, 'DESCRIPTION.rst')
+    if path.exists(description_path):
+        with open(description_path, 'rb') as stream:
+            long_description = stream.read().decode('utf8')
 
     setup(
         name = 'M-LOOP',
@@ -46,7 +49,7 @@ def main():
         license = 'MIT',
         keywords = 'automated machine learning optimization optimisation science experiment quantum',
         url = 'https://github.com/michaelhush/M-LOOP/', 
-        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/3.2.0',
+        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/3.2.1',
     
         classifiers = ['Development Status :: 2 - Pre-Alpha',
                       'Intended Audience :: Science/Research',
