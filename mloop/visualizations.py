@@ -851,18 +851,26 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
 
     def return_cross_sections(self, points=100, cross_section_center=None):
         '''
-        Finds the predicted global minima, then returns a list of vectors of parameters values, costs and uncertainties, corresponding to the 1D cross sections along each parameter axis through the predicted global minima.
+        Generate 1D cross sections along each parameter axis.
+
+        The cross sections are returned as a list of vectors of parameters
+        values, costs, and uncertainties, corresponding to the 1D cross sections
+        along each parameter axis. The cross sections pass through
+        `cross_section_center`, which will default to the parameters that gave
+        the best measured cost.
 
         Keyword Args:
             points (int): the number of points to sample along each cross section. Default value is 100.
-            cross_section_center (array): parameter array where the centre of the cross section should be taken. If None, the parameters for the best returned cost are used.
+            cross_section_center (array): parameter array where the centre of
+                the cross section should be taken. If None, the parameters for
+                the best measured cost are used. Default `None`.
 
         Returns:
             a tuple (cross_arrays, cost_arrays, uncer_arrays)
             cross_parameter_arrays (list): a list of arrays for each cross section, with the values of the varied parameter going from the minimum to maximum value.
-            cost_arrays (list): a list of arrays for the costs evaluated along each cross section about the minimum.
+            cost_arrays (list): a list of arrays for the costs evaluated along
+                each cross section through `cross_section_center`.
             uncertainty_arrays (list): a list of uncertainties
-
         '''
         points = int(points)
         if points <= 0:
@@ -961,6 +969,30 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
     def plot_cross_sections(self, parameter_subset=None):
         '''
         Produce a figure of the cross section about best cost and parameters.
+
+        This method will produce plots showing cross sections of the predicted
+        cost landscape along each parameter axis through the point in parameter
+        space which gave the best measured cost. In other words, one parameter
+        will be varied from its minimum allowed value to its maximum allowed
+        value with the other parameters fixed at the values that they had in the
+        set of parameters that gave the best measured cost. At each point the
+        predicted cost will be plotted. That process will be repeated for each
+        parameter in `parameter_subset`. The x axes will be scaled to the range
+        0 to 1, corresponding to the minimum and maximum bound respectively for
+        each parameter, so that curves from different cross sections can be
+        overlaid nicely.
+
+        The expected value of the cost will be plotted as a solid line.
+        Additionally, dashed lines representing the 1-sigma uncertainty in the
+        predicted cost will be plotted as well. This uncertainty includes
+        contributions from the uncertainty in the model due to taking only a
+        finite number of observations. Additionally, if `cost_has_noise` was set
+        to `True` then the fitted noise level will be added in quadrature with
+        the model uncertainty. Note that as more data points are taken the
+        uncertainty in the model generally decreases, but the predicted noise
+        level will typically converge to a nonzero value. That implies that the
+        predicted cost uncertainty generally won't tend towards zero if
+        `cost_has_noise` is set to `True`, even if many observations are made.
 
         Args:
             parameter_subset (list-like): The indices of parameters to plot. The
@@ -1299,18 +1331,26 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
 
     def return_cross_sections(self, points=100, cross_section_center=None):
         '''
-        Finds the predicted global minima, then returns a list of vectors of parameters values, costs and uncertainties, corresponding to the 1D cross sections along each parameter axis through the predicted global minima.
+        Generate 1D cross sections along each parameter axis.
+
+        The cross sections are returned as a list of vectors of parameters
+        values and costs, corresponding to the 1D cross sections along each
+        parameter axis. The cross sections pass through `cross_section_center`,
+        which will default to the parameters that gave the best measured cost.
+        One such pair of list of parameter vectors and corresponding predicted
+        costs are returned for each net.
 
         Keyword Args:
             points (int): the number of points to sample along each cross section. Default value is 100.
-            cross_section_center (array): parameter array where the centre of the cross section should be taken. If None, the parameters for the best returned cost are used.
+            cross_section_center (array): parameter array where the centre of
+                the cross section should be taken. If None, the parameters for
+                the best measured cost are used. Default `None`.
 
         Returns:
-            a tuple (cross_arrays, cost_arrays, uncer_arrays)
+            a list of tuple (cross_arrays, cost_arrays), one tuple for each net.
             cross_parameter_arrays (list): a list of arrays for each cross section, with the values of the varied parameter going from the minimum to maximum value.
-            cost_arrays (list): a list of arrays for the costs evaluated along each cross section about the minimum.
-            uncertainty_arrays (list): a list of uncertainties
-
+            cost_arrays (list): a list of arrays for the costs evaluated along
+                each cross section through `cross_section_center`.
         '''
         points = int(points)
         if points <= 0:
@@ -1346,7 +1386,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                           plot_individual_cross_sections=True):
         '''
         Produce figures of the cross section about best cost and parameters.
-        
+
         This method will produce plots showing cross sections of the predicted
         cost landscape along each parameter axis through the point in parameter
         space which gave the best measured cost. In other words, one parameter
@@ -1358,7 +1398,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         0 to 1, corresponding to the minimum and maximum bound respectively for
         each parameter, so that curves from different cross sections can be
         overlaid nicely.
-        
+
         One plot will be created which includes a solid line that shows the mean
         of the cost landscapes predicted by each net, as well as two dashed
         lines showing the minimum and maximum of the costs predicted by the
