@@ -1342,9 +1342,29 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
     def _ensure_parameter_subset_valid(self, parameter_subset):
         _ensure_parameter_subset_valid(self, parameter_subset)
 
-    def do_cross_sections(self, parameter_subset=None):
+    def do_cross_sections(self, parameter_subset=None,
+                          plot_individual_cross_sections=True):
         '''
-        Produce a figure of the cross section about best cost and parameters.
+        Produce figures of the cross section about best cost and parameters.
+        
+        This method will produce plots showing cross sections of the predicted
+        cost landscape along each parameter axis through the point in parameter
+        space which gave the best measured cost. In other words, one parameter
+        will be varied from its minimum allowed value to its maximum allowed
+        value with the other parameters fixed at the values that they had in the
+        set of parameters that gave the best measured cost. At each point the
+        predicted cost will be plotted. That process will be repeated for each
+        parameter in `parameter_subset`. The x axes will be scaled to the range
+        0 to 1, corresponding to the minimum and maximum bound respectively for
+        each parameter, so that curves from different cross sections can be
+        overlaid nicely.
+        
+        One plot will be created which includes a solid line that shows the mean
+        of the cost landscapes predicted by each net, as well as two dashed
+        lines showing the minimum and maximum of the costs predicted by the
+        nets for those parameter values. If `plot_individual_cross_sections` is
+        set to `True` then additional plots will be created, one for each net,
+        which show each net's predicted cost landscape cross sections.
 
         Args:
             parameter_subset (list-like): The indices of parameters to plot. The
@@ -1353,6 +1373,11 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 parameter_subset should be between 0 and the number of
                 parameters minus one, inclusively. If set to `None`, then all
                 parameters will be plotted. Default None.
+            plot_individual_cross_sections (bool): Whether or not to create
+                extra plots to show each net's predicted cross sections in its
+                own figure. The plot of the average/min/max of the different
+                nets' predicted cross sections in one figure will be generated
+                regardless of this setting. Default `True`.
         '''
         # Get default value for parameter_subset if necessary.
         if parameter_subset is None:
@@ -1374,34 +1399,35 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         points = 100
         rel_params = np.linspace(0,1,points)
         all_cost_arrays = [a for _,a in self.return_cross_sections(points=points)]
-        for net_index, cost_arrays in enumerate(all_cost_arrays):
-            def prepare_plot():
-                global figure_counter
-                figure_counter += 1
-                fig = plt.figure(figure_counter)
-                axes = plt.gca()
-                for ind in range(num_params):
-                    param_index = parameter_subset[ind]
-                    color = param_colors[ind]
-                    axes.plot(rel_params,cost_arrays[param_index,:],'-',color=color,label=str(param_index))
-                if self.has_trust_region:
-                    ymin, ymax = axes.get_ylim()
-                    ytrust = ymin + 0.1*(ymax - ymin)
+        if plot_individual_cross_sections:
+            for net_index, cost_arrays in enumerate(all_cost_arrays):
+                def prepare_plot():
+                    global figure_counter
+                    figure_counter += 1
+                    fig = plt.figure(figure_counter)
+                    axes = plt.gca()
                     for ind in range(num_params):
                         param_index = parameter_subset[ind]
                         color = param_colors[ind]
-                        axes.plot([self.scaled_trust_min[param_index],self.scaled_trust_max[param_index]],[ytrust,ytrust],'s', color=color)
-                axes.set_xlabel(scale_param_label)
-                axes.set_xlim((0,1))
-                axes.set_ylabel(cost_label)
-                axes.set_title('NN Learner: Predicted landscape' + (' with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
-                return fig
-            prepare_plot()
-            artists = []
-            for ind in range(num_params):
-                color = param_colors[ind]
-                artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
-            plt.legend(artists, legend_labels ,loc=legend_loc)
+                        axes.plot(rel_params,cost_arrays[param_index,:],'-',color=color,label=str(param_index))
+                    if self.has_trust_region:
+                        ymin, ymax = axes.get_ylim()
+                        ytrust = ymin + 0.1*(ymax - ymin)
+                        for ind in range(num_params):
+                            param_index = parameter_subset[ind]
+                            color = param_colors[ind]
+                            axes.plot([self.scaled_trust_min[param_index],self.scaled_trust_max[param_index]],[ytrust,ytrust],'s', color=color)
+                    axes.set_xlabel(scale_param_label)
+                    axes.set_xlim((0,1))
+                    axes.set_ylabel(cost_label)
+                    axes.set_title('NN Learner: Predicted landscape' + (' with trust regions.' if self.has_trust_region else '.') + ' (' + str(net_index) + ')')
+                    return fig
+                prepare_plot()
+                artists = []
+                for ind in range(num_params):
+                    color = param_colors[ind]
+                    artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
+                plt.legend(artists, legend_labels ,loc=legend_loc)
         if self.num_nets > 1:
             # And now create a plot showing the average, max and min for each cross section.
             def prepare_plot():
@@ -1425,6 +1451,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 axes.set_title('NN Learner: Average predicted landscape')
                 return fig
             prepare_plot()
+            artists = []
             for ind in range(num_params):
                 color = param_colors[ind]
                 artists.append(plt.Line2D((0,1),(0,0), color=color, linestyle='-'))
