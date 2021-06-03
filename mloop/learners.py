@@ -904,6 +904,8 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         self.population_age = []
         self.min_index = 0
 
+        # TODO: right now only one first params is accepted, but should
+        # be able to give as many as desired.
         if np.all(np.isfinite(self.first_params)) and self.first_sample:
             curr_params = self.first_params
             self.first_sample = False
