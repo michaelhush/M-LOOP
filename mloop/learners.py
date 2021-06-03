@@ -946,19 +946,22 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         Evolve the population by a single generation
         '''
 
-        # re-evaulate all agents that are older than self.lifetime
-        if self.lifetime > 0:
-            for index in range(self.num_population_members):
-                if self.population_age[index] > self.lifetime:
-                    self.population_costs[index] = self.put_params_and_get_cost(self.population[index])
-                    self.population_age[index] = 0
-                
-
         self.curr_scale = nr.uniform(self.mutation_scale[0], self.mutation_scale[1])
+
+        # re-evaulate all agents that are older than self.lifetime
+        # and generate candidate parameters
+        candidates = []
+        for index in range(self.num_population_members):
+                
+            if self.lifetime > 0 and self.population_age[index] > self.lifetime:
+                self.population_costs[index] = self.put_params_and_get_cost(self.population[index])
+                self.population_age[index] = 0
+                
+            candidates.append(self.mutation_func(index))
 
         for index in range(self.num_population_members):
 
-            curr_params = self.mutate(index)
+            curr_params = self.mutate(index, candidates[index])
 
             curr_cost = self.put_params_and_get_cost(curr_params)
 
@@ -973,7 +976,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         self.save_generation()
 
-    def mutate(self, index):
+    def mutate(self, index, candidate_params):
         '''
         Mutate the parameters at index.
 
@@ -982,7 +985,6 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
 
         fill_point = nr.randint(0, self.num_params)
-        candidate_params = self.mutation_func(index)
         crossovers = nr.rand(self.num_params) < self.cross_over_probability
         crossovers[fill_point] = True
         mutated_params = np.where(crossovers, candidate_params, self.population[index])
