@@ -959,6 +959,8 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                 
             candidates.append(self.mutation_func(index))
 
+        self.min_index = np.argmin(self.population_costs)
+
         for index in range(self.num_population_members):
 
             curr_params = self.mutate(index, candidates[index])
@@ -968,9 +970,8 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             if curr_cost < self.population_costs[index]:
                 self.population[index] = curr_params
                 self.population_costs[index] = curr_cost
-
-                if curr_cost < self.population_costs[self.min_index]:
-                    self.min_index = index
+        
+        self.min_index = np.argmin(self.population_costs)
 
         self.curr_std = np.std(self.population_costs)
 
