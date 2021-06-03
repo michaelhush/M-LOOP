@@ -8,6 +8,7 @@ __metaclass__ = type
 
 import threading
 import numpy as np
+import math
 import random
 import numpy.random as nr
 import scipy.optimize as so
@@ -759,6 +760,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best2', 'rand1' and 'rand2'. The default is 'best1'.
         population_size (Optional [int]): multiplier proportional to the number of parameters in a generation. The generation population is set to population_size * parameter_num. Default 15.
         mutation_scale (Optional [tuple]): The mutation scale when picking new points. Otherwise known as differential weight. When provided as a tuple (min,max) a mutation constant is picked randomly in the interval. Default (0.5,1.0).
+        elite  (Optional [float]): When selecting random agents only select from the fraction of the best agents given by elite.
         cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
         restart_tolerance (Optional [float]): when the current population have a spread less than the initial tolerance, namely stdev(curr_pop) < restart_tolerance stdev(init_pop), it is likely the population is now in a minima, and so the search is started again.
         lifetime (Optional [int]): re-evaluate each agent after a number of iterations given by lifetime.  This avoids drifts present in physical hardware.  lifetime <= 0 indicates infinite lifetime which is the standard DE method.
@@ -778,6 +780,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                  evolution_strategy='best1',
                  population_size=15,
                  mutation_scale=(0.5, 1),
+                 elite=1.0,
                  cross_over_probability=0.7,
                  restart_tolerance=0.01,
                  lifetime=0,
@@ -833,6 +836,12 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             self.population_size = population_size
         else:
             self.log.error('Population size must be greater or equal to 5:' + repr(population_size))
+
+        if elite < 0 or elite > 1:
+            self.log.error('Elite must be between 0 and 1:' + repr(elite))
+        else:
+            self.elite = elite
+
 
         self.num_population_members = self.population_size * self.num_params
 
@@ -1031,15 +1040,27 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
     def random_index_sample(self, index, num_picks):
         '''
-        Randomly select a num_picks of indexes, without index.
+        Randomly select a num_picks of indexes, without index, from 
+        a subset of all cases given by self.elite, where 1 selects from
+        all and 0 gives the num_picks best
 
         Args:
             index(int): The index that is not included
             num_picks(int): The number of picks.
         '''
-        rand_indexes = list(range(self.num_population_members))
-        rand_indexes.remove(index)
-        return random.sample(rand_indexes, num_picks)
+        
+        # Begin by removing self
+        rand_costs = self.population_costs.copy()
+        rand_costs.remove(index)
+        
+        # now remove a fraction given by elite
+        num = math.ceil(self.num_population_members*self.elite)
+        if num < num_picks: num = num_picks
+        
+        locations = np.argsort(rand_costs)
+        locations = locations[:num]
+        
+        return random.sample(locations, num_picks)
 
     def update_archive(self):
         '''
