@@ -761,7 +761,8 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         mutation_scale (Optional [tuple]): The mutation scale when picking new points. Otherwise known as differential weight. When provided as a tuple (min,max) a mutation constant is picked randomly in the interval. Default (0.5,1.0).
         cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
         restart_tolerance (Optional [float]): when the current population have a spread less than the initial tolerance, namely stdev(curr_pop) < restart_tolerance stdev(init_pop), it is likely the population is now in a minima, and so the search is started again.
-
+        lifetime (Optional [int]): re-evaluate each agent after a number of iterations given by lifetime.  This avoids drifts present in physical hardware.  lifetime <= 0 indicates infinite lifetime which is the standard DE method.
+            
     Attributes:
         has_trust_region (bool): Whether the learner has a trust region.
         num_population_members (int): The number of parameters in a generation.
@@ -779,6 +780,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                  mutation_scale=(0.5, 1),
                  cross_over_probability=0.7,
                  restart_tolerance=0.01,
+                 lifetime=0,
                  **kwargs):
 
         super(DifferentialEvolutionLearner,self).__init__(**kwargs)
@@ -811,6 +813,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             self.log.error(msg)
             raise ValueError(msg)
 
+        self.lifetime = lifetime
         self.evolution_strategy = evolution_strategy
         self.restart_tolerance = restart_tolerance
 
@@ -850,6 +853,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                                   'population_size':self.population_size,
                                   'num_population_members':self.num_population_members,
                                   'restart_tolerance':self.restart_tolerance,
+                                  'lifetime':self.lifetime,
                                   'first_params':self.first_params,
                                   'has_trust_region':self.has_trust_region,
                                   'trust_region':self.trust_region})
@@ -888,6 +892,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         self.population = []
         self.population_costs = []
+        self.population_age = []
         self.min_index = 0
 
         if np.all(np.isfinite(self.first_params)) and self.first_sample:
@@ -900,6 +905,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         self.population.append(curr_params)
         self.population_costs.append(curr_cost)
+        self.population_age.append(0)
 
         for index in range(1, self.num_population_members):
 
@@ -930,6 +936,14 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
         Evolve the population by a single generation
         '''
+
+        # re-evaulate all agents that are older than self.lifetime
+        if self.lifetime > 0:
+            for index in range(self.num_population_members):
+                if self.population_age[index] > self.lifetime:
+                    self.population_costs[index] = self.put_params_and_get_cost(self.population[index])
+                    self.population_age[index] = 0
+                
 
         self.curr_scale = nr.uniform(self.mutation_scale[0], self.mutation_scale[1])
 
@@ -1037,6 +1051,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             'costs_generations':self.costs_generations,
             'population':self.population,
             'population_costs':self.population_costs,
+            'population_age':self.population_age,
             'init_std':self.init_std,
             'curr_std':self.curr_std,
             'generation_count':self.generation_count,
@@ -1875,7 +1890,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         # Ensure that all of the limits are positive numbers.
         if not np.all(bounds > 0):
             msg = ('Noise level bounds must all be positive numbers: ' +
-                   repr(msg))
+                   repr(bounds))
             self.log.error(msg)
             raise ValueError(msg)
         # Ensure that the dimensions are correct.
