@@ -131,6 +131,7 @@ class Learner():
             raise ValueError(msg)
         if learner_archive_filename is None:
             self.learner_archive_filename = None
+            self.learner_archive_dir = None
         else:
             # Store self.learner_archive_filename without any path, but include
             # any path components in learner_archive_filename when constructing

@@ -804,6 +804,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
                                                         gp_training_file_type = file_type,
                                                         gp_training_override_kwargs=True,
                                                         update_hyperparameters = False,
+                                                        learner_archive_filename=None,
                                                         **kwargs)
 
         self.log = logging.getLogger(__name__)
@@ -1254,6 +1255,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         super(NeuralNetVisualizer, self).__init__(nn_training_filename = filename,
                                                   nn_training_file_type = file_type,
                                                   update_hyperparameters = False,
+                                                  learner_archive_filename=None,
                                                   **kwargs)
 
         self.log = logging.getLogger(__name__)
