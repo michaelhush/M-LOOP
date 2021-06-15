@@ -1063,7 +1063,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
         
         # Begin by removing self
-        rand_costs = self.population_costs.copy()
+        rand_costs = list(self.population_costs)
         rand_costs.remove(index)
         
         # now remove a fraction given by elite
