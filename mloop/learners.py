@@ -764,6 +764,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         elite  (Optional [float]): When selecting random agents only select from the fraction of the best agents given by elite.
         cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
         restart_tolerance (Optional [float]): when the current population have a spread less than the initial tolerance, namely stdev(curr_pop) < restart_tolerance stdev(init_pop), it is likely the population is now in a minima, and so the search is started again.
+        restart_to_best (Optional [bool]): upon restart use the current best params rather than first_params.
         lifetime (Optional [int]): re-evaluate each agent after a number of iterations given by lifetime.  This avoids drifts present in physical hardware.  lifetime <= 0 indicates infinite lifetime which is the standard DE method.
             
     Attributes:
@@ -784,6 +785,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                  elite=1.0,
                  cross_over_probability=0.7,
                  restart_tolerance=0.01,
+                 restart_to_best=False,
                  lifetime=0,
                  **kwargs):
 
@@ -820,6 +822,8 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         self.lifetime = lifetime
         self.evolution_strategy = evolution_strategy
         self.restart_tolerance = restart_tolerance
+        self.restart_to_best = bool(restart_to_best)
+            
 
         if len(mutation_scale) == 2 and (np.any(np.array(mutation_scale) <= 2) or np.any(np.array(mutation_scale) > 0)):
             self.mutation_scale = mutation_scale
@@ -846,8 +850,6 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         self.num_population_members = self.population_size * self.num_params
 
-        self.first_sample = True
-
         self.params_generations = []
         self.costs_generations = []
         self.generation_count = 0
@@ -863,6 +865,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                                   'population_size':self.population_size,
                                   'num_population_members':self.num_population_members,
                                   'restart_tolerance':self.restart_tolerance,
+                                  'restart_to_best':self.restart_to_best,
                                   'lifetime':self.lifetime,
                                   'first_params':self.first_params,
                                   'has_trust_region':self.has_trust_region,
@@ -875,14 +878,17 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
         try:
 
-            self.generate_population()
+            self.generate_population(first_params=self.first_params)
 
             while not self.end_event.is_set():
 
                 self.next_generation()
 
                 if self.curr_std < self.restart_tolerance * self.init_std:
-                    self.generate_population()
+                    if self.restart_to_best:
+                        self.generate_population(first_params=self.population[self.min_index])
+                    else:
+                        self.generate_population()
 
         except LearnerInterrupt:
             return
@@ -895,7 +901,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         self.costs_generations.append(np.copy(self.population_costs))
         self.generation_count += 1
 
-    def generate_population(self):
+    def generate_population(self, first_params=[np.inf]):
         '''
         Sample a new random set of variables
         '''
@@ -907,9 +913,8 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         # TODO: right now only one first params is accepted, but should
         # be able to give as many as desired.
-        if np.all(np.isfinite(self.first_params)) and self.first_sample:
-            curr_params = self.first_params
-            self.first_sample = False
+        if np.all(np.isfinite(first_params)):
+            curr_params = first_params
         else:
             curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
 
