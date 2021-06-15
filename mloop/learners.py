@@ -1064,16 +1064,19 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         
         # Begin by removing self
         rand_costs = list(self.population_costs)
+        rand_indexes = list(range(self.num_population_members))
         rand_costs.remove(index)
+        rand_indexes.remove(index)
+
+        locations = np.argsort(rand_costs)
+        rand_indexes = rand_indexes[locations] # indices sorted by increasing cost
         
         # now remove a fraction given by elite
         num = math.ceil(self.num_population_members*self.elite)
         if num < num_picks: num = num_picks
         
-        locations = np.argsort(rand_costs)
-        locations = locations[:num]
         
-        return random.sample(locations, num_picks)
+        return random.sample(rand_indexes[:num], num_picks)
 
     def update_archive(self):
         '''
