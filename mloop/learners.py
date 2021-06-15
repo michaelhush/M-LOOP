@@ -1067,13 +1067,9 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             num_picks(int): The number of picks.
         '''
         
-        # Begin by removing self (I think there is some numpy magic that can give a view with one element removed)
-        rand_costs = list(self.population_costs)
-        rand_indexes = list(range(self.num_population_members))
-        rand_costs.remove(index)
-        rand_indexes.remove(index)
-        rand_costs = np.array(rand_costs)
-        rand_indexes = np.array(rand_indexes)
+        # Begin by removing index from list of costs and indices
+        rand_costs = np.delete(self.population_costs, index) # np.delete returns a copy
+        rand_indexes = np.delete(np.arange(self.num_population_members), index)
 
         locations = np.argsort(rand_costs)
         rand_indexes = rand_indexes[locations] # indices sorted by increasing cost
