@@ -932,12 +932,15 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
             self.population.append(curr_params)
             self.population_costs.append(curr_cost)
+            self.population_age.append(0)
+
 
             if curr_cost < self.population_costs[self.min_index]:
                 self.min_index = index
 
         self.population = np.array(self.population)
         self.population_costs = np.array(self.population_costs)
+        self.population_age = np.array(self.population_age)
 
         self.init_std = np.std(self.population_costs)
         self.curr_std = self.init_std
@@ -973,6 +976,10 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             if curr_cost < self.population_costs[index]:
                 self.population[index] = curr_params
                 self.population_costs[index] = curr_cost
+                self.population_age[index] = 0
+            else:
+                self.population_age[index] += 1
+
         
         self.min_index = np.argmin(self.population_costs)
 
