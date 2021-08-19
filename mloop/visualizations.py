@@ -141,8 +141,7 @@ def show_all_default_visualizations_from_archive(controller_filename,
             learner visualizer's __init__() method. If set to None, no
             additional keyword arguments will be passed. Default None.
     '''
-    # Issue DeprecationWarning about controller_type if the user provided a
-    # value for it.
+    # Issue warning about controller_type if the user provided a value for it.
     if controller_type is not None:
         warnings.warn(
             ("The controller_type argument is now deprecated and has no "
@@ -200,8 +199,7 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
         visualizer: An instance of the appropriate visualizer class for plotting
             data from filename.
     '''
-    # Issue DeprecationWarning about controller_type if the user provided a
-    # value for it.
+    # Issue warning about controller_type if the user provided a value for it.
     if controller_type is not None:
         warnings.warn(
             ("The controller_type argument is now deprecated and has no "
