@@ -115,11 +115,10 @@ def show_all_default_visualizations_from_archive(controller_filename,
             archive.
 
     Keyword Args:
-        controller_type (str): The value of controller_type type used in the
-            optimization corresponding to the learner learner archive, e.g.
-            'gaussian_process', 'neural_net', or 'differential_evolution'. If
-            set to None then controller_type will be determined automatically.
-            Default None.
+        controller_type (NoneType): This argument is now deprecated and has no
+            effect. Do not provide a value for controller_type; it will be
+            removed in a future version of M-LOOP. If set to anything other than
+            None, a warning will be issued. Default None.
         show_plots (bool): Determine whether to run plt.show() at the end or
             not. For debugging. Default True.
         max_parameters_per_plot (Optional [int]): The maximum number of
@@ -142,6 +141,14 @@ def show_all_default_visualizations_from_archive(controller_filename,
             learner visualizer's __init__() method. If set to None, no
             additional keyword arguments will be passed. Default None.
     '''
+    # Issue warning about controller_type if the user provided a value for it.
+    if controller_type is not None:
+        warnings.warn(
+            ("The controller_type argument is now deprecated and has no "
+             "effect. It will be removed in a future version of M-LOOP. Do not "
+             "provide a value for controller_type.")
+        )
+
     # Set default value for controller_visualization_kwargs if necessary.
     if controller_visualization_kwargs is None:
         controller_visualization_kwargs = {}
@@ -181,11 +188,10 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
         filename (String): Filename of the learner archive.
 
     Keyword Args:
-        controller_type (String): The type of controller used during the
-            optimization that created the provided learner archive. Options
-            include 'gaussian_process', 'neural_net', and
-            'differential_evolution'. If set to None, then controller_type will
-            be determined automatically from the archive. Default None.
+        controller_type (NoneType): This argument is now deprecated and has no
+            effect. Do not provide a value for controller_type; it will be
+            removed in a future version of M-LOOP. If set to anything other than
+            None, a warning will be issued. Default None.
         **kwargs: Additional keyword arguments are passed to the visualizer's
             __init__() method.
 
@@ -193,9 +199,16 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
         visualizer: An instance of the appropriate visualizer class for plotting
             data from filename.
     '''
-    # Automatically determine controller_type if necessary.
-    if controller_type is None:
-        controller_type = mlu.get_controller_type_from_learner_archive(filename)
+    # Issue warning about controller_type if the user provided a value for it.
+    if controller_type is not None:
+        warnings.warn(
+            ("The controller_type argument is now deprecated and has no "
+             "effect. It will be removed in a future version of M-LOOP. Do not "
+             "provide a value for controller_type.")
+        )
+
+    # Automatically determine controller_type.
+    controller_type = mlu.get_controller_type_from_learner_archive(filename)
 
     # Create an instance of the appropriate visualizer class for the archive.
     log = logging.getLogger(__name__)
