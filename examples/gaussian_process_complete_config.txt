@@ -31,6 +31,5 @@ training_type = 'random'               #training type can be random, differentia
 first_params = [1.9, -1.0]             #first parameters to try in initial training
 gp_training_filename = None            #filename for training from previous experiment
 gp_training_file_type = 'pkl'          #training data file type
-gp_training_override_kwargs = False    #whether to override user-supplied keyword options with values set in training archive.
 
 #if you use nelder_mead for the initial training source see the CompleteNelderMeadConfig.txt for options. 

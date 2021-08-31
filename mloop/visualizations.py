@@ -815,7 +815,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
 
         super(GaussianProcessVisualizer, self).__init__(gp_training_filename = filename,
                                                         gp_training_file_type = file_type,
-                                                        gp_training_override_kwargs=True,
                                                         update_hyperparameters = False,
                                                         learner_archive_filename=None,
                                                         **kwargs)
