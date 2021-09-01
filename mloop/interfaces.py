@@ -232,21 +232,33 @@ class ShellInterface(Interface):
     Interface for running programs from the shell.
     
     Args:
-        params_out_queue (queue): Queue for parameters to next be run by experiment.
-        costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
+        params_out_queue (queue): Queue for parameters to next be run by
+            experiment.
+        costs_in_queue (queue): Queue for costs (and other details) that have
+            been returned by experiment.
         
     Keyword Args:
-        command (Optional [string]): The command used to run the experiment. Default './run_exp'
-        params_args_type (Optional [string]): The style used to pass parameters. Can be 'direct' or 'named'. If 'direct' it is assumed the parameters are fed directly to the program. For example if I wanted to run the parameters [7,5,9] with the command './run_exp' I would use the syntax::
+        command (Optional [string]): The command used to run the experiment.
+            Default `'./run_exp'`.
+        params_args_type (Optional [string]): The style used to pass parameters.
+            Can be 'direct' or 'named'. If 'direct' it is assumed the parameters
+            are fed directly to the program. For example if I wanted to run the
+            parameters [7,5,9] with the command './run_exp' I would use the
+            syntax::
             
                 ./run_exp 7 5 9
             
-            'named' on the other hand requires an option for each parameter. The options should be name --param1, --param2 etc. The same example as before would be ::
+            'named' on the other hand requires an option for each parameter. The
+            options should be name --param1, --param2 etc (unless `param_names`
+            is specified, see below)). The same example as before would be ::
         
                 ./run_exp --param1 7 --param2 5 --param3 9
             
             Default 'direct'.
-        param_names (Optional [string]): List of names for parameters to be passed as options to the shell command, replacing --param1, --param2, etc. Default None
+        param_names (Optional [string]): List of names for parameters to be
+            passed as options to the shell command, replacing `--param1`,
+            `--param2`, etc. If set to `None` then the default parameter names
+            will be used. Default `None`.
     '''
     
     def __init__(self,
@@ -284,7 +296,8 @@ class ShellInterface(Interface):
         if param_names == None:
             param_names = []
             for ind,p in enumerate(params):
-                self.param_names.append('param' + str(ind+1))
+                param_names.append('param' + str(ind+1))
+            self.param_names = param_names
                 
         curr_command = self.command
         
