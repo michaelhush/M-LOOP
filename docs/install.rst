@@ -42,10 +42,10 @@ M-LOOP can be installed from the latest source code with three commands::
 
    git clone git://github.com/michaelhush/M-LOOP.git
    cd ./M-LOOP
-   python setup.py develop
+   pip install -e .
 
 The first command downloads the latest source code for M-LOOP from GitHub into the current directory, the second moves into the M-LOOP source directory, and the third command builds the package and creates a link from you python package to the source.
-If you are using linux or MacOS you may need admin privileges to run the setup script.
+If you are using linux or MacOS you may need admin privileges to run the installation step.
 
 At any time you can update M-LOOP to the latest version from GitHub by running the command::
 
@@ -70,9 +70,9 @@ If you are using linux or MacOS you may need admin privileges to run the command
 Testing
 =======
 
-If you have installed from source, you can test your installation with the command::
+If you have installed from source, you can test your installation by running the command::
 
-   python setup.py test
+   pytest
    
 In the M-LOOP source code directory. The tests should take around five minutes to complete. If you find a error please consider :ref:`sec-contributing` to the project and report a bug on the `GitHub <https://github.com/michaelhush/M-LOOP>`_.
 
