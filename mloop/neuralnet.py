@@ -10,7 +10,6 @@ import numpy as np
 import numpy.random as nr
 import sklearn.preprocessing as skp
 import tensorflow as tf
-tf.compat.v1.disable_eager_execution()
 
 class SingleNeuralNet():
     '''
@@ -202,7 +201,8 @@ class SingleNeuralNet():
         for dirname in search_dirs:
             try:
                 full_path = os.path.join(dirname, filename)
-                self.saver.restore(self.tf_session, full_path)
+                with self.graph.as_default():
+                    self.saver.restore(self.tf_session, full_path)
                 return
             except ValueError:
                 pass
@@ -217,7 +217,8 @@ class SingleNeuralNet():
         '''
         Exports the net to an archive dictionary.
         '''
-        path = self.saver.save(self.tf_session, self.save_archive_filename)
+        with self.graph.as_default():
+            path = self.saver.save(self.tf_session, self.save_archive_filename)
         self.log.info("Saving neural network to: " + path)
         return {'saver_path': path}
 
