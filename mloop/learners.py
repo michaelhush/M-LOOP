@@ -2092,7 +2092,12 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                 self.predicted_best_scaled_cost = curr_best_cost
                 self.predicted_best_scaled_uncertainty = curr_best_uncer
 
-        self.predicted_best_cost = self.cost_scaler.inverse_transform(self.predicted_best_scaled_cost)
+        # Convert 1-element 1D arrays to/from 2D for scikit-learn >=1.0
+        # compatability.
+        predicted_best_cost = self.cost_scaler.inverse_transform(
+            self.predicted_best_scaled_cost.reshape(1, -1)  # 2D array.
+        )
+        self.predicted_best_cost = predicted_best_cost.reshape(1)  # 1D array.
         self.predicted_best_uncertainty = self.predicted_best_scaled_uncertainty * self.cost_scaler.scale_
 
         self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
@@ -2441,7 +2446,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                 self.predicted_best_parameters = curr_best_params
                 self.predicted_best_scaled_cost = curr_best_cost
 
-        self.predicted_best_cost = float(self.cost_scaler.inverse_transform([self.predicted_best_scaled_cost]))
+        self.predicted_best_cost = float(self.cost_scaler.inverse_transform([[self.predicted_best_scaled_cost]]))
         self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
                                   'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
                                   'predicted_best_cost':self.predicted_best_cost})
