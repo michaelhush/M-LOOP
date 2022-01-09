@@ -241,7 +241,7 @@ class SingleNeuralNet():
             params (array): array of parameter arrays
             costs (array): array of costs (associated with the corresponding parameters)
         '''
-        self.log.info('Fitting neural network')
+        self.log.debug('Fitting neural network')
         if len(params) == 0:
             self.log.error('No data provided.')
             raise ValueError
@@ -281,7 +281,7 @@ class SingleNeuralNet():
                 if i % 10 == 0:
                     (l, ul, lr) = self._loss(params, costs)
                     self.losses_list.append(l)
-                    self.log.info(
+                    self.log.debug(
                         ("Fit neural network with total training cost {l}, "
                          "with unregularized cost {ul} and regularization cost "
                          "{lr}").format(l=l, ul=ul, lr=lr)
