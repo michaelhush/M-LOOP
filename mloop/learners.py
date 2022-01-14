@@ -2325,6 +2325,29 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
         return self.neural_net[net_index].predict_cost_gradient(params).astype(np.float64)
 
+    def predict_cost_minimize(self,params,net_index=None):
+        '''
+        Produces a prediction of cost from the neural net at params.
+
+        Returns:
+            float : Predicted cost at paramters
+        '''
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
+        return self.neural_net[net_index].predict_cost_minimize(params)
+
+    def predict_cost_gradient_minimize(self,params,net_index=None):
+        '''
+        Produces a prediction of the gradient of the cost function at params.
+
+        Returns:
+            float : Predicted gradient at paramters
+        '''
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
+        # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
+        return self.neural_net[net_index].predict_cost_gradient_minimize(params).astype(np.float64)
+
 
     def predict_costs_from_param_array(self,params,net_index=None):
         '''
@@ -2364,14 +2387,18 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         next_params = None
         next_cost = float('inf')
         self.neural_net[net_index].start_opt()
+        net_scaler = self.neural_net[0]._param_scaler
         for start_params in self.search_params:
-            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
-                                 x0 = start_params,
-                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
-                                 bounds = self.search_region,
+            scaled_start_parameters = net_scaler.transform([start_params])
+            scaled_search_region = net_scaler.transform(np.array(self.search_region).T).T
+
+            result = so.minimize(fun = lambda x: self.predict_cost_minimize(x, net_index),
+                                 x0 = scaled_start_parameters,
+                                 jac = lambda x: self.predict_cost_gradient_minimize(x, net_index),
+                                 bounds = scaled_search_region,
                                  tol = self.search_precision)
             if result.fun < next_cost:
-                next_params = result.x
+                next_params = net_scaler.inverse_transform([result.x])[0]
                 next_cost = result.fun
         self.neural_net[net_index].stop_opt()
         self.log.debug("Suggesting params " + str(next_params) + " with predicted cost: "
@@ -2464,13 +2491,20 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             search_params.append(self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary)
 
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
+        net_scaler = self.neural_net[0]._param_scaler
         for start_params in search_params:
-            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
-                                 x0 = start_params,
-                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
-                                 bounds = search_bounds,
+
+            scaled_start_parameters = net_scaler.transform([start_params])
+            scaled_search_region = net_scaler.transform(np.array(search_bounds).T).T
+
+            result = so.minimize(fun = lambda x: self.predict_cost_minimize(x, net_index),
+                                 x0 = scaled_start_parameters,
+                                 jac = lambda x: self.predict_cost_gradient_minimize(x, net_index),
+                                 bounds = scaled_search_region,
                                  tol = self.search_precision)
-            curr_best_params = result.x
+
+
+            curr_best_params = net_scaler.inverse_transform([result.x])[0]
             curr_best_cost = result.fun
             if curr_best_cost<self.predicted_best_scaled_cost:
                 self.predicted_best_parameters = curr_best_params
