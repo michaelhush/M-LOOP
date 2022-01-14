@@ -1659,6 +1659,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             fitted to data and used to make predictions
         cost_scaler (StandardScaler): Scaler used to normalize the provided
             costs.
+        params_scaler (StandardScaler): Scaler used to normalize the provided
+            parameters.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
     _ARCHIVE_TYPE = 'gaussian_process_learner'
@@ -1797,6 +1799,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.gaussian_process = None
 
         self.cost_scaler = skp.StandardScaler()
+        self.params_scaler = None
 
         # Update archive.
         new_values_dict = {
@@ -1812,6 +1815,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             'generation_num': self.generation_num,
             'update_hyperparameters': self.update_hyperparameters,
             'hyperparameter_searches': self.hyperparameter_searches,
+            'scaler_samples': None,
         }
         self.archive_dict.update(new_values_dict)
 
@@ -1924,6 +1928,19 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         }
         self.archive_dict.update(new_values_dict)
 
+    def _init_params_scaler(self, scaler_samples=None):
+        """
+        Initialize the parameter scaling using the values in scaler_samples
+        """
+
+        if scaler_samples is None:
+            scaler_samples = self.all_params
+            self.archive_dict.update({'scaler_samples':self.all_params})
+
+        if self.params_scaler is None:
+            self.params_scaler = skp.StandardScaler(with_mean=True, with_std=True)
+            self.params_scaler.fit(scaler_samples)
+
     def fit_gaussian_process(self):
         '''
         Fit the Gaussian process to the current data
@@ -1936,6 +1953,10 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
         cost_scaling_factor = float(self.cost_scaler.scale_)
         self.scaled_uncers = self.all_uncers / cost_scaling_factor
+
+
+        self._init_params_scaler()
+        self.scaled_params = self.params_scaler.transform(self.all_params)
         if self.cost_has_noise:
             # Ensure compatability with archives from M-LOOP versions <= 3.1.1.
             if self._scale_deprecated_noise_levels:
@@ -1956,7 +1977,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             self.scaled_noise_level_bounds = self.noise_level_bounds / cost_scaling_factor**2
 
         self.create_gaussian_process()
-        self.gaussian_process.fit(self.all_params,self.scaled_costs)
+        self.gaussian_process.fit(self.scaled_params,self.scaled_costs)
 
         if self.update_hyperparameters:
 
@@ -2008,11 +2029,16 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         next_params = None
         next_cost = float('inf')
         for start_params in self.search_params:
-            result = so.minimize(self.predict_biased_cost, start_params, bounds = self.search_region, tol=self.search_precision)
+            scaled_start_parameters = self.params_scaler.transform([start_params])
+            scaled_search_region = self.params_scaler.transform(np.array(self.search_region).T)
+            result = so.minimize(self.predict_biased_cost, scaled_start_parameters, 
+                                 bounds=scaled_search_region.T, tol=self.search_precision)
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
-        return next_params
+
+        new_parameters = self.params_scaler.inverse_transform([next_params])[0]
+        return new_parameters
 
     def run(self):
         '''
@@ -2060,7 +2086,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         Returns:
             float : Predicted cost at paramters
         '''
-        return self.gaussian_process.predict(params[np.newaxis,:])
+        predicted_cost = self.gaussian_process.predict(self.params_scaler.transform(params[np.newaxis,:]))
+        return predicted_cost
 
     def find_global_minima(self):
         '''
@@ -2084,8 +2111,11 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         for start_params in search_params:
-            result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
-            curr_best_params = result.x
+            scaled_start_parameters = self.params_scaler.transform([start_params])
+            scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T)
+            result = so.minimize(self.predict_biased_cost, scaled_start_parameters, 
+                                 bounds=scaled_search_region.T, tol=self.search_precision)
+            curr_best_params = self.params_scaler.inverse_transform([result.x])[0]
             (curr_best_cost,curr_best_uncer) = self.gaussian_process.predict(curr_best_params[np.newaxis,:],return_std=True)
             if curr_best_cost<self.predicted_best_scaled_cost:
                 self.predicted_best_parameters = curr_best_params

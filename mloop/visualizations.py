@@ -906,7 +906,10 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         for ind in range(self.num_params):
             sample_parameters = np.array([cross_section_center for _ in range(points)])
             sample_parameters[:, ind] = cross_parameter_arrays[ind]
-            (costs, uncers) = self.gaussian_process.predict(sample_parameters,return_std=True)
+            if self.params_scaler is not None:
+                scaled_sample_parameters = self.params_scaler.transform(sample_parameters)
+
+            (costs, uncers) = self.gaussian_process.predict(scaled_sample_parameters,return_std=True)
             scaled_cost_arrays.append(costs)
             scaled_uncertainty_arrays.append(uncers)
         cross_parameter_arrays = np.array(cross_parameter_arrays)
