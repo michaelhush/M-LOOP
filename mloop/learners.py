@@ -1930,7 +1930,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
     def _update_params_scaler(self, scaler_samples=None):
         """
-        Initialize the parameter scaling using the values in scaler_samples
+        Initialize or update the parameter scaling. This is called every fit
         """
 
         self.params_scaler = skp.StandardScaler(with_mean=True, with_std=True)
@@ -2003,7 +2003,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
     def predict_biased_cost_unscaled(self,params):
         '''
         Predicts the biased cost at the given parameters. The bias function is:
-            biased_cost = cost_bias*pred_cost - uncer_bias*pred_uncer
+            biased_cost = cost_bias*pred_cost - uncer_bias*pred_uncer. No scaling
+            is done in this function. It is assumed the params input are already scaled
 
         Returns:
             pred_bias_cost (float): Biased cost predicted at the given parameters
@@ -2023,7 +2024,13 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
-        for start_params in self.search_params:
+        for start_params in self.search_params: 
+            # Scale the params and bounds before putting into the minimize function
+            # Otherwise, it may break
+            # We do the scaling *before* putting them in, so the predict cost/gradient method
+            # we use here does not scale the inputs inside the function 
+            
+
             scaled_start_parameters = self.params_scaler.transform([start_params])
             scaled_search_region = self.params_scaler.transform(np.array(self.search_region).T)
             result = so.minimize(self.predict_biased_cost_unscaled, scaled_start_parameters, 
@@ -2106,6 +2113,11 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         for start_params in search_params:
+            # Scale the params and bounds before putting into the minimize function
+            # Otherwise, it may break
+            # We do the scaling *before* putting them in, so the predict cost/gradient method
+            # we use here does not scale the inputs inside the function 
+
             scaled_start_parameters = self.params_scaler.transform([start_params])
             scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T)
             result = so.minimize(self.predict_biased_cost_unscaled, scaled_start_parameters, 
@@ -2323,25 +2335,26 @@ class NeuralNetLearner(MachineLearner, mp.Process):
     def predict_cost_unscaled(self,params,net_index=None):
         '''
         Produces a prediction of cost from the neural net at params.
+        Same a predict cost, but without the scaling
 
         Returns:
             float : Predicted cost at paramters
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-        return self.neural_net[net_index].predict_cost_minimize(params)
+        return self.neural_net[net_index].predict_cost_unscaled(params)
 
     def predict_cost_gradient_unscaled(self,params,net_index=None):
         '''
         Produces a prediction of the gradient of the cost function at params.
-
+        Same as predict gradient, but without the scaling
         Returns:
             float : Predicted gradient at paramters
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net[net_index].predict_cost_gradient_minimize(params).astype(np.float64)
+        return self.neural_net[net_index].predict_cost_gradient_unscaled(params).astype(np.float64)
 
 
     def predict_costs_from_param_array(self,params,net_index=None):
@@ -2384,6 +2397,11 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         self.neural_net[net_index].start_opt()
         net_scaler = self.neural_net[net_index]._param_scaler
         for start_params in self.search_params:
+
+            # Scale the params and bounds before putting into the minimize function
+            # Otherwise, it may break
+            # We do the scaling *before* putting them in, so the predict cost/gradient method
+            # we use here does not scale the inputs inside the function 
             scaled_start_parameters = net_scaler.transform([start_params])
             scaled_search_region = net_scaler.transform(np.array(self.search_region).T).T
 
@@ -2488,7 +2506,11 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         net_scaler = self.neural_net[net_index]._param_scaler
         for start_params in search_params:
-
+            
+            # Scale the params and bounds before putting into the minimize function
+            # Otherwise, it may break
+            # We do the scaling *before* putting them in, so the predict cost/gradient method
+            # we use here does not scale the inputs inside the function 
             scaled_start_parameters = net_scaler.transform([start_params])
             scaled_search_region = net_scaler.transform(np.array(search_bounds).T).T
 
