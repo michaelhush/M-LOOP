@@ -1934,7 +1934,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         """
 
         self.params_scaler = skp.StandardScaler(with_mean=True, with_std=True)
-        self.params_scaler.fit(scaler_samples)
+        self.params_scaler.fit(self.all_params)
 
     def fit_gaussian_process(self):
         '''
