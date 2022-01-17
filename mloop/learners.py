@@ -1927,10 +1927,12 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         }
         self.archive_dict.update(new_values_dict)
 
-    def _update_params_scaler(self):
-        """
-        Initialize or update the parameter scaling. This is called every fit
-        """
+    def _update_params_scaler(self, scaler_samples=None):
+        '''
+        Initialize or update the parameter scaling.
+        
+        This method is called every fit.
+        '''
 
         self.params_scaler = skp.StandardScaler(with_mean=True, with_std=True)
         self.params_scaler.fit(self.all_params)
