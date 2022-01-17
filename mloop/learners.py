@@ -2001,9 +2001,13 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
     def predict_biased_cost_unscaled(self,params):
         '''
-        Predicts the biased cost at the given parameters. The bias function is:
-            biased_cost = cost_bias*pred_cost - uncer_bias*pred_uncer. No scaling
-            is done in this function. It is assumed the params input are already scaled
+        Predict the biased cost at the given parameters.
+        
+        The bias function is:
+            biased_cost = cost_bias*pred_cost - uncer_bias*pred_uncer
+            
+        No scaling is done in this function. It is assumed the params input are
+        already scaled.
 
         Returns:
             pred_bias_cost (float): Biased cost predicted at the given parameters
