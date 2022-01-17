@@ -1815,7 +1815,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             'generation_num': self.generation_num,
             'update_hyperparameters': self.update_hyperparameters,
             'hyperparameter_searches': self.hyperparameter_searches,
-            'scaler_samples': None,
         }
         self.archive_dict.update(new_values_dict)
 
@@ -1928,7 +1927,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         }
         self.archive_dict.update(new_values_dict)
 
-    def _update_params_scaler(self, scaler_samples=None):
+    def _update_params_scaler(self):
         """
         Initialize or update the parameter scaling. This is called every fit
         """
