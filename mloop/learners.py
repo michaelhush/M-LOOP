@@ -2004,7 +2004,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         Predict the biased cost at the given parameters.
         
         The bias function is:
-            biased_cost = cost_bias*pred_cost - uncer_bias*pred_uncer
+            `biased_cost = cost_bias*pred_cost - uncer_bias*pred_uncer`
             
         No scaling is done in this function. It is assumed the params input are
         already scaled.
