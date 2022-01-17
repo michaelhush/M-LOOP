@@ -2027,7 +2027,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.update_search_params()
         next_params = None
         next_cost = float('inf')
-        for start_params in self.search_params: 
+        for start_params in self.search_params:
             # Scale the params and bounds before putting into the minimize function
             # Otherwise, it may break
             # We do the scaling *before* putting them in, so the predict cost/gradient method
