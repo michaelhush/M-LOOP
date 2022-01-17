@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import scipy.io as si
+import sklearn.preprocessing as skp
 import pickle
 import logging
 import datetime
@@ -470,6 +471,25 @@ class NullQueueListener():
         '''
         pass
 
+class ParameterScaler(skp.MinMaxScaler):
+    def __init__(self, min_boundary, max_boundary, *args, **kwargs):
+        '''
+        Class to scale the parameters of the gaussian process. 
+        All parameters are mapped (by default) between [0, 1] using min and max boundaries
+        '''
+        if len(min_boundary) != len(max_boundary):
+            raise("The minimum and maximum boundary arrays must have the same lengths")
+
+        self.min_boundary = min_boundary
+        self.max_boundary = max_boundary
+        return super().__init__(*args, **kwargs)
+
+    def partial_fit(self, X=None, *args, **kwargs):
+        '''
+        Teach the scaler that we want to scale things based on the minimum and maximum boundaries
+        '''
+        X = [self.min_boundary, self.max_boundary]  # Maybe need transpose of this.
+        return super().partial_fit(X,*args, **kwargs)
 
 
     

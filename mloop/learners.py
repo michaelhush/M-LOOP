@@ -16,7 +16,6 @@ import datetime
 import os
 import mloop.utilities as mlu
 import multiprocessing as mp
-
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
@@ -1799,7 +1798,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.gaussian_process = None
 
         self.cost_scaler = skp.StandardScaler()
-        self.params_scaler = None
+        self.params_scaler = mlu.ParameterScaler(self.min_boundary, self.max_boundary)
+        # fit the scaler to the min/max boundaries
+        self.params_scaler.partial_fit()
 
         # Update archive.
         new_values_dict = {
@@ -1927,14 +1928,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         }
         self.archive_dict.update(new_values_dict)
 
-    def _update_params_scaler(self):
-        '''
-        Initialize or update the parameter scaling. This is called every fit
-        '''
-
-        self.params_scaler = skp.StandardScaler(with_mean=True, with_std=True)
-        self.params_scaler.fit(self.all_params)
-
     def fit_gaussian_process(self):
         '''
         Fit the Gaussian process to the current data
@@ -1948,8 +1941,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         cost_scaling_factor = float(self.cost_scaler.scale_)
         self.scaled_uncers = self.all_uncers / cost_scaling_factor
 
-
-        self._update_params_scaler()
         self.scaled_params = self.params_scaler.transform(self.all_params)
         if self.cost_has_noise:
             # Ensure compatability with archives from M-LOOP versions <= 3.1.1.
