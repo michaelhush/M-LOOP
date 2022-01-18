@@ -1990,7 +1990,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.cost_bias = self.bias_func_cost_factor[self.params_count%self.bias_func_cycle]
         self.uncer_bias = self.bias_func_uncer_factor[self.params_count%self.bias_func_cycle]
 
-    def predict_biased_cost_unscaled(self,scaled_params):
+    def predict_biased_cost(self,scaled_params):
         '''
         Predict the biased cost at the given parameters.
         
@@ -2027,7 +2027,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
             scaled_start_parameters = self.params_scaler.transform([start_params])
             scaled_search_region = self.params_scaler.transform(np.array(self.search_region).T)
-            result = so.minimize(self.predict_biased_cost_unscaled, scaled_start_parameters, 
+            result = so.minimize(self.predict_biased_cost, scaled_start_parameters, 
                                  bounds=scaled_search_region.T, tol=self.search_precision)
             if result.fun < next_cost:
                 next_params = result.x
@@ -2114,7 +2114,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
             scaled_start_parameters = self.params_scaler.transform([start_params])
             scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T)
-            result = so.minimize(self.predict_biased_cost_unscaled, scaled_start_parameters, 
+            result = so.minimize(self.predict_biased_cost, scaled_start_parameters, 
                                  bounds=scaled_search_region.T, tol=self.search_precision)
             curr_best_params = self.params_scaler.inverse_transform([result.x])[0]
             (curr_best_cost,curr_best_uncer) = self.gaussian_process.predict(curr_best_params[np.newaxis,:],return_std=True)
@@ -2326,7 +2326,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
         return self.neural_net[net_index].predict_cost_gradient(params).astype(np.float64)
 
-    def predict_cost_unscaled(self,scaled_params,net_index=None):
+    def predict_cost(self,scaled_params,net_index=None):
         '''
         Produces a prediction of cost from the neural net at params.
         Same a predict cost, but without the scaling
@@ -2336,9 +2336,9 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-        return self.neural_net[net_index].predict_cost_unscaled(scaled_params)
+        return self.neural_net[net_index].predict_cost(scaled_params)
 
-    def predict_cost_gradient_unscaled(self,scaled_params,net_index=None):
+    def predict_cost_gradient(self,scaled_params,net_index=None):
         '''
         Produces a prediction of the gradient of the cost function at params.
         Same as predict gradient, but without the scaling
@@ -2348,7 +2348,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         if net_index is None:
             net_index = nr.randint(self.num_nets)
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net[net_index].predict_cost_gradient_unscaled(scaled_params).astype(np.float64)
+        return self.neural_net[net_index].predict_cost_gradient(scaled_params).astype(np.float64)
 
 
     def predict_costs_from_param_array(self,params,net_index=None):
@@ -2399,9 +2399,9 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             scaled_start_parameters = net_scaler.transform([start_params])
             scaled_search_region = net_scaler.transform(np.array(self.search_region).T).T
 
-            result = so.minimize(fun = lambda x: self.predict_cost_unscaled(x, net_index),
+            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
                                  x0 = scaled_start_parameters,
-                                 jac = lambda x: self.predict_cost_gradient_unscaled(x, net_index),
+                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
                                  bounds = scaled_search_region,
                                  tol = self.search_precision)
             if result.fun < next_cost:
@@ -2508,9 +2508,9 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             scaled_start_parameters = net_scaler.transform([start_params])
             scaled_search_region = net_scaler.transform(np.array(search_bounds).T).T
 
-            result = so.minimize(fun = lambda x: self.predict_cost_unscaled(x, net_index),
+            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
                                  x0 = scaled_start_parameters,
-                                 jac = lambda x: self.predict_cost_gradient_unscaled(x, net_index),
+                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
                                  bounds = scaled_search_region,
                                  tol = self.search_precision)
 
