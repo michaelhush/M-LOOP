@@ -2027,9 +2027,10 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             
 
             scaled_start_parameters = self.params_scaler.transform([start_params])
-            scaled_search_region = self.params_scaler.transform(np.array(self.search_region).T)
+            scaled_search_region = self.params_scaler.transform(np.array(self.search_region).T).T
+            
             result = so.minimize(self.predict_biased_cost, scaled_start_parameters, 
-                                 bounds=scaled_search_region.T, tol=self.search_precision)
+                                 bounds=scaled_search_region, tol=self.search_precision)
             if result.fun < next_cost:
                 next_params = result.x
                 next_cost = result.fun
