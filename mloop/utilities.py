@@ -472,11 +472,24 @@ class NullQueueListener():
         pass
 
 class ParameterScaler(skp.MinMaxScaler):
+    '''
+    Class for scaling parameters based on their min/max value constraints.
+
+    All parameters are mapped (by default) between [0, 1] by linearly rescaling them,
+    In particular the minimum value for a parameter is mapped to 0 and the maximum
+    value is mapped to 1.
+
+    This class inherits from scikit-learn's `MinMaxScaler`. The primary difference is that
+    values are scaled by the minimum and maximum values set by the user, rather
+    than the minimum and maximum values actually used in a dataset.
+
+    Args:
+        min_boundary (np.array): The minimum values allowed for each parameter.
+        max_boundary (np.array): The maximum values allowed for each parameter.
+        *args: Additional arguments are passed to `MinMaxScaler.__init__()`.
+        **kwargs: Arbitrary keyword arguments are passed to `MinMaxScaler.__init__()`.
+    '''
     def __init__(self, min_boundary, max_boundary, *args, **kwargs):
-        '''
-        Class to scale the parameters of the gaussian process. 
-        All parameters are mapped (by default) between [0, 1] using min and max boundaries
-        '''
         if len(min_boundary) != len(max_boundary):
             raise ValueError(
                 "The minimum and maximum boundary arrays must have the same lengths but "
