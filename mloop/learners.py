@@ -2115,9 +2115,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             # we use here does not scale the inputs inside the function 
 
             scaled_start_parameters = self.params_scaler.transform([start_params])
-            scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T)
+            scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T).T
             result = so.minimize(self.predict_biased_cost, scaled_start_parameters, 
-                                 bounds=scaled_search_region.T, tol=self.search_precision)
+                                 bounds=scaled_search_region, tol=self.search_precision)
             curr_best_params = self.params_scaler.inverse_transform([result.x])[0]
             (curr_best_cost,curr_best_uncer) = self.gaussian_process.predict(curr_best_params[np.newaxis,:],return_std=True)
             if curr_best_cost<self.predicted_best_scaled_cost:
