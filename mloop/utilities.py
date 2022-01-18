@@ -505,7 +505,7 @@ class ParameterScaler(skp.MinMaxScaler):
         '''
         Teach the scaler that we want to scale things based on the minimum and maximum boundaries
         '''
-        X = [self.min_boundary, self.max_boundary]  # Maybe need transpose of this.
+        X = [self.min_boundary, self.max_boundary]
         return super().partial_fit(X,*args, **kwargs)
 
 
