@@ -478,7 +478,11 @@ class ParameterScaler(skp.MinMaxScaler):
         All parameters are mapped (by default) between [0, 1] using min and max boundaries
         '''
         if len(min_boundary) != len(max_boundary):
-            raise("The minimum and maximum boundary arrays must have the same lengths")
+            raise ValueError(
+                "The minimum and maximum boundary arrays must have the same lengths but "
+                f"min_boundary had length {len(min_boundary)} while max_boundary had length "
+                f" {len(max_boundary)}."
+            )
 
         self.min_boundary = min_boundary
         self.max_boundary = max_boundary
