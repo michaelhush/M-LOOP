@@ -763,27 +763,27 @@ class NeuralNet():
         '''
         return self._unscale_gradient(self.net.predict_cost_gradient(self._scale_params(params)))
 
-    def predict_cost_unscaled(self,params):
+    def predict_cost_minimization(self,scaled_params):
         '''
         Produces a prediction of cost from the neural net at params.
-
+        Used when the params input are prescaled
         Must not be called before fit_neural_net().
 
         Returns:
             float : Predicted cost at parameters
         '''
-        return self.net.predict_cost(params)
+        return self.net.predict_cost(scaled_params)
 
-    def predict_cost_gradient_unscaled(self,params):
+    def predict_cost_gradient_minimization(self,scaled_params):
         '''
         Produces a prediction of the gradient of the cost function at params.
-
+        Used when the params input are prescaled
         Must not be called before fit_neural_net().
 
         Returns:
             float : Predicted gradient at parameters
         '''
-        return self.net.predict_cost_gradient(params)
+        return self.net.predict_cost_gradient(scaled_params)
 
     def start_opt(self):
         '''

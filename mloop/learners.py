@@ -1763,8 +1763,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         else:
             self.noise_level = float(noise_level)
         self.update_hyperparameters = bool(update_hyperparameters)
+        # Make the length scale bounds default on the order of our scaled parameters (order ~1)
         if length_scale_bounds is None:
-            self.length_scale_bounds = np.array([1e-5, 1e5])
+            self.length_scale_bounds = np.array([1e-3, 1e1])
         else:
             self.length_scale_bounds = mlu.safe_cast_to_array(length_scale_bounds)
         if noise_level_bounds is None:
@@ -2326,29 +2327,29 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
         return self.neural_net[net_index].predict_cost_gradient(params).astype(np.float64)
 
-    def predict_cost(self,scaled_params,net_index=None):
+    def predict_cost_minimization(self,scaled_params,net_index=None):
         '''
-        Produces a prediction of cost from the neural net at params.
-        Same a predict cost, but without the scaling
+        Produces a prediction of the cost of the cost function at params, used in so.minimize.
+        Same as predict cost, but without the scaling of the input parameters
 
         Returns:
             float : Predicted cost at paramters
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-        return self.neural_net[net_index].predict_cost(scaled_params)
+        return self.neural_net[net_index].predict_cost_minimization(scaled_params)
 
-    def predict_cost_gradient(self,scaled_params,net_index=None):
+    def predict_cost_gradient_minimization(self,scaled_params,net_index=None):
         '''
-        Produces a prediction of the gradient of the cost function at params.
-        Same as predict gradient, but without the scaling
+        Produces a prediction of the gradient of the cost function at params, used in so.minimize.
+        Same as predict gradient, but without the scaling of the input parameters
         Returns:
             float : Predicted gradient at paramters
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
         # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net[net_index].predict_cost_gradient(scaled_params).astype(np.float64)
+        return self.neural_net[net_index].predict_cost_gradient_minimization(scaled_params).astype(np.float64)
 
 
     def predict_costs_from_param_array(self,params,net_index=None):
@@ -2399,9 +2400,9 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             scaled_start_parameters = net_scaler.transform([start_params])
             scaled_search_region = net_scaler.transform(np.array(self.search_region).T).T
 
-            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
+            result = so.minimize(fun = lambda x: self.predict_cost_minimization(x, net_index),
                                  x0 = scaled_start_parameters,
-                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
+                                 jac = lambda x: self.predict_cost_gradient_minimization(x, net_index),
                                  bounds = scaled_search_region,
                                  tol = self.search_precision)
             if result.fun < next_cost:
@@ -2508,9 +2509,9 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             scaled_start_parameters = net_scaler.transform([start_params])
             scaled_search_region = net_scaler.transform(np.array(search_bounds).T).T
 
-            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
+            result = so.minimize(fun = lambda x: self.predict_cost_minimization(x, net_index),
                                  x0 = scaled_start_parameters,
-                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
+                                 jac = lambda x: self.predict_cost_gradient_minimization(x, net_index),
                                  bounds = scaled_search_region,
                                  tol = self.search_precision)
 
