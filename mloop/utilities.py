@@ -50,6 +50,7 @@ def config_logger(**kwargs):
 def _config_logger(log_filename = default_log_filename,
                   file_log_level=logging.DEBUG,
                   console_log_level=logging.INFO,
+                  start_datetime=None,
                   **kwargs):
     '''
     Configure and the root logger.
@@ -58,6 +59,11 @@ def _config_logger(log_filename = default_log_filename,
         log_filename (Optional [string]) : Filename prefix for log. Default M-LOOP run . If None, no file handler is created
         file_log_level (Optional[int]) : Level of log output for file, default is logging.DEBUG = 10
         console_log_level (Optional[int]) :Level of log output for console, default is logging.INFO = 20
+        start_datetime (Optional datetime.datetime): The date and time to use in
+            the filename suffix, represented as an instance of the datetime
+            class defined in the datetime module. If set to None, then this
+            function will use the result returned by datetime.datetime.now().
+            Default None.
     
     Returns:
         dictionary: Dict with extra keywords not used by the logging configuration.
@@ -67,7 +73,7 @@ def _config_logger(log_filename = default_log_filename,
     if len(log.handlers) == 0:
         log.setLevel(min(file_log_level,console_log_level))
         if log_filename is not None:
-            filename_suffix = generate_filename_suffix('log')
+            filename_suffix = generate_filename_suffix('log', start_datetime)
             full_filename = log_filename + filename_suffix
             filename_with_path = os.path.join(log_foldername, full_filename)
             # Create folder if it doesn't exist, accounting for any parts of the

@@ -126,7 +126,7 @@ class Controller():
                  **kwargs):
 
         #Make logger
-        self.remaining_kwargs = mlu._config_logger(**kwargs)
+        self.remaining_kwargs = mlu._config_logger(start_datetime=start_datetime, **kwargs)
         self.log = logging.getLogger(__name__)
 
         #Variable that are included in archive
@@ -177,9 +177,14 @@ class Controller():
 
         #Other options
         if start_datetime is None:
-            self.start_datetime = datetime.datetime.now()
+            start_datetime = datetime.datetime.now()
+        if isinstance(start_datetime, datetime.datetime):
+            self.start_datetime = start_datetime
         else:
-            self.start_datetime = datetime.datetime(start_datetime)
+            raise ValueError(
+                "start_datetime must be of type datetime.datetime but was "
+                f"{start_datetime} (type: {type(start_datetime)})."
+            )
         self.max_num_runs = float(max_num_runs)
         if self.max_num_runs<=0:
             self.log.error('Number of runs must be greater than zero. max_num_runs:'+repr(self.max_num_run))
