@@ -126,7 +126,7 @@ class Controller():
                  **kwargs):
 
         #Make logger
-        self.remaining_kwargs = mlu._config_logger(**kwargs)
+        self.remaining_kwargs = mlu._config_logger(start_datetime=start_datetime, **kwargs)
         self.log = logging.getLogger(__name__)
 
         #Variable that are included in archive
