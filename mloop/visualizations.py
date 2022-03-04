@@ -830,11 +830,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         #Trust region
         self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(training_dict['trust_region'], dtype=float))
-        # Try to extract options not present in archives from M-LOOP <= 3.1.1
-        if 'length_scale_bounds' in training_dict:
-            self.length_scale_bounds = mlu.safe_cast_to_array(training_dict['length_scale_bounds'])
-        if 'noise_level_bounds' in training_dict:
-            self.noise_level_bounds = mlu.safe_cast_to_array(training_dict['noise_level_bounds'])
 
         self.fit_gaussian_process()
 

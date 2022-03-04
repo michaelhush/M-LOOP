@@ -1559,7 +1559,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             `None` but `gp_training_filename` does not specify a learner archive
             from a Guassian process optimization, then it is assumed that all of
             the length scales should be independent and they are all given an
-            initial value of `1`. Default `None`.
+            initial value of equal to one tenth of their allowed range. Default
+            `None`.
         length_scale_bounds (Optional [array]): The limits on the fitted length
             scale values, specified as a single pair of numbers e.g.
             `[min, max]`, or a list of pairs of numbers, e.g.
@@ -1569,8 +1570,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             one pair of `[min, max]` can be provided for each length scale. For
             example, possible valid values include `[1e-5, 1e5]` and
             `[[1e-2, 1e2], [5, 5], [1.6e-4, 1e3]]` for optimizations with three
-            parameters. If set to `None`, the value `[1e-5, 1e5]` will be used.
-            Default `None`.
+            parameters. If set to `None`, then the length scale will be bounded
+            to be between `0.001` and `10` times the allowed range for each
+            parameter.
         update_hyperparameters (Optional [bool]): Whether the length scales and
             noise estimate should be updated when new data is provided. Default
             `True`.
@@ -1663,6 +1665,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         has_trust_region (bool): Whether the learner has a trust region.
     '''
     _ARCHIVE_TYPE = 'gaussian_process_learner'
+    _DEFAULT_SCALED_LENGTH_SCALE = 1e-1
+    _DEFAULT_SCALED_LENGTH_SCALE_BOUNDS = np.array([1e-3, 1e1])
 
     def __init__(self,
                  length_scale = None,
@@ -1717,9 +1721,24 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
             # Fit parameters that can be overriden by user keyword options.
             if length_scale is None:
-                length_scale = mlu.safe_cast_to_array(training_dict['length_scale'])
+                length_scale = mlu.safe_cast_to_array(
+                    training_dict['length_scale'],
+                )
             if noise_level is None:
                 noise_level = float(training_dict['noise_level'])
+            # The options below are not present in archives from M-LOOP <= 3.1.1
+            # so they need an extra check to see if there are values available
+            # for them.
+            if length_scale_bounds is None:
+                if 'length_scale_bounds' in training_dict:
+                    length_scale_bounds = mlu.safe_cast_to_array(
+                        training_dict['length_scale_bounds'],
+                    )
+            if noise_level_bounds is None:
+                if 'noise_level_bounds' in training_dict:
+                    noise_level_bounds = mlu.safe_cast_to_array(
+                        training_dict['noise_level_bounds'],
+                    )
         else:
             # Storage variables, archived
             self.length_scale_history = []
@@ -1748,12 +1767,30 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         #Constants, limits and tolerances
         self.hyperparameter_searches = max(10,self.num_params)
 
-        #Optional user set variables
+        # Scalers for the costs and parameter values.
+        self.cost_scaler = skp.StandardScaler()
+        self.params_scaler = mlu.ParameterScaler(
+            self.min_boundary,
+            self.max_boundary,
+        )
+        # Fit the scaler to the min/max boundaries.
+        self.params_scaler.partial_fit()
+
+        # Optional user set variables
         self.cost_has_noise = bool(cost_has_noise)
+        self.update_hyperparameters = bool(update_hyperparameters)
+        # Length scale.
         if length_scale is None:
-            self.length_scale = np.ones((self.num_params,))
+            self.scaled_length_scale = self._DEFAULT_SCALED_LENGTH_SCALE
+            self.length_scale = self._inverse_transform_length_scales(
+                self.scaled_length_scale,
+            )
         else:
             self.length_scale = np.array(length_scale, dtype=float)
+            self.scaled_length_scale = self._transform_length_scales(
+                self.length_scale,
+            )
+        # Noise level.
         if noise_level is None:
             # Temporarily change to NaN to mark that the default value
             # should be calcualted once training data is available. Using
@@ -1762,12 +1799,20 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             self.noise_level = float('nan')
         else:
             self.noise_level = float(noise_level)
-        self.update_hyperparameters = bool(update_hyperparameters)
-        # Make the length scale bounds default on the order of our scaled parameters (order ~1)
+        # Length scale bounds.
         if length_scale_bounds is None:
-            self.length_scale_bounds = np.array([1e-3, 1e1])
+            self.scaled_length_scale_bounds = self._DEFAULT_SCALED_LENGTH_SCALE_BOUNDS
+            self.length_scale_bounds = self._inverse_transform_length_scale_bounds(
+                self.scaled_length_scale_bounds,
+            )
         else:
-            self.length_scale_bounds = mlu.safe_cast_to_array(length_scale_bounds)
+            self.length_scale_bounds = mlu.safe_cast_to_array(
+                length_scale_bounds,
+            )
+            self.scaled_length_scale_bounds = self._transform_length_scale_bounds(
+                self.length_scale_bounds,
+            )
+        # Noise level bounds.
         if noise_level_bounds is None:
             self.noise_level_bounds = float('nan')
         else:
@@ -1798,11 +1843,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         self.gaussian_process = None
 
-        self.cost_scaler = skp.StandardScaler()
-        self.params_scaler = mlu.ParameterScaler(self.min_boundary, self.max_boundary)
-        # fit the scaler to the min/max boundaries
-        self.params_scaler.partial_fit()
-
         # Update archive.
         new_values_dict = {
             'archive_type': self._ARCHIVE_TYPE,
@@ -1822,6 +1862,193 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
+
+    def _transform_length_scales(self, length_scales):
+        '''
+        Transform length scales to scaled units.
+
+        This method uses `self.params_scaler` to transform length scales into
+        scaled units. Notably length scales should be scaled, but not offset,
+        when they are transformed. For this reason, they should not simply be
+        passed through `self.params_scaler.transform()` and instead should be
+        passed through this method.
+        
+        An inverse of this method is available:
+        `self._inverse_transform_length_scales()`.
+
+        Args:
+            length_scales (float or array): Length scale(s) for the Gaussian
+                process which should be transformed into scaled units. Can be
+                either a single float or a 1D array of length `self.num_params`.
+
+        Returns:
+            scaled_length_scales (array): The length scales in scaled units.
+                Note that this will be a 1D array even if `length_scales` was a
+                single float.
+        '''
+        # scale_factors is a 1D array with length equal to the number of
+        # parameters.
+        scale_factors = self.params_scaler.scale_
+        scaled_length_scales = scale_factors * length_scales
+        return scaled_length_scales
+
+    def _transform_length_scale_bounds(self, length_scale_bounds):
+        '''
+        Transform length scale bounds to scaled units.
+
+        This method functions similarly to `self.transform_length_scales()`,
+        except that it transforms the bounds for the length scales. The same
+        scaling used for the length scales themselves is applied here to the
+        lower and upper bounds.
+        
+        The output array will have a separate scaled min/max value pair for each
+        parameter length scale. In other words, the output will be an array with
+        two columns (one for min values and one for max values) and one row for
+        each parameter length scale. This will be the case even if
+        `length_scale_bounds` consists of a single min/max value pair because
+        the scalings are generally different for different parameters,
+        
+        A near-inverse of this method is available:
+        `self._inverse_transform_length_scale_bounds()`. It isn't exactly an
+        inverse function though because the returned array may have a different
+        dimension than it began with. In particular if a single min/max value
+        pair is passed to this method, then the result is passed to
+        `self._inverse_transform_length_scale_bounds()`, then an array with a
+        separate min/max value for each parameter length scale will be returned
+        instead of a single min/max pair (although all of the pairs will have
+        the same values).
+
+        Args:
+            length_scale_bounds (array): The bounds of the length scale in
+                unscaled units. This can either be (a) a 1D array with two
+                entries of the form `[min, max]` or (b) a 2D array with two
+                columns (min and max values respectively) and one row for each
+                parameter length scale.
+
+        Raises:
+            ValueError: A `ValueError` is raised if `length_scale_bounds` does
+                not have an acceptable shape. The allowed shapes are `(2,)` and
+                `(self.num_params, 2)`.
+
+        Returns:
+            scaled_length_scale_bounds (array): The length scale bounds in
+                scaled units. This will always be a 2D array of shape
+                `(self.num_params, 2)`.
+        '''
+        if  length_scale_bounds.shape == (2,):
+            # In this case, length_scale_bounds is just one pair of min and max
+            # values which should be applied to every parameter length scale.
+            min_, max_ = length_scale_bounds
+            lower_bounds = np.full(self.num_params, min_)
+            upper_bounds = np.full(self.num_params, max_)
+        elif length_scale_bounds.shape == (self.num_params, 2):
+            # In this case there is a separate min/max bound for each parameter
+            # length scale.
+            lower_bounds = length_scale_bounds[:, 0]
+            upper_bounds = length_scale_bounds[:, 1]
+        else:
+            # In this case, length_scale_bounds has an invalid shape.
+            msg = (
+                f"length_scale_bounds should either be a 1D array with two "
+                f"values or a 2D array with two columns and one row for each "
+                f"parameter ({self.num_params} here) but was "
+                f"{length_scale_bounds} (shape {length_scale_bounds.shape})."
+            )
+            self.log.error(msg)
+            raise ValueError(msg)
+        
+        # Use self._transform_length_scales() to transform the limits.
+        scaled_lower_bounds = self._transform_length_scales(lower_bounds)
+        scaled_upper_bounds = self._transform_length_scales(upper_bounds)
+        scaled_length_scale_bounds = np.transpose(
+            [scaled_lower_bounds, scaled_upper_bounds],
+        )
+        
+        return scaled_length_scale_bounds
+
+    def _inverse_transform_length_scales(self, scaled_length_scales):
+        '''
+        Transform scaled length scales into real/unscaled units.
+
+        This method is the inverse of `self._transform_length_scales()`. See
+        that method's docstring for more information.
+
+        Args:
+            scaled_length_scales (array): The Gaussian process length scale(s)
+                in scaled units. Can be either a single float or a 1D array of
+                length `self.num_params`.
+
+        Returns:
+            length_scales (array): The length scales in real units. Note that
+                this will be a 1D array even if `scaled_length_scales` was a
+                single float.
+        '''
+        scale_factors = self.params_scaler.scale_
+        length_scales = scaled_length_scales / scale_factors
+        return length_scales
+
+    def _inverse_transform_length_scale_bounds(
+            self,
+            scaled_length_scale_bounds,
+        ):
+        '''
+        Transform scaled length scale bounds into real/unscaled units.
+
+        This method is essentially an inverse of
+        `_transform_length_scale_bounds()`. See that method's docstring for more
+        information.
+
+        Args:
+            scaled_length_scale_bounds (array): The Gaussian process length
+                scale bounds in scaled units. This can either be (a) a 1D array
+                with two entries of the form `[min, max]` or (b) a 2D array with
+                two columns (min and max values respectively) and one row for
+                each parameter length scale.
+
+        Raises:
+            ValueError: A `ValueError` is raised if `scaled_length_scale_bounds`
+                does not have an acceptable shape. The allowed shapes are `(2,)`
+                and `(self.num_params, 2)`.
+
+        Returns:
+            length_scale_bounds (array): The length scale bounds in
+                real/unscaled units. This will always be a 2D array of shape
+                `(self.num_params, 2)`.
+        '''
+        if scaled_length_scale_bounds.shape == (2,):
+            # In this case, scaled_length_scale_bounds is just one pair of min
+            # and max values which should be applied to every scaled parameter
+            # length scale.
+            min_, max_ = scaled_length_scale_bounds
+            scaled_lower_bounds = np.full(self.num_params, min_)
+            scaled_upper_bounds = np.full(self.num_params, max_)
+        elif scaled_length_scale_bounds.shape == (self.num_params, 2):
+            # In this case there is a separate min/max bound for each scaled
+            # parameter length scale.
+            scaled_lower_bounds = scaled_length_scale_bounds[:, 0]
+            scaled_upper_bounds = scaled_length_scale_bounds[:, 1]
+        else:
+            # In this case, scaled_length_scale_bounds has an invalid shape.
+            msg = (
+                f"scaled_length_scale_bounds should either be a 1D array with "
+                f"two values or a 2D array with two columns and one row for "
+                f"each parameter ({self.num_params} here) but was "
+                f"{scaled_length_scale_bounds} (shape "
+                f"{scaled_length_scale_bounds.shape})."
+            )
+            self.log.error(msg)
+            raise ValueError(msg)
+        
+        # Use self._inverse_transform_length_scales() to transform the limits.
+        lower_bounds = self._inverse_transform_length_scales(
+            scaled_lower_bounds,
+        )
+        upper_bounds = self._inverse_transform_length_scales(
+            scaled_upper_bounds,
+        )
+        length_scale_bounds = np.transpose([lower_bounds, upper_bounds])
+        
+        return length_scale_bounds
 
     def _check_length_scale_bounds(self):
         '''
@@ -1902,8 +2129,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         Create a Gaussian process.
         '''
         gp_kernel = skk.RBF(
-            length_scale=self.length_scale,
-            length_scale_bounds=self.length_scale_bounds,
+            length_scale=self.scaled_length_scale,
+            length_scale_bounds=self.scaled_length_scale_bounds,
         )
         if self.cost_has_noise:
             white_kernel = skk.WhiteKernel(
@@ -1972,7 +2199,10 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             last_hyperparameters = self.gaussian_process.kernel_.get_params()
 
             if self.cost_has_noise:
-                self.length_scale = last_hyperparameters['k1__length_scale']
+                self.scaled_length_scale = last_hyperparameters['k1__length_scale']
+                self.length_scale = self._inverse_transform_length_scales(
+                    self.scaled_length_scale,
+                )
                 if isinstance(self.length_scale, float):
                     self.length_scale = np.array([self.length_scale])
                 self.length_scale_history.append(self.length_scale)
@@ -1980,7 +2210,10 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                 self.noise_level = self.scaled_noise_level * cost_scaling_factor**2
                 self.noise_level_history.append(self.noise_level)
             else:
-                self.length_scale = last_hyperparameters['length_scale']
+                self.scaled_length_scale = last_hyperparameters['length_scale']
+                self.length_scale = self._inverse_transform_length_scales(
+                    self.scaled_length_scale,
+                )
                 self.length_scale_history.append(self.length_scale)
 
 
