@@ -2310,67 +2310,143 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self._shut_down()
         self.log.debug('Ended Gaussian Process Learner')
 
-    def predict_cost(self,params):
+    def predict_cost(self, params, perform_scaling=True):
         '''
-        Produces a prediction of cost from the gaussian process at params.
+        Predict the cost for `params` using `self.gaussian_process`.
+
+        By default (with `perform_scaling=True`) this method will use
+        `self.params_scaler` to scale the input values and then use
+        `self.cost_scaler` to scale the cost back to real/unscaled units. If
+        `perform_scaling` is `False`, then this scaling will NOT be done. In
+        that case, `params` should consist of already-scaled parameter values
+        and the returned cost will be in scaled units.
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost in real/unscaled units. If `False`, then this method takes
+                parameter values in scaled units and returns a cost in scaled
+                units. Note that this method cannot determine on its own if the
+                values in `params` are in real/unscaled units or scaled units;
+                it is up to the caller to pass the correct values. Defaults to
+                `True`.
 
         Returns:
-            float : Predicted cost at paramters
+            cost (float): Predicted cost at `params`. The cost will be in
+                real/unscaled units if `perform_scaling` is `True` and will be
+                in scaled units if `perform_scaling` is `False`.
         '''
-        predicted_cost = self.gaussian_process.predict(self.params_scaler.transform(params[np.newaxis,:]))
-        return predicted_cost
+        # Reshape to 2D array as the methods below expect this format.
+        params = params[np.newaxis,:]
+
+        # Scale the input parameters if set to do so.
+        if perform_scaling:
+            scaled_params = self.params_scaler.transform(params)
+        else:
+            scaled_params = params
+
+        # Generate the prediction using self.gaussian_process.
+        predicted_scaled_cost = self.gaussian_process.predict(scaled_params)
+
+        # Un-scale the cost if set to do so.
+        if perform_scaling:
+            cost = self.cost_scaler.inverse_transform(
+                predicted_scaled_cost.reshape(1, -1),
+            )
+            # Extract from 2D array.
+            cost = cost[0, 0]
+        else:
+            # Extract from 1D array.
+            cost = predicted_scaled_cost[0]
+
+        return cost
 
     def find_global_minima(self):
         '''
-        Performs a quick search for the predicted global minima from the learner. Does not return any values, but creates the following attributes.
+        Search for the global minima predicted by the Gaussian process.
+
+        This method will attempt to find the global minima predicted by the
+        Gaussian process, but it is possible for it to become stuck in local
+        minima of the predicted cost landscape.
+
+        This method does not return any values, but creates the attributes
+        listed below.
 
         Attributes:
-            predicted_best_parameters (array): the parameters for the predicted global minima
-            predicted_best_cost (float): the cost at the predicted global minima
-            predicted_best_uncertainty (float): the uncertainty of the predicted global minima
+            predicted_best_parameters (array): The parameter values which are
+                predicted to yield the best results, as a 1D array.
+            predicted_best_cost (array): The predicted cost at the
+                `predicted_best_parameters`, in a 1D 1-element array.
+            predicted_best_uncertainty (array): The uncertainty of the predicted
+                cost at `predicted_best_parameters`, in a 1D 1-element array.
         '''
         self.log.debug('Started search for predicted global minima.')
 
+        # Initialize some attributes for keeping track of predicted results.
         self.predicted_best_parameters = None
-        self.predicted_best_scaled_cost = float('inf')
-        self.predicted_best_scaled_uncertainty = None
+        self._predicted_best_scaled_cost = float('inf')
+        self._predicted_best_scaled_uncertainty = None
 
+        # Create a list of initial points in parameter-space at which to start
+        # a search for predicted optimal parameters.
         search_params = []
         search_params.append(self.best_params)
         for _ in range(self.parameter_searches):
-            search_params.append(self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary)
+            search_params.append(
+                self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary
+            )
 
+        # Perform a search for each initial point in parameter-space, keeping
+        # track of which has performed best so far.
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
+        scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T).T
         for start_params in search_params:
-            # Scale the params and bounds before putting into the minimize function
-            # Otherwise, it may break
-            # We do the scaling *before* putting them in, so the predict cost/gradient method
-            # we use here does not scale the inputs inside the function 
-
-            scaled_start_parameters = self.params_scaler.transform([start_params])
-            scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T).T
-            result = so.minimize(self.predict_biased_cost, scaled_start_parameters, 
-                                 bounds=scaled_search_region, tol=self.search_precision)
-            curr_best_params = self.params_scaler.inverse_transform([result.x])[0]
-            (curr_best_cost,curr_best_uncer) = self.gaussian_process.predict(curr_best_params[np.newaxis,:],return_std=True)
-            if curr_best_cost<self.predicted_best_scaled_cost:
+            # Scale the params and bounds before passing them to minimize(),
+            # otherwise it may break when parameters aren't order ~1. We do the
+            # scaling *before* putting them in, so the predict_cost() method
+            # shouldn't do any scaling.
+            scaled_start_parameters = self.params_scaler.transform(
+                [start_params],
+            )
+            result = so.minimize(
+                lambda params: self.predict_cost(params, perform_scaling=False),
+                scaled_start_parameters, 
+                bounds=scaled_search_region,
+                tol=self.search_precision,
+            )
+            curr_best_scaled_params = result.x
+            curr_best_params = self.params_scaler.inverse_transform([curr_best_scaled_params])[0]
+            curr_best_scaled_cost, curr_best_scaled_uncer = self.gaussian_process.predict(
+                curr_best_scaled_params[np.newaxis,:],
+                return_std=True,
+            )
+            if curr_best_scaled_cost < self._predicted_best_scaled_cost:
                 self.predicted_best_parameters = curr_best_params
-                self.predicted_best_scaled_cost = curr_best_cost
-                self.predicted_best_scaled_uncertainty = curr_best_uncer
+                self._predicted_best_scaled_cost = curr_best_scaled_cost
+                self._predicted_best_scaled_uncertainty = curr_best_scaled_uncer
 
+        # Format and store results.
         # Convert 1-element 1D arrays to/from 2D for scikit-learn >=1.0
         # compatability.
         predicted_best_cost = self.cost_scaler.inverse_transform(
-            self.predicted_best_scaled_cost.reshape(1, -1)  # 2D array.
+            self._predicted_best_scaled_cost.reshape(1, -1)  # 2D array.
         )
         self.predicted_best_cost = predicted_best_cost.reshape(1)  # 1D array.
-        self.predicted_best_uncertainty = self.predicted_best_scaled_uncertainty * self.cost_scaler.scale_
-
-        self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
-                                  'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
-                                  'predicted_best_scaled_uncertainty':self.predicted_best_scaled_uncertainty,
-                                  'predicted_best_cost':self.predicted_best_cost,
-                                  'predicted_best_uncertainty':self.predicted_best_uncertainty})
+        self.predicted_best_uncertainty = self._predicted_best_scaled_uncertainty * self.cost_scaler.scale_
+        self.archive_dict.update(
+            {
+                'predicted_best_parameters':self.predicted_best_parameters,
+                'predicted_best_scaled_cost':self._predicted_best_scaled_cost,
+                'predicted_best_scaled_uncertainty':self._predicted_best_scaled_uncertainty,
+                'predicted_best_cost':self.predicted_best_cost,
+                'predicted_best_uncertainty':self.predicted_best_uncertainty,
+            }
+        )
 
         self.has_global_minima = True
         self.log.debug('Predicted global minima found.')
