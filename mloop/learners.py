@@ -1782,8 +1782,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         # Length scale.
         if length_scale is None:
             self.scaled_length_scale = self._DEFAULT_SCALED_LENGTH_SCALE
-            self.length_scale = self._inverse_transform_length_scales(
+            self.length_scale = self._transform_length_scales(
                 self.scaled_length_scale,
+                inverse=True,
             )
         else:
             self.length_scale = np.array(length_scale, dtype=float)
@@ -1802,8 +1803,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         # Length scale bounds.
         if length_scale_bounds is None:
             self.scaled_length_scale_bounds = self._DEFAULT_SCALED_LENGTH_SCALE_BOUNDS
-            self.length_scale_bounds = self._inverse_transform_length_scale_bounds(
+            self.length_scale_bounds = self._transform_length_scale_bounds(
                 self.scaled_length_scale_bounds,
+                inverse=True,
             )
         else:
             self.length_scale_bounds = mlu.safe_cast_to_array(
@@ -1863,77 +1865,117 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
 
-    def _transform_length_scales(self, length_scales):
+    def _transform_length_scales(self, length_scales, inverse=False):
         '''
-        Transform length scales to scaled units.
+        Transform length scales to or from scaled units.
 
-        This method uses `self.params_scaler` to transform length scales into
-        scaled units. Notably length scales should be scaled, but not offset,
-        when they are transformed. For this reason, they should not simply be
-        passed through `self.params_scaler.transform()` and instead should be
-        passed through this method.
+        This method uses `self.params_scaler` to transform length scales to/from
+        scaled units. To transform from real/unscaled units to scaled units,
+        call this method with `inverse` set to `False`. To perform the inverse
+        transformation, namely to transform length scales from scaled units to
+        real/unscaled units, call this method with `inverse` set to `True`.
         
-        An inverse of this method is available:
-        `self._inverse_transform_length_scales()`.
+        Notably length scales should be scaled, but not offset, when they are
+        transformed. For this reason, they should not simply be passed through
+        `self.params_scaler.transform()` and instead should be passed through
+        this method.
+        
+        Although `length_scales` can be a fingle float, this method always
+        returns a 1D array because the scaling factors aren't generally the same
+        for all of the parameters. This implies that transforming a float then
+        performing the inverse transformation will yield a 1D array of identical
+        entries rather than a single float.
 
         Args:
             length_scales (float or array): Length scale(s) for the Gaussian
-                process which should be transformed into scaled units. Can be
-                either a single float or a 1D array of length `self.num_params`.
+                process which should be transformed to or from scaled units. Can
+                be either a single float or a 1D array of length
+                `self.num_params`.
+            inverse (bool): This argument controls whether the forward or
+                inverse transformation is applied. If `False`, then the forward
+                transformation is applied, which takes `length_scales` in
+                real/unscaled units and transforms them to scaled units. If
+                `True` then this method assumes that `length_scales` are in
+                scaled units and transforms them into real/unscaled units.
+                Default `False`.
 
         Returns:
-            scaled_length_scales (array): The length scales in scaled units.
-                Note that this will be a 1D array even if `length_scales` was a
-                single float.
+            transformed_length_scales (array): The transformed length scales.
+                These will be in scaled units if `inverse` is `False` or in
+                real/unscaled units if `inverse` is `True`. Note that
+                `transformed_length_scales` will be a 1D array even if
+                `length_scales` was a single float.
         '''
         # scale_factors is a 1D array with length equal to the number of
         # parameters.
         scale_factors = self.params_scaler.scale_
-        scaled_length_scales = scale_factors * length_scales
-        return scaled_length_scales
+        if inverse:
+            transformed_length_scales = length_scales / scale_factors
+        else:
+            transformed_length_scales = length_scales * scale_factors
+        return transformed_length_scales
 
-    def _transform_length_scale_bounds(self, length_scale_bounds):
+    def _transform_length_scale_bounds(
+        self,
+        length_scale_bounds,
+        inverse=False,
+    ):
         '''
-        Transform length scale bounds to scaled units.
+        Transform length scale bounds to or from scaled units.
 
         This method functions similarly to `self.transform_length_scales()`,
         except that it transforms the bounds for the length scales. The same
-        scaling used for the length scales themselves is applied here to the
-        lower and upper bounds.
-        
+        scalings used for the length scales themselves are applied here to the
+        lower and upper bounds. To transform from real/unscaled units to scaled
+        units, call this method with `inverse` set to `False`. To perform the
+        inverse transformation, namely to transform length scale bounds from
+        scaled units to real/unscaled units, call this method with `inverse` set
+        to `True`.
+
         The output array will have a separate scaled min/max value pair for each
         parameter length scale. In other words, the output will be an array with
         two columns (one for min values and one for max values) and one row for
         each parameter length scale. This will be the case even if
         `length_scale_bounds` consists of a single min/max value pair because
-        the scalings are generally different for different parameters,
-        
-        A near-inverse of this method is available:
-        `self._inverse_transform_length_scale_bounds()`. It isn't exactly an
-        inverse function though because the returned array may have a different
-        dimension than it began with. In particular if a single min/max value
-        pair is passed to this method, then the result is passed to
-        `self._inverse_transform_length_scale_bounds()`, then an array with a
-        separate min/max value for each parameter length scale will be returned
-        instead of a single min/max pair (although all of the pairs will have
-        the same values).
+        the scalings are generally different for different parameters.
+
+        Note that although `length_scale_bounds` can be a 1D array with only two
+        entries (a single min/max pair shared by all parameters), this method
+        always returns a 2D array with a separate min/max pair for each
+        parameter because the scaling factors aren't generally the same for all
+        of the parameters. This implies that transforming a 1D array then
+        performing the inverse transformation will yield a 2D array of identical
+        min/max pairs rather than the original 1D array.
 
         Args:
-            length_scale_bounds (array): The bounds of the length scale in
-                unscaled units. This can either be (a) a 1D array with two
-                entries of the form `[min, max]` or (b) a 2D array with two
-                columns (min and max values respectively) and one row for each
-                parameter length scale.
+            length_scale_bounds (array): The bounds for the Gaussian process's
+                length scales which should be transformed to or from scaled
+                units. This can either be (a) a 1D array with two entries of the
+                form `[min, max]` or (b) a 2D array with two columns (min and
+                max values respectively) and one row for each parameter length
+                scale.
+            inverse (bool): This argument controls whether the forward or
+                inverse transformation is applied. If `False`, then the forward
+                transformation is applied, which takes `length_scale_bounds` in
+                real/unscaled units and transforms them to scaled units. If
+                `True` then this method assumes that `length_scale_bounds` are
+                in scaled units and transforms them into real/unscaled units.
+                Default `False`.
 
         Raises:
             ValueError: A `ValueError` is raised if `length_scale_bounds` does
-                not have an acceptable shape. The allowed shapes are `(2,)` and
-                `(self.num_params, 2)`.
+                not have an acceptable shape. The allowed shapes are `(2,)` (a
+                single min/max pair shared by all parameters) or
+                `(self.num_params, 2)` (a separate min/max pair for each
+                parameter).
 
         Returns:
-            scaled_length_scale_bounds (array): The length scale bounds in
-                scaled units. This will always be a 2D array of shape
-                `(self.num_params, 2)`.
+            transformed_length_scale_bounds (array): The transformed length
+                scale bounds. These will be in scaled units if `inverse` is
+                `False` or in real/unscaled units if `inverse` is `True`. Note
+                that `transformed_length_scale_bounds` will always be a 2D array
+                of shape `(self.num_params, 2)` even if `length_scale_bounds`
+                was a single pair of min/max values.
         '''
         if  length_scale_bounds.shape == (2,):
             # In this case, length_scale_bounds is just one pair of min and max
@@ -1958,97 +2000,19 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             raise ValueError(msg)
         
         # Use self._transform_length_scales() to transform the limits.
-        scaled_lower_bounds = self._transform_length_scales(lower_bounds)
-        scaled_upper_bounds = self._transform_length_scales(upper_bounds)
-        scaled_length_scale_bounds = np.transpose(
-            [scaled_lower_bounds, scaled_upper_bounds],
+        transformed_lower_bounds = self._transform_length_scales(
+            lower_bounds,
+            inverse=inverse,
+        )
+        transformed_upper_bounds = self._transform_length_scales(
+            upper_bounds,
+            inverse=inverse,
+        )
+        transformed_length_scale_bounds = np.transpose(
+            [transformed_lower_bounds, transformed_upper_bounds],
         )
         
-        return scaled_length_scale_bounds
-
-    def _inverse_transform_length_scales(self, scaled_length_scales):
-        '''
-        Transform scaled length scales into real/unscaled units.
-
-        This method is the inverse of `self._transform_length_scales()`. See
-        that method's docstring for more information.
-
-        Args:
-            scaled_length_scales (array): The Gaussian process length scale(s)
-                in scaled units. Can be either a single float or a 1D array of
-                length `self.num_params`.
-
-        Returns:
-            length_scales (array): The length scales in real units. Note that
-                this will be a 1D array even if `scaled_length_scales` was a
-                single float.
-        '''
-        scale_factors = self.params_scaler.scale_
-        length_scales = scaled_length_scales / scale_factors
-        return length_scales
-
-    def _inverse_transform_length_scale_bounds(
-            self,
-            scaled_length_scale_bounds,
-        ):
-        '''
-        Transform scaled length scale bounds into real/unscaled units.
-
-        This method is essentially an inverse of
-        `_transform_length_scale_bounds()`. See that method's docstring for more
-        information.
-
-        Args:
-            scaled_length_scale_bounds (array): The Gaussian process length
-                scale bounds in scaled units. This can either be (a) a 1D array
-                with two entries of the form `[min, max]` or (b) a 2D array with
-                two columns (min and max values respectively) and one row for
-                each parameter length scale.
-
-        Raises:
-            ValueError: A `ValueError` is raised if `scaled_length_scale_bounds`
-                does not have an acceptable shape. The allowed shapes are `(2,)`
-                and `(self.num_params, 2)`.
-
-        Returns:
-            length_scale_bounds (array): The length scale bounds in
-                real/unscaled units. This will always be a 2D array of shape
-                `(self.num_params, 2)`.
-        '''
-        if scaled_length_scale_bounds.shape == (2,):
-            # In this case, scaled_length_scale_bounds is just one pair of min
-            # and max values which should be applied to every scaled parameter
-            # length scale.
-            min_, max_ = scaled_length_scale_bounds
-            scaled_lower_bounds = np.full(self.num_params, min_)
-            scaled_upper_bounds = np.full(self.num_params, max_)
-        elif scaled_length_scale_bounds.shape == (self.num_params, 2):
-            # In this case there is a separate min/max bound for each scaled
-            # parameter length scale.
-            scaled_lower_bounds = scaled_length_scale_bounds[:, 0]
-            scaled_upper_bounds = scaled_length_scale_bounds[:, 1]
-        else:
-            # In this case, scaled_length_scale_bounds has an invalid shape.
-            msg = (
-                f"scaled_length_scale_bounds should either be a 1D array with "
-                f"two values or a 2D array with two columns and one row for "
-                f"each parameter ({self.num_params} here) but was "
-                f"{scaled_length_scale_bounds} (shape "
-                f"{scaled_length_scale_bounds.shape})."
-            )
-            self.log.error(msg)
-            raise ValueError(msg)
-        
-        # Use self._inverse_transform_length_scales() to transform the limits.
-        lower_bounds = self._inverse_transform_length_scales(
-            scaled_lower_bounds,
-        )
-        upper_bounds = self._inverse_transform_length_scales(
-            scaled_upper_bounds,
-        )
-        length_scale_bounds = np.transpose([lower_bounds, upper_bounds])
-        
-        return length_scale_bounds
+        return transformed_length_scale_bounds
 
     def _check_length_scale_bounds(self):
         '''
@@ -2200,8 +2164,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
             if self.cost_has_noise:
                 self.scaled_length_scale = last_hyperparameters['k1__length_scale']
-                self.length_scale = self._inverse_transform_length_scales(
+                self.length_scale = self._transform_length_scales(
                     self.scaled_length_scale,
+                    inverse=True,
                 )
                 if isinstance(self.length_scale, float):
                     self.length_scale = np.array([self.length_scale])
@@ -2211,11 +2176,11 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                 self.noise_level_history.append(self.noise_level)
             else:
                 self.scaled_length_scale = last_hyperparameters['length_scale']
-                self.length_scale = self._inverse_transform_length_scales(
+                self.length_scale = self._transform_length_scales(
                     self.scaled_length_scale,
+                    inverse=True,
                 )
                 self.length_scale_history.append(self.length_scale)
-
 
     def update_bias_function(self):
         '''
