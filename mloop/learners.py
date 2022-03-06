@@ -2189,21 +2189,46 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.cost_bias = self.bias_func_cost_factor[self.params_count%self.bias_func_cycle]
         self.uncer_bias = self.bias_func_uncer_factor[self.params_count%self.bias_func_cycle]
 
-    def predict_biased_cost(self,scaled_params):
+    def predict_biased_cost(self, params, perform_scaling=True):
         '''
         Predict the biased cost at the given parameters.
         
-        The bias function is:
-            `biased_cost = cost_bias*pred_cost - uncer_bias*pred_uncer`
-            
-        No scaling is done in this function. It is assumed the params input are
-        already scaled.
+        The biased cost is a weighted sum of the predicted cost and the
+        uncertainty of the prediced cost. In particular, the bias function is:
+            `biased_cost = cost_bias * pred_cost - uncer_bias * pred_uncer`
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                biased costs should be scaled. If `True` then this method takes
+                in parameter values in real/unscaled units then returns a biased
+                predicted cost in real/unscaled units. If `False`, then this
+                method takes parameter values in scaled units and returns a
+                biased predicted cost in scaled units. Note that this method
+                cannot determine on its own if the values in `params` are in
+                real/unscaled units or scaled units; it is up to the caller to
+                pass the correct values. Defaults to `True`.
 
         Returns:
-            pred_bias_cost (float): Biased cost predicted at the given parameters
+            pred_bias_cost (float): Biased cost predicted for the given
+                parameters. This will be in real/unscaled units if
+                `perform_scaling` is `True` or it will be in scaled units if
+                `perform_scaling` is `False`.
         '''
-        (pred_cost, pred_uncer) = self.gaussian_process.predict(scaled_params[np.newaxis,:], return_std=True)
-        return self.cost_bias*pred_cost - self.uncer_bias*pred_uncer
+        # Determine the predicted cost and uncertainty.
+        cost, uncertainty = self.gaussian_process.predict(
+            params,
+            perform_scaling=perform_scaling,
+            return_std=True,
+        )
+
+        # Calculate the biased cost.
+        biased_cost = self.cost_bias * cost - self.uncer_bias * uncertainty
+
+        return biased_cost
 
     def find_next_parameters(self):
         '''
@@ -2275,16 +2300,25 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self._shut_down()
         self.log.debug('Ended Gaussian Process Learner')
 
-    def predict_cost(self, params, perform_scaling=True):
+    def predict_cost(
+        self,
+        params,
+        perform_scaling=True,
+        return_uncertainty=False,
+    ):
         '''
         Predict the cost for `params` using `self.gaussian_process`.
+
+        This method also optionally returns the uncertainty of the predicted
+        cost.
 
         By default (with `perform_scaling=True`) this method will use
         `self.params_scaler` to scale the input values and then use
         `self.cost_scaler` to scale the cost back to real/unscaled units. If
         `perform_scaling` is `False`, then this scaling will NOT be done. In
         that case, `params` should consist of already-scaled parameter values
-        and the returned cost will be in scaled units.
+        and the returned cost (and optional uncertainty) will be in scaled
+        units.
 
         Args:
             params (array): A 1D array containing the values for each parameter.
@@ -2294,17 +2328,28 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             perform_scaling (bool, optional): Whether or not the parameters and
                 costs should be scaled. If `True` then this method takes in
                 parameter values in real/unscaled units then returns a predicted
-                cost in real/unscaled units. If `False`, then this method takes
-                parameter values in scaled units and returns a cost in scaled
-                units. Note that this method cannot determine on its own if the
-                values in `params` are in real/unscaled units or scaled units;
-                it is up to the caller to pass the correct values. Defaults to
-                `True`.
+                cost (and optionally the predicted cost uncertainty) in
+                real/unscaled units. If `False`, then this method takes
+                parameter values in scaled units and returns a cost (and
+                optionally the predicted cost uncertainty) in scaled units. Note
+                that this method cannot determine on its own if the values in
+                `params` are in real/unscaled units or scaled units; it is up to
+                the caller to pass the correct values. Defaults to `True`.
+            return_uncertainty (bool, optional): This optional argument controls
+                whether or not the predicted cost uncertainty is returned with
+                the predicted cost. The predicted cost uncertainty will be in
+                real/unscaled units if `perform_scaling` is `True` and will be
+                in scaled units if `perform_scaling` is `False`. Defaults to
+                `False`.
 
         Returns:
             cost (float): Predicted cost at `params`. The cost will be in
                 real/unscaled units if `perform_scaling` is `True` and will be
                 in scaled units if `perform_scaling` is `False`.
+            uncertainty (float, optional): The uncertainty of the predicted
+                cost. This will be in the same units (either real/unscaled or
+                scaled) as the returned `cost`. The `cost_uncertainty` will only
+                be returned if `return_uncertainty` is `True`.
         '''
         # Reshape to 2D array as the methods below expect this format.
         params = params[np.newaxis,:]
@@ -2316,20 +2361,38 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             scaled_params = params
 
         # Generate the prediction using self.gaussian_process.
-        predicted_scaled_cost = self.gaussian_process.predict(scaled_params)
+        predicted_results = self.gaussian_process.predict(
+            scaled_params,
+            return_std=return_uncertainty,
+        )
+        if return_uncertainty:
+            scaled_cost, scaled_uncertainty = predicted_results
+        else:
+            scaled_cost = predicted_results
 
         # Un-scale the cost if set to do so.
         if perform_scaling:
             cost = self.cost_scaler.inverse_transform(
-                predicted_scaled_cost.reshape(1, -1),
+                scaled_cost.reshape(1, -1),
             )
-            # Extract from 2D array.
-            cost = cost[0, 0]
+            cost = cost[0, 0]  # Extract from 2D array.
         else:
-            # Extract from 1D array.
-            cost = predicted_scaled_cost[0]
+            cost = scaled_cost[0]  # Extract from 1D array.
+        
+        # Un-scale the uncertainty if set to do so.
+        if return_uncertainty:
+            if perform_scaling:
+                cost_scaling_factor = self.cost_scaler.scale_
+                uncertainty = scaled_uncertainty * cost_scaling_factor
+            else:
+                uncertainty = scaled_uncertainty
+            uncertainty = uncertainty[0]  # Extract from 1D array.
 
-        return cost
+        # Return the requested results.
+        if return_uncertainty:
+            return cost, uncertainty
+        else:
+            return cost
 
     def find_global_minima(self):
         '''
