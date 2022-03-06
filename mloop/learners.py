@@ -2579,53 +2579,93 @@ class NeuralNetLearner(MachineLearner, mp.Process):
 
         self.neural_net[index].fit_neural_net(self.all_params, self.scaled_costs)
 
-    def predict_cost(self,params,net_index=None):
+    def predict_cost(
+        self,
+        params,
+        net_index=None,
+        perform_scaling=True,
+    ):
         '''
-        Produces a prediction of cost from the neural net at params.
+        Predict the cost from the neural net for `params`.
+
+        This method is a wrapper around
+        `mloop.neuralnet.NeuralNet.predict_cost()`.
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost. If `None` then a net will be randomly chosen.
+                Defaults to `None`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost in real/unscaled units. If `False`, then this method takes
+                parameter values in scaled units and returns a cost in scaled
+                units. Note that this method cannot determine on its own if the
+                values in `params` are in real/unscaled units or scaled units;
+                it is up to the caller to pass the correct values. Defaults to
+                `True`.
 
         Returns:
-            float : Predicted cost at paramters
+            cost (float): Predicted cost for `params`. This will be in
+                real/unscaled units if `perform_scaling` is `True` or it will be
+                in scaled units if `perform_scaling` is `False`.
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-        return self.neural_net[net_index].predict_cost(params)
+        net = self.neural_net[net_index]
+        cost = net.predict_cost(params, perform_scaling=perform_scaling)
+        return cost
 
-    def predict_cost_gradient(self,params,net_index=None):
+    def predict_cost_gradient(
+        self,
+        params,
+        net_index=None,
+        perform_scaling=True,
+    ):
         '''
-        Produces a prediction of the gradient of the cost function at params.
+        Predict the gradient of the cost function at `params`.
+
+        This method is a wrapper around
+        `mloop.neuralnet.NeuralNet.predict_cost_gradient()`.
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost gradient. If `None` then a net will be randomly
+                chosen. Defaults to `None`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost gradient in real/unscaled units. If `False`, then this
+                method takes parameter values in scaled units and returns a cost
+                gradient in scaled units. Note that this method cannot determine
+                on its own if the values in `params` are in real/unscaled units
+                or scaled units; it is up to the caller to pass the correct
+                values. Defaults to `True`.
 
         Returns:
-            float : Predicted gradient at paramters
+            cost_gradient (np.float64): The predicted gradient at `params`. This
+                will be in real/unscaled units if `perform_scaling` is `True` or
+                it will be in scaled units if `perform_scaling` is `False`.
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-        # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net[net_index].predict_cost_gradient(params).astype(np.float64)
-
-    def predict_cost_minimization(self,scaled_params,net_index=None):
-        '''
-        Produces a prediction of the cost of the cost function at params, used in so.minimize.
-        Same as predict cost, but without the scaling of the input parameters
-
-        Returns:
-            float : Predicted cost at paramters
-        '''
-        if net_index is None:
-            net_index = nr.randint(self.num_nets)
-        return self.neural_net[net_index].predict_cost_minimization(scaled_params)
-
-    def predict_cost_gradient_minimization(self,scaled_params,net_index=None):
-        '''
-        Produces a prediction of the gradient of the cost function at params, used in so.minimize.
-        Same as predict gradient, but without the scaling of the input parameters
-        Returns:
-            float : Predicted gradient at paramters
-        '''
-        if net_index is None:
-            net_index = nr.randint(self.num_nets)
-        # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net[net_index].predict_cost_gradient_minimization(scaled_params).astype(np.float64)
-
+        net = self.neural_net[net_index]
+        cost_gradient = net.predict_cost_gradient(
+            params,
+            perform_scaling=perform_scaling,
+        )
+        # scipy.optimize.minimize() doesn't seem to like a 32-bit Jacobian, so
+        # convert to 64-bit.
+        cost_gradient = cost_gradient.astype(np.float64)
+        return cost_gradient
 
     def predict_costs_from_param_array(self,params,net_index=None):
         '''
@@ -2652,40 +2692,77 @@ class NeuralNetLearner(MachineLearner, mp.Process):
 
     def find_next_parameters(self, net_index=None):
         '''
-        Returns next parameters to find. Increments counters appropriately.
+        Get the next parameters to test.
+
+        This method searches for the parameters expected to give the minimum
+        cost, as predicted by a neural net.
+
+        This method additionally increments `self.params_count` appropriately.
+
+        Args:
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost. If `None` then a net will be randomly chosen.
+                Defaults to `None`.
 
         Return:
-            next_params (array): Returns next parameters from cost search.
+            next_params (array): The next parameter values to try.
         '''
+        # Set default values.
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-
-        self.params_count += 1
-        self.update_search_params()
+        
+        # Initialize some attributes for keeping track of predicted results.
         next_params = None
         next_cost = float('inf')
+
+        # Create functions for the search.
+        def search_function(scaled_params):
+            scaled_cost = self.predict_cost(
+                scaled_params,
+                net_index=net_index,
+                perform_scaling=False,
+            )
+            return scaled_cost
+        def search_jacobian(scaled_params):
+            scaled_jacobian = self.predict_cost_gradient(
+                scaled_params,
+                net_index=net_index,
+                perform_scaling=False,
+            )
+            return scaled_jacobian
+
+        # Search for parameters which minimize the predicted cost, starting at a
+        # few different points in parameter-space. The search for the next
+        # parameters will be performed in scaled units because so.minimize() can
+        # struggle with very large or very small values.
         self.neural_net[net_index].start_opt()
         net_scaler = self.neural_net[net_index]._param_scaler
+        scaled_search_region = net_scaler.transform(np.array(self.search_region).T).T
+        self.update_search_params()
         for start_params in self.search_params:
-
-            # Scale the params and bounds before putting into the minimize function
-            # Otherwise, it may break
-            # We do the scaling *before* putting them in, so the predict cost/gradient method
-            # we use here does not scale the inputs inside the function 
             scaled_start_parameters = net_scaler.transform([start_params])
-            scaled_search_region = net_scaler.transform(np.array(self.search_region).T).T
-
-            result = so.minimize(fun = lambda x: self.predict_cost_minimization(x, net_index),
-                                 x0 = scaled_start_parameters,
-                                 jac = lambda x: self.predict_cost_gradient_minimization(x, net_index),
-                                 bounds = scaled_search_region,
-                                 tol = self.search_precision)
+            result = so.minimize(
+                fun=search_function,
+                x0=scaled_start_parameters,
+                jac=search_jacobian,
+                bounds=scaled_search_region,
+                tol=self.search_precision,
+            )
+            # Check if these parameters give better predicted results than any
+            # others found so far in this search.
             if result.fun < next_cost:
                 next_params = net_scaler.inverse_transform([result.x])[0]
                 next_cost = result.fun
         self.neural_net[net_index].stop_opt()
-        self.log.debug("Suggesting params " + str(next_params) + " with predicted cost: "
-                + str(next_cost))
+
+        # Increment the counter.
+        self.params_count += 1
+
+        # Return results.
+        self.log.debug(
+            "Suggesting params " + str(next_params) + " with predicted cost: "
+            + str(next_cost)
+        )
         return next_params
 
     def run(self):
@@ -2753,58 +2830,68 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             n.destroy()
         self.log.debug('Ended neural network learner')
 
-    def find_global_minima(self,net_index=None):
+    def find_global_minima(self, net_index=None):
         '''
-        Performs a quick search for the predicted global minima from the learner. Does not return any values, but creates the following attributes.
+        Search for the global minima predicted by the neural net.
+
+        This method will attempt to find the global minima predicted by the
+        neural net, but it is possible for it to become stuck in local minima of
+        the predicted cost landscape.
+
+        This method does not return any values, but creates the attributes
+        listed below.
+
+        Args:
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost. If `None` then a net will be randomly chosen.
+                Defaults to `None`.
 
         Attributes:
-            predicted_best_parameters (array): the parameters for the predicted global minima
-            predicted_best_cost (float): the cost at the predicted global minima
+            predicted_best_parameters (array): The parameter values which are
+                predicted to yield the best results, as a 1D array.
+            predicted_best_cost (array): The predicted cost at the
+                `predicted_best_parameters`, in a 1D 1-element array.
         '''
-        if net_index is None:
-            net_index = nr.randint(self.num_nets)
         self.log.debug('Started search for predicted global minima.')
 
+        # Set default values.
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
+
+        # Initialize some attributes for keeping track of predicted results.
         self.predicted_best_parameters = None
         self.predicted_best_scaled_cost = float('inf')
 
-        search_params = []
-        search_params.append(self.best_params)
-        for _ in range(self.parameter_searches):
-            search_params.append(self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary)
+        # Call self.find_next_parameters() since that method searches for the
+        # predicted minimum.
+        self.predicted_best_parameters = self.find_next_parameters(
+            net_index=net_index,
+        )
 
-        search_bounds = list(zip(self.min_boundary, self.max_boundary))
-        net_scaler = self.neural_net[net_index]._param_scaler
-        for start_params in search_params:
-            
-            # Scale the params and bounds before putting into the minimize function
-            # Otherwise, it may break
-            # We do the scaling *before* putting them in, so the predict cost/gradient method
-            # we use here does not scale the inputs inside the function 
-            scaled_start_parameters = net_scaler.transform([start_params])
-            scaled_search_region = net_scaler.transform(np.array(search_bounds).T).T
+        # Get the predicted scaled/un-scaled costs at the predicted best
+        # parameters.
+        self.predicted_best_cost = self.predict_cost(
+            params=self.predicted_best_parameters,
+            net_index=net_index,
+            perform_scaling=True,
+        )
+        net = self.neural_net[net_index]
+        self._predicted_best_scaled_cost = self.predict_cost(
+            params=net._scale_params(self.predicted_best_parameters),
+            net_index=net_index,
+            perform_scaling=False,
+        )
 
-            result = so.minimize(fun = lambda x: self.predict_cost_minimization(x, net_index),
-                                 x0 = scaled_start_parameters,
-                                 jac = lambda x: self.predict_cost_gradient_minimization(x, net_index),
-                                 bounds = scaled_search_region,
-                                 tol = self.search_precision)
-
-
-            curr_best_params = net_scaler.inverse_transform([result.x])[0]
-            curr_best_cost = result.fun
-            if curr_best_cost<self.predicted_best_scaled_cost:
-                self.predicted_best_parameters = curr_best_params
-                self.predicted_best_scaled_cost = curr_best_cost
-
-        self.predicted_best_cost = float(self.cost_scaler.inverse_transform([[self.predicted_best_scaled_cost]]))
-        self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
-                                  'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
-                                  'predicted_best_cost':self.predicted_best_cost})
-
+        # Store results.
+        self.archive_dict.update(
+            {
+                'predicted_best_parameters': self.predicted_best_parameters,
+                'predicted_best_scaled_cost': self._predicted_best_scaled_cost,
+                'predicted_best_cost': self.predicted_best_cost
+            }
+        )
         self.has_global_minima = True
         self.log.debug('Predicted global minima found.')
-
 
 
     # Methods for debugging/analysis.
