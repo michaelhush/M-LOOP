@@ -1552,7 +1552,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
                 np.linspace(self.min_boundary[1], self.max_boundary[1], points))
         zs_list = self.predict_costs_from_param_array(list(zip(xs.flatten(),ys.flatten())))
         zs = np.array(zs_list).reshape(points,points)
-        plt.pcolormesh(xs,ys,zs)
+        plt.pcolormesh(xs, ys, zs, shading='nearest')
         plt.scatter(self.all_params[:,0], self.all_params[:,1], c=self.all_costs, vmin=np.min(zs), vmax=np.max(zs), s=100)
         plt.colorbar()
         plt.xlabel("Param 0")
