@@ -741,27 +741,95 @@ class NeuralNet():
                 all_costs,
                 self.initial_epochs if first_fit else self.subsequent_epochs)
 
-    def predict_cost(self,params):
+    def predict_cost(self, params, perform_scaling=True):
         '''
-        Produces a prediction of cost from the neural net at params.
+        Predict the cost from the neural net for `params`.
 
-        Must not be called before fit_neural_net().
+        This method must not be called before `self.fit_neural_net()`.
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost in real/unscaled units. If `False`, then this method takes
+                parameter values in scaled units and returns a cost in scaled
+                units. Note that this method cannot determine on its own if the
+                values in `params` are in real/unscaled units or scaled units;
+                it is up to the caller to pass the correct values. Defaults to
+                `True`.
 
         Returns:
-            float : Predicted cost at parameters
+            cost (float): Predicted cost for `params`. This will be in
+                real/unscaled units if `perform_scaling` is `True` or it will be
+                in scaled units if `perform_scaling` is `False`.
         '''
-        return self._unscale_cost(self.net.predict_cost(self._scale_params(params)))
+        # Scale the input parameters if set to do so.
+        if perform_scaling:
+            scaled_params = self._scale_params(params)
+        else:
+            scaled_params = params
 
-    def predict_cost_gradient(self,params):
+        # Generate the predicted cost.
+        predicted_scaled_cost = self.net.predict_cost(scaled_params)
+
+        # Un-scale the cost if set to do so.
+        if perform_scaling:
+            cost = self._unscale_cost(predicted_scaled_cost)
+        else:
+            cost = predicted_scaled_cost
+
+        return cost
+
+    def predict_cost_gradient(self, params, perform_scaling=True):
         '''
-        Produces a prediction of the gradient of the cost function at params.
+        Predict the gradient of the cost function at `params`.
 
-        Must not be called before fit_neural_net().
+        This method must not be called before `self.fit_neural_net()`.
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost gradient in real/unscaled units. If `False`, then this
+                method takes parameter values in scaled units and returns a cost
+                gradient in scaled units. Note that this method cannot determine
+                on its own if the values in `params` are in real/unscaled units
+                or scaled units; it is up to the caller to pass the correct
+                values. Defaults to `True`.
 
         Returns:
-            float : Predicted gradient at parameters
+            cost_gradient (float): The predicted gradient at `params`. This will
+                be in real/unscaled units if `perform_scaling` is `True` or it
+                will be in scaled units if `perform_scaling` is `False`.
         '''
-        return self._unscale_gradient(self.net.predict_cost_gradient(self._scale_params(params)))
+        # Scale the input parameters if set to do so.
+        if perform_scaling:
+            scaled_params = self._scale_params(params)
+        else:
+            scaled_params = params
+
+        # Generate the cost gradient prediction.
+        predicted_scaled_cost_gradient = self.net.predict_cost_gradient(
+            scaled_params
+        )
+
+        # Un-scaled the cost if set to do so.
+        if perform_scaling:
+            cost_gradient = self._unscale_gradient(
+                predicted_scaled_cost_gradient,
+            )
+        else:
+            cost_gradient = predicted_scaled_cost_gradient
+
+        return cost_gradient
 
     def start_opt(self):
         '''

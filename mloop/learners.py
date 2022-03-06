@@ -16,7 +16,6 @@ import datetime
 import os
 import mloop.utilities as mlu
 import multiprocessing as mp
-
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
@@ -1315,7 +1314,7 @@ class MachineLearner(Learner):
         self.search_min = self.min_boundary
         self.search_max = self.max_boundary
         self.search_diff = self.search_max - self.search_min
-        self.search_region = list(zip(self.search_min, self.search_max))
+        self.search_region = np.transpose([self.search_min, self.search_max])
 
         # Update archive.
         new_values_dict = {
@@ -1522,7 +1521,7 @@ class MachineLearner(Learner):
             self.search_min = np.maximum(self.best_params - self.trust_region, self.min_boundary)
             self.search_max = np.minimum(self.best_params + self.trust_region, self.max_boundary)
             self.search_diff = self.search_max - self.search_min
-            self.search_region = list(zip(self.search_min, self.search_max))
+            self.search_region = np.transpose([self.search_min, self.search_max])
 
     def update_search_params(self):
         '''
@@ -1532,6 +1531,87 @@ class MachineLearner(Learner):
         self.search_params.append(self.best_params)
         for _ in range(self.parameter_searches):
             self.search_params.append(self.search_min + nr.uniform(size=self.num_params) * self.search_diff)
+
+    def _find_predicted_minimum(
+        self,
+        scaled_figure_of_merit_function,
+        scaled_search_region,
+        params_scaler,
+        scaled_jacobian_function=None,
+    ):
+        '''
+        Find the predicted minimum of `scaled_figure_of_merit_function()`.
+
+        The search for the minimum is constrained to be within
+        `scaled_search_region`.
+
+        The `scaled_figure_of_merit_function()` should take inputs in scaled
+        units and generate outputs in scaled units. This is necessary because
+        `scipy.optimize.minimize()` (which is used internally here) can struggle
+        if the numbers are too small or too large. Using scaled parameters and
+        figures of merit brings the numbers closer to ~1, which can improve the
+        behavior of `scipy.optimize.minimize()`. 
+
+        Args:
+            scaled_figure_of_merit_function (function): This should be a
+                function which accepts an array of scaled parameter values and
+                returns a predicted figure of merit. Importantly, both the input
+                parameter values and the returned value should be in scaled
+                units.
+            scaled_search_region (array): The scaled parameter-space bounds for
+                the search. The returned minimum position will be constrained to
+                be within this region. The `scaled_search_region` should be a 2D
+                array of shape `(self.num_params, 2)` where the first column
+                specifies lower bounds and the second column specifies upper
+                bounds for each parameter (in scaled units).
+            params_scaler (mloop.utilities.ParameterScaler): A `ParameterScaler`
+                instance for converting parameters to scaled units.
+            scaled_jacobian_function (function, optional): An optional function
+                giving the Jacobian of `scaled_figure_of_merit_function()` which
+                will be used by `scipy.optimize.minimize()` if provided. As with
+                `scaled_figure_of_merit_function()`, the
+                `scaled_jacobian_function()` should accept and return values in
+                scaled units. If `None` then no Jacobian will be provided to
+                `scipy.optimize.minimize()`. Defaults to `None`.
+
+        Returns:
+            best_scaled_params (array): The scaled parameter values which
+                minimize `scaled_figure_of_merit_function()` within
+                `scaled_search_region`. They are provided as a 1D array of
+                values in scaled units.
+        '''
+        # Generate the list of starting points for the search.
+        self.update_search_params()
+
+        # Search for parameters which minimize the provided
+        # scaled_figure_of_merit_function, starting at a few different points in
+        # parameter-space. The search for the next parameters will be performed
+        # in scaled units because so.minimize() can struggle with very large or
+        # very small values.
+        best_scaled_cost = float('inf')
+        best_scaled_params = None
+        for start_params in self.search_params:
+            scaled_start_parameters = params_scaler.transform(
+                [start_params],
+            )
+            # Extract 1D array from 2D array.
+            scaled_start_parameters = scaled_start_parameters[0]
+            result = so.minimize(
+                scaled_figure_of_merit_function,
+                scaled_start_parameters,
+                jac=scaled_jacobian_function,
+                bounds=scaled_search_region,
+                tol=self.search_precision,
+            )
+            # Check if these parameters give better predicted results than any
+            # others found so far in this search.
+            current_best_scaled_cost = result.fun
+            curr_best_scaled_params = result.x
+            if current_best_scaled_cost < best_scaled_cost:
+                best_scaled_cost = current_best_scaled_cost
+                best_scaled_params = curr_best_scaled_params
+
+        return best_scaled_params
 
 
 class GaussianProcessLearner(MachineLearner, mp.Process):
@@ -1560,7 +1640,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             `None` but `gp_training_filename` does not specify a learner archive
             from a Guassian process optimization, then it is assumed that all of
             the length scales should be independent and they are all given an
-            initial value of `1`. Default `None`.
+            initial value of equal to one tenth of their allowed range. Default
+            `None`.
         length_scale_bounds (Optional [array]): The limits on the fitted length
             scale values, specified as a single pair of numbers e.g.
             `[min, max]`, or a list of pairs of numbers, e.g.
@@ -1570,8 +1651,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             one pair of `[min, max]` can be provided for each length scale. For
             example, possible valid values include `[1e-5, 1e5]` and
             `[[1e-2, 1e2], [5, 5], [1.6e-4, 1e3]]` for optimizations with three
-            parameters. If set to `None`, the value `[1e-5, 1e5]` will be used.
-            Default `None`.
+            parameters. If set to `None`, then the length scale will be bounded
+            to be between `0.001` and `10` times the allowed range for each
+            parameter.
         update_hyperparameters (Optional [bool]): Whether the length scales and
             noise estimate should be updated when new data is provided. Default
             `True`.
@@ -1659,9 +1741,13 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             fitted to data and used to make predictions
         cost_scaler (StandardScaler): Scaler used to normalize the provided
             costs.
+        params_scaler (StandardScaler): Scaler used to normalize the provided
+            parameters.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
     _ARCHIVE_TYPE = 'gaussian_process_learner'
+    _DEFAULT_SCALED_LENGTH_SCALE = 1e-1
+    _DEFAULT_SCALED_LENGTH_SCALE_BOUNDS = np.array([1e-3, 1e1])
 
     def __init__(self,
                  length_scale = None,
@@ -1716,9 +1802,24 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
             # Fit parameters that can be overriden by user keyword options.
             if length_scale is None:
-                length_scale = mlu.safe_cast_to_array(training_dict['length_scale'])
+                length_scale = mlu.safe_cast_to_array(
+                    training_dict['length_scale'],
+                )
             if noise_level is None:
                 noise_level = float(training_dict['noise_level'])
+            # The options below are not present in archives from M-LOOP <= 3.1.1
+            # so they need an extra check to see if there are values available
+            # for them.
+            if length_scale_bounds is None:
+                if 'length_scale_bounds' in training_dict:
+                    length_scale_bounds = mlu.safe_cast_to_array(
+                        training_dict['length_scale_bounds'],
+                    )
+            if noise_level_bounds is None:
+                if 'noise_level_bounds' in training_dict:
+                    noise_level_bounds = mlu.safe_cast_to_array(
+                        training_dict['noise_level_bounds'],
+                    )
         else:
             # Storage variables, archived
             self.length_scale_history = []
@@ -1747,12 +1848,31 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         #Constants, limits and tolerances
         self.hyperparameter_searches = max(10,self.num_params)
 
-        #Optional user set variables
+        # Scalers for the costs and parameter values.
+        self.cost_scaler = skp.StandardScaler()
+        self.params_scaler = mlu.ParameterScaler(
+            self.min_boundary,
+            self.max_boundary,
+        )
+        # Fit the scaler to the min/max boundaries.
+        self.params_scaler.partial_fit()
+
+        # Optional user set variables
         self.cost_has_noise = bool(cost_has_noise)
+        self.update_hyperparameters = bool(update_hyperparameters)
+        # Length scale.
         if length_scale is None:
-            self.length_scale = np.ones((self.num_params,))
+            self.scaled_length_scale = self._DEFAULT_SCALED_LENGTH_SCALE
+            self.length_scale = self._transform_length_scales(
+                self.scaled_length_scale,
+                inverse=True,
+            )
         else:
             self.length_scale = np.array(length_scale, dtype=float)
+            self.scaled_length_scale = self._transform_length_scales(
+                self.length_scale,
+            )
+        # Noise level.
         if noise_level is None:
             # Temporarily change to NaN to mark that the default value
             # should be calcualted once training data is available. Using
@@ -1761,11 +1881,21 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             self.noise_level = float('nan')
         else:
             self.noise_level = float(noise_level)
-        self.update_hyperparameters = bool(update_hyperparameters)
+        # Length scale bounds.
         if length_scale_bounds is None:
-            self.length_scale_bounds = np.array([1e-5, 1e5])
+            self.scaled_length_scale_bounds = self._DEFAULT_SCALED_LENGTH_SCALE_BOUNDS
+            self.length_scale_bounds = self._transform_length_scale_bounds(
+                self.scaled_length_scale_bounds,
+                inverse=True,
+            )
         else:
-            self.length_scale_bounds = mlu.safe_cast_to_array(length_scale_bounds)
+            self.length_scale_bounds = mlu.safe_cast_to_array(
+                length_scale_bounds,
+            )
+            self.scaled_length_scale_bounds = self._transform_length_scale_bounds(
+                self.length_scale_bounds,
+            )
+        # Noise level bounds.
         if noise_level_bounds is None:
             self.noise_level_bounds = float('nan')
         else:
@@ -1796,8 +1926,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         self.gaussian_process = None
 
-        self.cost_scaler = skp.StandardScaler()
-
         # Update archive.
         new_values_dict = {
             'archive_type': self._ARCHIVE_TYPE,
@@ -1817,6 +1945,155 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         #Remove logger so gaussian process can be safely picked for multiprocessing on Windows
         self.log = None
+
+    def _transform_length_scales(self, length_scales, inverse=False):
+        '''
+        Transform length scales to or from scaled units.
+
+        This method uses `self.params_scaler` to transform length scales to/from
+        scaled units. To transform from real/unscaled units to scaled units,
+        call this method with `inverse` set to `False`. To perform the inverse
+        transformation, namely to transform length scales from scaled units to
+        real/unscaled units, call this method with `inverse` set to `True`.
+        
+        Notably length scales should be scaled, but not offset, when they are
+        transformed. For this reason, they should not simply be passed through
+        `self.params_scaler.transform()` and instead should be passed through
+        this method.
+        
+        Although `length_scales` can be a fingle float, this method always
+        returns a 1D array because the scaling factors aren't generally the same
+        for all of the parameters. This implies that transforming a float then
+        performing the inverse transformation will yield a 1D array of identical
+        entries rather than a single float.
+
+        Args:
+            length_scales (float or array): Length scale(s) for the Gaussian
+                process which should be transformed to or from scaled units. Can
+                be either a single float or a 1D array of length
+                `self.num_params`.
+            inverse (bool): This argument controls whether the forward or
+                inverse transformation is applied. If `False`, then the forward
+                transformation is applied, which takes `length_scales` in
+                real/unscaled units and transforms them to scaled units. If
+                `True` then this method assumes that `length_scales` are in
+                scaled units and transforms them into real/unscaled units.
+                Default `False`.
+
+        Returns:
+            transformed_length_scales (array): The transformed length scales.
+                These will be in scaled units if `inverse` is `False` or in
+                real/unscaled units if `inverse` is `True`. Note that
+                `transformed_length_scales` will be a 1D array even if
+                `length_scales` was a single float.
+        '''
+        # scale_factors is a 1D array with length equal to the number of
+        # parameters.
+        scale_factors = self.params_scaler.scale_
+        if inverse:
+            transformed_length_scales = length_scales / scale_factors
+        else:
+            transformed_length_scales = length_scales * scale_factors
+        return transformed_length_scales
+
+    def _transform_length_scale_bounds(
+        self,
+        length_scale_bounds,
+        inverse=False,
+    ):
+        '''
+        Transform length scale bounds to or from scaled units.
+
+        This method functions similarly to `self.transform_length_scales()`,
+        except that it transforms the bounds for the length scales. The same
+        scalings used for the length scales themselves are applied here to the
+        lower and upper bounds. To transform from real/unscaled units to scaled
+        units, call this method with `inverse` set to `False`. To perform the
+        inverse transformation, namely to transform length scale bounds from
+        scaled units to real/unscaled units, call this method with `inverse` set
+        to `True`.
+
+        The output array will have a separate scaled min/max value pair for each
+        parameter length scale. In other words, the output will be an array with
+        two columns (one for min values and one for max values) and one row for
+        each parameter length scale. This will be the case even if
+        `length_scale_bounds` consists of a single min/max value pair because
+        the scalings are generally different for different parameters.
+
+        Note that although `length_scale_bounds` can be a 1D array with only two
+        entries (a single min/max pair shared by all parameters), this method
+        always returns a 2D array with a separate min/max pair for each
+        parameter because the scaling factors aren't generally the same for all
+        of the parameters. This implies that transforming a 1D array then
+        performing the inverse transformation will yield a 2D array of identical
+        min/max pairs rather than the original 1D array.
+
+        Args:
+            length_scale_bounds (array): The bounds for the Gaussian process's
+                length scales which should be transformed to or from scaled
+                units. This can either be (a) a 1D array with two entries of the
+                form `[min, max]` or (b) a 2D array with two columns (min and
+                max values respectively) and one row for each parameter length
+                scale.
+            inverse (bool): This argument controls whether the forward or
+                inverse transformation is applied. If `False`, then the forward
+                transformation is applied, which takes `length_scale_bounds` in
+                real/unscaled units and transforms them to scaled units. If
+                `True` then this method assumes that `length_scale_bounds` are
+                in scaled units and transforms them into real/unscaled units.
+                Default `False`.
+
+        Raises:
+            ValueError: A `ValueError` is raised if `length_scale_bounds` does
+                not have an acceptable shape. The allowed shapes are `(2,)` (a
+                single min/max pair shared by all parameters) or
+                `(self.num_params, 2)` (a separate min/max pair for each
+                parameter).
+
+        Returns:
+            transformed_length_scale_bounds (array): The transformed length
+                scale bounds. These will be in scaled units if `inverse` is
+                `False` or in real/unscaled units if `inverse` is `True`. Note
+                that `transformed_length_scale_bounds` will always be a 2D array
+                of shape `(self.num_params, 2)` even if `length_scale_bounds`
+                was a single pair of min/max values.
+        '''
+        if  length_scale_bounds.shape == (2,):
+            # In this case, length_scale_bounds is just one pair of min and max
+            # values which should be applied to every parameter length scale.
+            min_, max_ = length_scale_bounds
+            lower_bounds = np.full(self.num_params, min_)
+            upper_bounds = np.full(self.num_params, max_)
+        elif length_scale_bounds.shape == (self.num_params, 2):
+            # In this case there is a separate min/max bound for each parameter
+            # length scale.
+            lower_bounds = length_scale_bounds[:, 0]
+            upper_bounds = length_scale_bounds[:, 1]
+        else:
+            # In this case, length_scale_bounds has an invalid shape.
+            msg = (
+                f"length_scale_bounds should either be a 1D array with two "
+                f"values or a 2D array with two columns and one row for each "
+                f"parameter ({self.num_params} here) but was "
+                f"{length_scale_bounds} (shape {length_scale_bounds.shape})."
+            )
+            self.log.error(msg)
+            raise ValueError(msg)
+        
+        # Use self._transform_length_scales() to transform the limits.
+        transformed_lower_bounds = self._transform_length_scales(
+            lower_bounds,
+            inverse=inverse,
+        )
+        transformed_upper_bounds = self._transform_length_scales(
+            upper_bounds,
+            inverse=inverse,
+        )
+        transformed_length_scale_bounds = np.transpose(
+            [transformed_lower_bounds, transformed_upper_bounds],
+        )
+        
+        return transformed_length_scale_bounds
 
     def _check_length_scale_bounds(self):
         '''
@@ -1897,8 +2174,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         Create a Gaussian process.
         '''
         gp_kernel = skk.RBF(
-            length_scale=self.length_scale,
-            length_scale_bounds=self.length_scale_bounds,
+            length_scale=self.scaled_length_scale,
+            length_scale_bounds=self.scaled_length_scale_bounds,
         )
         if self.cost_has_noise:
             white_kernel = skk.WhiteKernel(
@@ -1936,6 +2213,8 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.scaled_costs = self.cost_scaler.fit_transform(self.all_costs[:,np.newaxis])[:,0]
         cost_scaling_factor = float(self.cost_scaler.scale_)
         self.scaled_uncers = self.all_uncers / cost_scaling_factor
+
+        self.scaled_params = self.params_scaler.transform(self.all_params)
         if self.cost_has_noise:
             # Ensure compatability with archives from M-LOOP versions <= 3.1.1.
             if self._scale_deprecated_noise_levels:
@@ -1956,7 +2235,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             self.scaled_noise_level_bounds = self.noise_level_bounds / cost_scaling_factor**2
 
         self.create_gaussian_process()
-        self.gaussian_process.fit(self.all_params,self.scaled_costs)
+        self.gaussian_process.fit(self.scaled_params,self.scaled_costs)
 
         if self.update_hyperparameters:
 
@@ -1965,7 +2244,11 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             last_hyperparameters = self.gaussian_process.kernel_.get_params()
 
             if self.cost_has_noise:
-                self.length_scale = last_hyperparameters['k1__length_scale']
+                self.scaled_length_scale = last_hyperparameters['k1__length_scale']
+                self.length_scale = self._transform_length_scales(
+                    self.scaled_length_scale,
+                    inverse=True,
+                )
                 if isinstance(self.length_scale, float):
                     self.length_scale = np.array([self.length_scale])
                 self.length_scale_history.append(self.length_scale)
@@ -1973,9 +2256,12 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                 self.noise_level = self.scaled_noise_level * cost_scaling_factor**2
                 self.noise_level_history.append(self.noise_level)
             else:
-                self.length_scale = last_hyperparameters['length_scale']
+                self.scaled_length_scale = last_hyperparameters['length_scale']
+                self.length_scale = self._transform_length_scales(
+                    self.scaled_length_scale,
+                    inverse=True,
+                )
                 self.length_scale_history.append(self.length_scale)
-
 
     def update_bias_function(self):
         '''
@@ -1984,34 +2270,88 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self.cost_bias = self.bias_func_cost_factor[self.params_count%self.bias_func_cycle]
         self.uncer_bias = self.bias_func_uncer_factor[self.params_count%self.bias_func_cycle]
 
-    def predict_biased_cost(self,params):
+    def predict_biased_cost(self, params, perform_scaling=True):
         '''
-        Predicts the biased cost at the given parameters. The bias function is:
-            biased_cost = cost_bias*pred_cost - uncer_bias*pred_uncer
+        Predict the biased cost at the given parameters.
+        
+        The biased cost is a weighted sum of the predicted cost and the
+        uncertainty of the prediced cost. In particular, the bias function is:
+            `biased_cost = cost_bias * pred_cost - uncer_bias * pred_uncer`
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                biased costs should be scaled. If `True` then this method takes
+                in parameter values in real/unscaled units then returns a biased
+                predicted cost in real/unscaled units. If `False`, then this
+                method takes parameter values in scaled units and returns a
+                biased predicted cost in scaled units. Note that this method
+                cannot determine on its own if the values in `params` are in
+                real/unscaled units or scaled units; it is up to the caller to
+                pass the correct values. Defaults to `True`.
 
         Returns:
-            pred_bias_cost (float): Biased cost predicted at the given parameters
+            pred_bias_cost (float): Biased cost predicted for the given
+                parameters. This will be in real/unscaled units if
+                `perform_scaling` is `True` or it will be in scaled units if
+                `perform_scaling` is `False`.
         '''
-        (pred_cost, pred_uncer) = self.gaussian_process.predict(params[np.newaxis,:], return_std=True)
-        return self.cost_bias*pred_cost - self.uncer_bias*pred_uncer
+        # Determine the predicted cost and uncertainty.
+        cost, uncertainty = self.predict_cost(
+            params,
+            perform_scaling=perform_scaling,
+            return_uncertainty=True,
+        )
+
+        # Calculate the biased cost.
+        biased_cost = self.cost_bias * cost - self.uncer_bias * uncertainty
+
+        return biased_cost
 
     def find_next_parameters(self):
         '''
-        Returns next parameters to find. Increments counters and bias function appropriately.
+        Get the next parameters to test.
+
+        This method searches for the parameters expected to give the minimum
+        biased cost, as predicted by the Gaussian process. The biased cost is
+        not just the predicted cost, but a weighted sum of the predicted cost
+        and the uncertainty in the predicted cost. See
+        `self.predict_biased_cost()` for more information.
+
+        This method additionally increments `self.params_count` appropriately.
 
         Return:
-            next_params (array): Returns next parameters from biased cost search.
+            next_params (array): The next parameter values to try, stored in a
+                1D array.
         '''
+        # Increment the counter and update the bias function.
         self.params_count += 1
         self.update_bias_function()
-        self.update_search_params()
-        next_params = None
-        next_cost = float('inf')
-        for start_params in self.search_params:
-            result = so.minimize(self.predict_biased_cost, start_params, bounds = self.search_region, tol=self.search_precision)
-            if result.fun < next_cost:
-                next_params = result.x
-                next_cost = result.fun
+
+        # Define the function to minimize when picking the next parameters.
+        def scaled_biased_cost_function(scaled_parameters):
+            scaled_biased_cost = self.predict_biased_cost(
+                scaled_parameters,
+                perform_scaling=False,
+            )
+            return scaled_biased_cost
+
+        # Set bounds on the parameter-space for the search.
+        scaled_search_region = self.params_scaler.transform(self.search_region.T).T
+
+        # Find the scaled parameters which minimize the biased cost function.
+        next_scaled_params = self._find_predicted_minimum(
+            scaled_figure_of_merit_function=scaled_biased_cost_function,
+            scaled_search_region=scaled_search_region,
+            params_scaler=self.params_scaler,
+        )
+
+        # Convert the scaled parameters to real/unscaled units.
+        next_params = self.params_scaler.inverse_transform([next_scaled_params])[0]
+
         return next_params
 
     def run(self):
@@ -2053,59 +2393,171 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self._shut_down()
         self.log.debug('Ended Gaussian Process Learner')
 
-    def predict_cost(self,params):
+    def predict_cost(
+        self,
+        params,
+        perform_scaling=True,
+        return_uncertainty=False,
+    ):
         '''
-        Produces a prediction of cost from the gaussian process at params.
+        Predict the cost for `params` using `self.gaussian_process`.
+
+        This method also optionally returns the uncertainty of the predicted
+        cost.
+
+        By default (with `perform_scaling=True`) this method will use
+        `self.params_scaler` to scale the input values and then use
+        `self.cost_scaler` to scale the cost back to real/unscaled units. If
+        `perform_scaling` is `False`, then this scaling will NOT be done. In
+        that case, `params` should consist of already-scaled parameter values
+        and the returned cost (and optional uncertainty) will be in scaled
+        units.
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost (and optionally the predicted cost uncertainty) in
+                real/unscaled units. If `False`, then this method takes
+                parameter values in scaled units and returns a cost (and
+                optionally the predicted cost uncertainty) in scaled units. Note
+                that this method cannot determine on its own if the values in
+                `params` are in real/unscaled units or scaled units; it is up to
+                the caller to pass the correct values. Defaults to `True`.
+            return_uncertainty (bool, optional): This optional argument controls
+                whether or not the predicted cost uncertainty is returned with
+                the predicted cost. The predicted cost uncertainty will be in
+                real/unscaled units if `perform_scaling` is `True` and will be
+                in scaled units if `perform_scaling` is `False`. Defaults to
+                `False`.
 
         Returns:
-            float : Predicted cost at paramters
+            cost (float): Predicted cost at `params`. The cost will be in
+                real/unscaled units if `perform_scaling` is `True` and will be
+                in scaled units if `perform_scaling` is `False`.
+            uncertainty (float, optional): The uncertainty of the predicted
+                cost. This will be in the same units (either real/unscaled or
+                scaled) as the returned `cost`. The `cost_uncertainty` will only
+                be returned if `return_uncertainty` is `True`.
         '''
-        return self.gaussian_process.predict(params[np.newaxis,:])
+        # Reshape to 2D array as the methods below expect this format.
+        params = params[np.newaxis,:]
+
+        # Scale the input parameters if set to do so.
+        if perform_scaling:
+            scaled_params = self.params_scaler.transform(params)
+        else:
+            scaled_params = params
+
+        # Generate the prediction using self.gaussian_process.
+        predicted_results = self.gaussian_process.predict(
+            scaled_params,
+            return_std=return_uncertainty,
+        )
+        if return_uncertainty:
+            scaled_cost, scaled_uncertainty = predicted_results
+        else:
+            scaled_cost = predicted_results
+
+        # Un-scale the cost if set to do so.
+        if perform_scaling:
+            cost = self.cost_scaler.inverse_transform(
+                scaled_cost.reshape(1, -1),
+            )
+            cost = cost[0, 0]  # Extract from 2D array.
+        else:
+            cost = scaled_cost[0]  # Extract from 1D array.
+        
+        # Un-scale the uncertainty if set to do so.
+        if return_uncertainty:
+            if perform_scaling:
+                cost_scaling_factor = self.cost_scaler.scale_
+                uncertainty = scaled_uncertainty * cost_scaling_factor
+            else:
+                uncertainty = scaled_uncertainty
+            uncertainty = uncertainty[0]  # Extract from 1D array.
+
+        # Return the requested results.
+        if return_uncertainty:
+            return cost, uncertainty
+        else:
+            return cost
 
     def find_global_minima(self):
         '''
-        Performs a quick search for the predicted global minima from the learner. Does not return any values, but creates the following attributes.
+        Search for the global minima predicted by the Gaussian process.
+
+        This method will attempt to find the global minima predicted by the
+        Gaussian process, but it is possible for it to become stuck in local
+        minima of the predicted cost landscape.
+
+        This method does not return any values, but creates the attributes
+        listed below.
 
         Attributes:
-            predicted_best_parameters (array): the parameters for the predicted global minima
-            predicted_best_cost (float): the cost at the predicted global minima
-            predicted_best_uncertainty (float): the uncertainty of the predicted global minima
+            predicted_best_parameters (array): The parameter values which are
+                predicted to yield the best results, as a 1D array.
+            predicted_best_cost (array): The predicted cost at the
+                `predicted_best_parameters`, in a 1D 1-element array.
+            predicted_best_uncertainty (array): The uncertainty of the predicted
+                cost at `predicted_best_parameters`, in a 1D 1-element array.
         '''
         self.log.debug('Started search for predicted global minima.')
 
-        self.predicted_best_parameters = None
-        self.predicted_best_scaled_cost = float('inf')
-        self.predicted_best_scaled_uncertainty = None
+        # Define the function to minimize when looking for the global minima.
+        def scaled_cost_function(scaled_parameters):
+            scaled_cost = self.predict_cost(
+                scaled_parameters,
+                perform_scaling=False,
+                return_uncertainty=False,
+            )
+            return scaled_cost
 
-        search_params = []
-        search_params.append(self.best_params)
-        for _ in range(self.parameter_searches):
-            search_params.append(self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary)
+        # Set bounds on parameter-space for the search. Don't constrain to the
+        # trust region when looking for global minima.
+        search_region = np.transpose([self.min_boundary, self.max_boundary])
+        scaled_search_region = self.params_scaler.transform(search_region.T).T
 
-        search_bounds = list(zip(self.min_boundary, self.max_boundary))
-        for start_params in search_params:
-            result = so.minimize(self.predict_cost, start_params, bounds = search_bounds, tol=self.search_precision)
-            curr_best_params = result.x
-            (curr_best_cost,curr_best_uncer) = self.gaussian_process.predict(curr_best_params[np.newaxis,:],return_std=True)
-            if curr_best_cost<self.predicted_best_scaled_cost:
-                self.predicted_best_parameters = curr_best_params
-                self.predicted_best_scaled_cost = curr_best_cost
-                self.predicted_best_scaled_uncertainty = curr_best_uncer
-
-        # Convert 1-element 1D arrays to/from 2D for scikit-learn >=1.0
-        # compatability.
-        predicted_best_cost = self.cost_scaler.inverse_transform(
-            self.predicted_best_scaled_cost.reshape(1, -1)  # 2D array.
+        # Find the scaled parameters which minimize the cost function.
+        best_scaled_params = self._find_predicted_minimum(
+            scaled_figure_of_merit_function=scaled_cost_function,
+            scaled_search_region=scaled_search_region,
+            params_scaler=self.params_scaler,
         )
-        self.predicted_best_cost = predicted_best_cost.reshape(1)  # 1D array.
-        self.predicted_best_uncertainty = self.predicted_best_scaled_uncertainty * self.cost_scaler.scale_
 
-        self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
-                                  'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
-                                  'predicted_best_scaled_uncertainty':self.predicted_best_scaled_uncertainty,
-                                  'predicted_best_cost':self.predicted_best_cost,
-                                  'predicted_best_uncertainty':self.predicted_best_uncertainty})
+        # Calculate some other related values in scaled units.
+        scaled_cost, scaled_uncertainty = self.predict_cost(
+            best_scaled_params,
+            perform_scaling=False,
+            return_uncertainty=True,
+        )
+        self._predicted_best_scaled_cost = scaled_cost
+        self._predicted_best_scaled_uncertainty = scaled_uncertainty
 
+        # Calculate some other related values in real/unscaled units.
+        self.predicted_best_parameters = self.params_scaler.inverse_transform([best_scaled_params])[0]
+        cost, uncertainty = self.predict_cost(
+            self.predicted_best_parameters,
+            perform_scaling=True,
+            return_uncertainty=True,
+        )
+        self.predicted_best_cost = cost
+        self.predicted_best_uncertainty = uncertainty
+
+        # Store results.
+        self.archive_dict.update(
+            {
+                'predicted_best_parameters': self.predicted_best_parameters,
+                'predicted_best_scaled_cost': self._predicted_best_scaled_cost,
+                'predicted_best_scaled_uncertainty': self._predicted_best_scaled_uncertainty,
+                'predicted_best_cost': self.predicted_best_cost,
+                'predicted_best_uncertainty': self.predicted_best_uncertainty,
+            }
+        )
         self.has_global_minima = True
         self.log.debug('Predicted global minima found.')
 
@@ -2272,29 +2724,93 @@ class NeuralNetLearner(MachineLearner, mp.Process):
 
         self.neural_net[index].fit_neural_net(self.all_params, self.scaled_costs)
 
-    def predict_cost(self,params,net_index=None):
+    def predict_cost(
+        self,
+        params,
+        net_index=None,
+        perform_scaling=True,
+    ):
         '''
-        Produces a prediction of cost from the neural net at params.
+        Predict the cost from the neural net for `params`.
+
+        This method is a wrapper around
+        `mloop.neuralnet.NeuralNet.predict_cost()`.
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost. If `None` then a net will be randomly chosen.
+                Defaults to `None`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost in real/unscaled units. If `False`, then this method takes
+                parameter values in scaled units and returns a cost in scaled
+                units. Note that this method cannot determine on its own if the
+                values in `params` are in real/unscaled units or scaled units;
+                it is up to the caller to pass the correct values. Defaults to
+                `True`.
 
         Returns:
-            float : Predicted cost at paramters
+            cost (float): Predicted cost for `params`. This will be in
+                real/unscaled units if `perform_scaling` is `True` or it will be
+                in scaled units if `perform_scaling` is `False`.
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-        return self.neural_net[net_index].predict_cost(params)
+        net = self.neural_net[net_index]
+        cost = net.predict_cost(params, perform_scaling=perform_scaling)
+        return cost
 
-    def predict_cost_gradient(self,params,net_index=None):
+    def predict_cost_gradient(
+        self,
+        params,
+        net_index=None,
+        perform_scaling=True,
+    ):
         '''
-        Produces a prediction of the gradient of the cost function at params.
+        Predict the gradient of the cost function at `params`.
+
+        This method is a wrapper around
+        `mloop.neuralnet.NeuralNet.predict_cost_gradient()`.
+
+        Args:
+            params (array): A 1D array containing the values for each parameter.
+                These should be in real/unscaled units if `perform_scaling` is
+                `True` or they should be in scaled units if `perform_scaling` is
+                `False`.
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost gradient. If `None` then a net will be randomly
+                chosen. Defaults to `None`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost gradient in real/unscaled units. If `False`, then this
+                method takes parameter values in scaled units and returns a cost
+                gradient in scaled units. Note that this method cannot determine
+                on its own if the values in `params` are in real/unscaled units
+                or scaled units; it is up to the caller to pass the correct
+                values. Defaults to `True`.
 
         Returns:
-            float : Predicted gradient at paramters
+            cost_gradient (np.float64): The predicted gradient at `params`. This
+                will be in real/unscaled units if `perform_scaling` is `True` or
+                it will be in scaled units if `perform_scaling` is `False`.
         '''
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-        # scipy.optimize.minimize doesn't seem to like a 32-bit Jacobian, so we convert to 64
-        return self.neural_net[net_index].predict_cost_gradient(params).astype(np.float64)
-
+        net = self.neural_net[net_index]
+        cost_gradient = net.predict_cost_gradient(
+            params,
+            perform_scaling=perform_scaling,
+        )
+        # scipy.optimize.minimize() doesn't seem to like a 32-bit Jacobian, so
+        # convert to 64-bit.
+        cost_gradient = cost_gradient.astype(np.float64)
+        return cost_gradient
 
     def predict_costs_from_param_array(self,params,net_index=None):
         '''
@@ -2321,31 +2837,76 @@ class NeuralNetLearner(MachineLearner, mp.Process):
 
     def find_next_parameters(self, net_index=None):
         '''
-        Returns next parameters to find. Increments counters appropriately.
+        Get the next parameters to test.
+
+        This method searches for the parameters expected to give the minimum
+        cost, as predicted by a neural net.
+
+        This method additionally increments `self.params_count` appropriately.
+
+        Args:
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost. If `None` then a net will be randomly chosen.
+                Defaults to `None`.
 
         Return:
-            next_params (array): Returns next parameters from cost search.
+            next_params (array): The next parameter values to try, stored in a
+                1D array.
         '''
+        # Set default values.
         if net_index is None:
             net_index = nr.randint(self.num_nets)
+        net = self.neural_net[net_index]
 
+        # Create functions for the search.
+        def scaled_cost_function(scaled_params):
+            scaled_cost = self.predict_cost(
+                scaled_params,
+                net_index=net_index,
+                perform_scaling=False,
+            )
+            return scaled_cost
+        def scaled_cost_jacobian_function(scaled_params):
+            scaled_jacobian = self.predict_cost_gradient(
+                scaled_params,
+                net_index=net_index,
+                perform_scaling=False,
+            )
+            return scaled_jacobian
+
+        # Get the ParameterScaler used for this neural net.
+        params_scaler = net._param_scaler
+
+        # Set bounds on the parameter-space for the search.
+        scaled_search_region = params_scaler.transform(self.search_region.T).T
+
+        # Find the scaled parameters which minimize the predicted cost function.
+        net.start_opt()
+        next_scaled_params = self._find_predicted_minimum(
+            scaled_figure_of_merit_function=scaled_cost_function,
+            scaled_search_region=scaled_search_region,
+            params_scaler=params_scaler,
+            scaled_jacobian_function=scaled_cost_jacobian_function,
+        )
+        net.stop_opt()
+
+        # Convert scaled parameters to real/unscaled units and get the predicted
+        # cost.
+        next_params = params_scaler.inverse_transform([next_scaled_params])[0]
+        next_cost = self.predict_cost(
+            next_params,
+            net_index=net_index,
+            perform_scaling=True,
+        )
+
+        # Increment the counter.
         self.params_count += 1
-        self.update_search_params()
-        next_params = None
-        next_cost = float('inf')
-        self.neural_net[net_index].start_opt()
-        for start_params in self.search_params:
-            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
-                                 x0 = start_params,
-                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
-                                 bounds = self.search_region,
-                                 tol = self.search_precision)
-            if result.fun < next_cost:
-                next_params = result.x
-                next_cost = result.fun
-        self.neural_net[net_index].stop_opt()
-        self.log.debug("Suggesting params " + str(next_params) + " with predicted cost: "
-                + str(next_cost))
+
+        # Return results.
+        self.log.debug(
+            "Suggesting params " + str(next_params) + " with predicted cost: "
+            + str(next_cost)
+        )
         return next_params
 
     def run(self):
@@ -2413,47 +2974,64 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             n.destroy()
         self.log.debug('Ended neural network learner')
 
-    def find_global_minima(self,net_index=None):
+    def find_global_minima(self, net_index=None):
         '''
-        Performs a quick search for the predicted global minima from the learner. Does not return any values, but creates the following attributes.
+        Search for the global minima predicted by the neural net.
+
+        This method will attempt to find the global minima predicted by the
+        neural net, but it is possible for it to become stuck in local minima of
+        the predicted cost landscape.
+
+        This method does not return any values, but creates the attributes
+        listed below.
+
+        Args:
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost. If `None` then a net will be randomly chosen.
+                Defaults to `None`.
 
         Attributes:
-            predicted_best_parameters (array): the parameters for the predicted global minima
-            predicted_best_cost (float): the cost at the predicted global minima
+            predicted_best_parameters (array): The parameter values which are
+                predicted to yield the best results, as a 1D array.
+            predicted_best_cost (array): The predicted cost at the
+                `predicted_best_parameters`, in a 1D 1-element array.
         '''
-        if net_index is None:
-            net_index = nr.randint(self.num_nets)
         self.log.debug('Started search for predicted global minima.')
 
-        self.predicted_best_parameters = None
-        self.predicted_best_scaled_cost = float('inf')
+        # Set default values.
+        if net_index is None:
+            net_index = nr.randint(self.num_nets)
 
-        search_params = []
-        search_params.append(self.best_params)
-        for _ in range(self.parameter_searches):
-            search_params.append(self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary)
+        # Call self.find_next_parameters() since that method searches for the
+        # predicted minimum.
+        self.predicted_best_parameters = self.find_next_parameters(
+            net_index=net_index,
+        )
 
-        search_bounds = list(zip(self.min_boundary, self.max_boundary))
-        for start_params in search_params:
-            result = so.minimize(fun = lambda x: self.predict_cost(x, net_index),
-                                 x0 = start_params,
-                                 jac = lambda x: self.predict_cost_gradient(x, net_index),
-                                 bounds = search_bounds,
-                                 tol = self.search_precision)
-            curr_best_params = result.x
-            curr_best_cost = result.fun
-            if curr_best_cost<self.predicted_best_scaled_cost:
-                self.predicted_best_parameters = curr_best_params
-                self.predicted_best_scaled_cost = curr_best_cost
+        # Get the predicted scaled/un-scaled costs at the predicted best
+        # parameters.
+        self.predicted_best_cost = self.predict_cost(
+            params=self.predicted_best_parameters,
+            net_index=net_index,
+            perform_scaling=True,
+        )
+        net = self.neural_net[net_index]
+        self._predicted_best_scaled_cost = self.predict_cost(
+            params=net._scale_params(self.predicted_best_parameters),
+            net_index=net_index,
+            perform_scaling=False,
+        )
 
-        self.predicted_best_cost = float(self.cost_scaler.inverse_transform([[self.predicted_best_scaled_cost]]))
-        self.archive_dict.update({'predicted_best_parameters':self.predicted_best_parameters,
-                                  'predicted_best_scaled_cost':self.predicted_best_scaled_cost,
-                                  'predicted_best_cost':self.predicted_best_cost})
-
+        # Store results.
+        self.archive_dict.update(
+            {
+                'predicted_best_parameters': self.predicted_best_parameters,
+                'predicted_best_scaled_cost': self._predicted_best_scaled_cost,
+                'predicted_best_cost': self.predicted_best_cost
+            }
+        )
         self.has_global_minima = True
         self.log.debug('Predicted global minima found.')
-
 
 
     # Methods for debugging/analysis.

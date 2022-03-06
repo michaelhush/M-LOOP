@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import scipy.io as si
+import sklearn.preprocessing as skp
 import pickle
 import logging
 import datetime
@@ -470,6 +471,42 @@ class NullQueueListener():
         '''
         pass
 
+class ParameterScaler(skp.MinMaxScaler):
+    '''
+    Class for scaling parameters based on their min/max value constraints.
+
+    All parameters are mapped (by default) between [0, 1] by linearly rescaling them,
+    In particular the minimum value for a parameter is mapped to 0 and the maximum
+    value is mapped to 1.
+
+    This class inherits from scikit-learn's `MinMaxScaler`. The primary difference is that
+    values are scaled by the minimum and maximum values set by the user, rather
+    than the minimum and maximum values actually used in a dataset.
+
+    Args:
+        min_boundary (np.array): The minimum values allowed for each parameter.
+        max_boundary (np.array): The maximum values allowed for each parameter.
+        *args: Additional arguments are passed to `MinMaxScaler.__init__()`.
+        **kwargs: Arbitrary keyword arguments are passed to `MinMaxScaler.__init__()`.
+    '''
+    def __init__(self, min_boundary, max_boundary, *args, **kwargs):
+        if len(min_boundary) != len(max_boundary):
+            raise ValueError(
+                "The minimum and maximum boundary arrays must have the same lengths but "
+                f"min_boundary had length {len(min_boundary)} while max_boundary had length "
+                f" {len(max_boundary)}."
+            )
+
+        self.min_boundary = min_boundary
+        self.max_boundary = max_boundary
+        return super().__init__(*args, **kwargs)
+
+    def partial_fit(self, X=None, *args, **kwargs):
+        '''
+        Teach the scaler that we want to scale things based on the minimum and maximum boundaries
+        '''
+        X = [self.min_boundary, self.max_boundary]
+        return super().partial_fit(X,*args, **kwargs)
 
 
     
