@@ -2357,24 +2357,14 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         self._predicted_best_scaled_cost = float('inf')
         self._predicted_best_scaled_uncertainty = None
 
-        # Create a list of initial points in parameter-space at which to start
-        # a search for predicted optimal parameters.
-        search_params = []
-        search_params.append(self.best_params)
-        for _ in range(self.parameter_searches):
-            search_params.append(
-                self.min_boundary + nr.uniform(size=self.num_params) * self.diff_boundary
-            )
-
-        # Perform a search for each initial point in parameter-space, keeping
-        # track of which has performed best so far.
+        # Search for parameters which minimize the predicted cost, starting at a
+        # few different points in parameter-space. The search for the next
+        # parameters will be performed in scaled units because so.minimize() can
+        # struggle with very large or very small values.
         search_bounds = list(zip(self.min_boundary, self.max_boundary))
         scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T).T
-        for start_params in search_params:
-            # Scale the params and bounds before passing them to minimize(),
-            # otherwise it may break when parameters aren't order ~1. We do the
-            # scaling *before* putting them in, so the predict_cost() method
-            # shouldn't do any scaling.
+        self.update_search_params()
+        for start_params in self.search_params:
             scaled_start_parameters = self.params_scaler.transform(
                 [start_params],
             )
