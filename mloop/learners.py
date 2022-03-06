@@ -2911,10 +2911,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         if net_index is None:
             net_index = nr.randint(self.num_nets)
 
-        # Initialize some attributes for keeping track of predicted results.
-        self.predicted_best_parameters = None
-        self.predicted_best_scaled_cost = float('inf')
-
         # Call self.find_next_parameters() since that method searches for the
         # predicted minimum.
         self.predicted_best_parameters = self.find_next_parameters(
