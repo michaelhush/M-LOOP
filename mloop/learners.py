@@ -1314,7 +1314,7 @@ class MachineLearner(Learner):
         self.search_min = self.min_boundary
         self.search_max = self.max_boundary
         self.search_diff = self.search_max - self.search_min
-        self.search_region = list(zip(self.search_min, self.search_max))
+        self.search_region = np.transpose([self.search_min, self.search_max])
 
         # Update archive.
         new_values_dict = {
@@ -1521,7 +1521,7 @@ class MachineLearner(Learner):
             self.search_min = np.maximum(self.best_params - self.trust_region, self.min_boundary)
             self.search_max = np.minimum(self.best_params + self.trust_region, self.max_boundary)
             self.search_diff = self.search_max - self.search_min
-            self.search_region = list(zip(self.search_min, self.search_max))
+            self.search_region = np.transpose([self.search_min, self.search_max])
 
     def update_search_params(self):
         '''
@@ -2230,36 +2230,118 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         return biased_cost
 
+    def _find_predicted_minimum(
+        self,
+        scaled_figure_of_merit_function,
+        scaled_search_region,
+    ):
+        '''
+        Find the predicted minimum of `scaled_figure_of_merit_function()`.
+
+        The search for the minimum is constrained to be within
+        `scaled_search_region`.
+
+        The `scaled_figure_of_merit_function()` should take inputs in scaled
+        units and generate outputs in scaled units. This is necessary because
+        `scipy.optimize.minimize()` (which is used internally here) can struggle
+        if the numbers are too small or too large. Using scaled parameters and
+        figures of merit brings the numbers closer to ~1, which can improve the
+        behavior of `scipy.optimize.minimize()`. 
+
+        Args:
+            scaled_figure_of_merit_function (function): This should be a
+                function which accepts an array of scaled parameter values and
+                returns a predicted figure of merit. Importantly, both the input
+                parameter values and the returned value should be in scaled
+                units.
+            scaled_search_region (array): The scaled parameter-space bounds for
+                the search. The returned minimum position will be constrained to
+                be within this region. The `scaled_search_region` should be a 2D
+                array of shape `(self.num_params, 2)` where the first column
+                specifies lower bounds and the second column specifies upper
+                bounds for each parameter (in scaled units).
+
+        Returns:
+            best_scaled_params (array): The scaled parameter values which
+                minimize `scaled_figure_of_merit_function()` within
+                `scaled_search_region`. They are provided as a 1D array of
+                values in scaled units.
+        '''
+        # TODO: Consider moving this method to the parent MachineLearner class
+        # so that NeuralNetLearner.find_next_parameters() can be refactored to
+        # use it. This will require some changes (such as accepting a jacobian
+        # function).
+        # Generate the list of starting points for the search.
+        self.update_search_params()
+
+        # Search for parameters which minimize the provided
+        # scaled_figure_of_merit_function, starting at a few different points in
+        # parameter-space. The search for the next parameters will be performed
+        # in scaled units because so.minimize() can struggle with very large or
+        # very small values.
+        best_scaled_cost = float('inf')
+        best_scaled_params = None
+        for start_params in self.search_params:
+            scaled_start_parameters = self.params_scaler.transform(
+                [start_params],
+            )
+            result = so.minimize(
+                scaled_figure_of_merit_function,
+                scaled_start_parameters, 
+                bounds=scaled_search_region,
+                tol=self.search_precision,
+            )
+            # Check if these parameters give better predicted results than any
+            # others found so far in this search.
+            current_best_scaled_cost = result.fun
+            curr_best_scaled_params = result.x
+            if current_best_scaled_cost < best_scaled_cost:
+                best_scaled_cost = current_best_scaled_cost
+                best_scaled_params = curr_best_scaled_params
+
+        return best_scaled_params
+
     def find_next_parameters(self):
         '''
-        Returns next parameters to find. Increments counters and bias function appropriately.
+        Get the next parameters to test.
+
+        This method searches for the parameters expected to give the minimum
+        biased cost, as predicted by the Gaussian process. The biased cost is
+        not just the predicted cost, but a weighted sum of the predicted cost
+        and the uncertainty in the predicted cost. See
+        `self.predict_biased_cost()` for more information.
+
+        This method additionally increments `self.params_count` appropriately.
 
         Return:
-            next_params (array): Returns next parameters from biased cost search.
+            next_params (array): The next parameter values to try, stored in a
+                1D array.
         '''
+        # Increment the counter and update the bias function.
         self.params_count += 1
         self.update_bias_function()
-        self.update_search_params()
-        next_params = None
-        next_cost = float('inf')
-        for start_params in self.search_params:
-            # Scale the params and bounds before putting into the minimize function
-            # Otherwise, it may break
-            # We do the scaling *before* putting them in, so the predict cost/gradient method
-            # we use here does not scale the inputs inside the function 
-            
 
-            scaled_start_parameters = self.params_scaler.transform([start_params])
-            scaled_search_region = self.params_scaler.transform(np.array(self.search_region).T).T
-            
-            result = so.minimize(self.predict_biased_cost, scaled_start_parameters, 
-                                 bounds=scaled_search_region, tol=self.search_precision)
-            if result.fun < next_cost:
-                next_params = result.x
-                next_cost = result.fun
+        # Define the function to minimize when picking the next parameters.
+        def scaled_biased_cost_function(scaled_parameters):
+            scaled_biased_cost = self.predict_biased_cost(
+                scaled_parameters,
+                perform_scaling=False,
+            )
+            return scaled_biased_cost
 
-        new_parameters = self.params_scaler.inverse_transform([next_params])[0]
-        return new_parameters
+        # Set bounds on the parameter-space for the search.
+        scaled_search_region = self.params_scaler.transform(self.search_region.T).T
+
+        # Find the scaled parameters which minimize the biased cost function.
+        next_scaled_params = self._find_predicted_minimum(
+            scaled_figure_of_merit_function=scaled_biased_cost_function,
+            scaled_search_region=scaled_search_region,
+        )
+
+        # Convert the scaled parameters to real/unscaled units.
+        next_params = self.params_scaler.inverse_transform([next_scaled_params])[0]
+
+        return next_params
 
     def run(self):
         '''
@@ -2415,57 +2497,55 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         '''
         self.log.debug('Started search for predicted global minima.')
 
-        # Initialize some attributes for keeping track of predicted results.
-        self.predicted_best_parameters = None
-        self._predicted_best_scaled_cost = float('inf')
-        self._predicted_best_scaled_uncertainty = None
+        # Define the function to minimize when looking for the global minima.
+        def scaled_cost_function(scaled_parameters):
+            scaled_cost = self.predict_cost(
+                scaled_parameters,
+                perform_scaling=False,
+                return_uncertainty=False,
+            )
+            return scaled_cost
 
-        # Search for parameters which minimize the predicted cost, starting at a
-        # few different points in parameter-space. The search for the next
-        # parameters will be performed in scaled units because so.minimize() can
-        # struggle with very large or very small values.
-        search_bounds = list(zip(self.min_boundary, self.max_boundary))
-        scaled_search_region = self.params_scaler.transform(np.array(search_bounds).T).T
-        self.update_search_params()
-        for start_params in self.search_params:
-            scaled_start_parameters = self.params_scaler.transform(
-                [start_params],
-            )
-            result = so.minimize(
-                lambda params: self.predict_cost(params, perform_scaling=False),
-                scaled_start_parameters, 
-                bounds=scaled_search_region,
-                tol=self.search_precision,
-            )
-            curr_best_scaled_params = result.x
-            curr_best_params = self.params_scaler.inverse_transform([curr_best_scaled_params])[0]
-            curr_best_scaled_cost, curr_best_scaled_uncer = self.gaussian_process.predict(
-                curr_best_scaled_params[np.newaxis,:],
-                return_std=True,
-            )
-            if curr_best_scaled_cost < self._predicted_best_scaled_cost:
-                self.predicted_best_parameters = curr_best_params
-                self._predicted_best_scaled_cost = curr_best_scaled_cost
-                self._predicted_best_scaled_uncertainty = curr_best_scaled_uncer
+        # Set bounds on parameter-space for the search. Don't constrain to the
+        # trust region when looking for global minima.
+        search_region = np.transpose([self.min_boundary, self.max_boundary])
+        scaled_search_region = self.params_scaler.transform(search_region.T).T
 
-        # Format and store results.
-        # Convert 1-element 1D arrays to/from 2D for scikit-learn >=1.0
-        # compatability.
-        predicted_best_cost = self.cost_scaler.inverse_transform(
-            self._predicted_best_scaled_cost.reshape(1, -1)  # 2D array.
+        # Find the scaled parameters which minimize the cost function.
+        best_scaled_params = self._find_predicted_minimum(
+            scaled_figure_of_merit_function=scaled_cost_function,
+            scaled_search_region=scaled_search_region,
         )
-        self.predicted_best_cost = predicted_best_cost.reshape(1)  # 1D array.
-        self.predicted_best_uncertainty = self._predicted_best_scaled_uncertainty * self.cost_scaler.scale_
+
+        # Calculate some other related values in scaled units.
+        scaled_cost, scaled_uncertainty = self.predict_cost(
+            best_scaled_params,
+            perform_scaling=False,
+            return_uncertainty=True,
+        )
+        self._predicted_best_scaled_cost = scaled_cost
+        self._predicted_best_scaled_uncertainty = scaled_uncertainty
+
+        # Calculate some other related values in real/unscaled units.
+        self.predicted_best_parameters = self.params_scaler.inverse_transform([best_scaled_params])[0]
+        cost, uncertainty = self.predict_cost(
+            self.predicted_best_parameters,
+            perform_scaling=True,
+            return_uncertainty=True,
+        )
+        self.predicted_best_cost = cost
+        self.predicted_best_uncertainty = uncertainty
+
+        # Store results.
         self.archive_dict.update(
             {
-                'predicted_best_parameters':self.predicted_best_parameters,
-                'predicted_best_scaled_cost':self._predicted_best_scaled_cost,
-                'predicted_best_scaled_uncertainty':self._predicted_best_scaled_uncertainty,
-                'predicted_best_cost':self.predicted_best_cost,
-                'predicted_best_uncertainty':self.predicted_best_uncertainty,
+                'predicted_best_parameters': self.predicted_best_parameters,
+                'predicted_best_scaled_cost': self._predicted_best_scaled_cost,
+                'predicted_best_scaled_uncertainty': self._predicted_best_scaled_uncertainty,
+                'predicted_best_cost': self.predicted_best_cost,
+                'predicted_best_uncertainty': self.predicted_best_uncertainty,
             }
         )
-
         self.has_global_minima = True
         self.log.debug('Predicted global minima found.')
 
@@ -2790,7 +2870,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         # struggle with very large or very small values.
         self.neural_net[net_index].start_opt()
         net_scaler = self.neural_net[net_index]._param_scaler
-        scaled_search_region = net_scaler.transform(np.array(self.search_region).T).T
+        scaled_search_region = net_scaler.transform(self.search_region.T).T
         self.update_search_params()
         for start_params in self.search_params:
             scaled_start_parameters = net_scaler.transform([start_params])
