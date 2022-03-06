@@ -1532,6 +1532,82 @@ class MachineLearner(Learner):
         for _ in range(self.parameter_searches):
             self.search_params.append(self.search_min + nr.uniform(size=self.num_params) * self.search_diff)
 
+    def _find_predicted_minimum(
+        self,
+        scaled_figure_of_merit_function,
+        scaled_search_region,
+        scaled_jacobian_function=None,
+    ):
+        '''
+        Find the predicted minimum of `scaled_figure_of_merit_function()`.
+
+        The search for the minimum is constrained to be within
+        `scaled_search_region`.
+
+        The `scaled_figure_of_merit_function()` should take inputs in scaled
+        units and generate outputs in scaled units. This is necessary because
+        `scipy.optimize.minimize()` (which is used internally here) can struggle
+        if the numbers are too small or too large. Using scaled parameters and
+        figures of merit brings the numbers closer to ~1, which can improve the
+        behavior of `scipy.optimize.minimize()`. 
+
+        Args:
+            scaled_figure_of_merit_function (function): This should be a
+                function which accepts an array of scaled parameter values and
+                returns a predicted figure of merit. Importantly, both the input
+                parameter values and the returned value should be in scaled
+                units.
+            scaled_search_region (array): The scaled parameter-space bounds for
+                the search. The returned minimum position will be constrained to
+                be within this region. The `scaled_search_region` should be a 2D
+                array of shape `(self.num_params, 2)` where the first column
+                specifies lower bounds and the second column specifies upper
+                bounds for each parameter (in scaled units).
+            scaled_jacobian_function (function, optional): An optional function
+                giving the Jacobian of `scaled_figure_of_merit_function()` which
+                will be used by `scipy.optimize.minimize()` if provided. As with
+                `scaled_figure_of_merit_function()`, the
+                `scaled_jacobian_function()` should accept and return values in
+                scaled units. If `None` then no Jacobian will be provided to
+                `scipy.optimize.minimize()`. Defaults to `None`.
+
+        Returns:
+            best_scaled_params (array): The scaled parameter values which
+                minimize `scaled_figure_of_merit_function()` within
+                `scaled_search_region`. They are provided as a 1D array of
+                values in scaled units.
+        '''
+        # Generate the list of starting points for the search.
+        self.update_search_params()
+
+        # Search for parameters which minimize the provided
+        # scaled_figure_of_merit_function, starting at a few different points in
+        # parameter-space. The search for the next parameters will be performed
+        # in scaled units because so.minimize() can struggle with very large or
+        # very small values.
+        best_scaled_cost = float('inf')
+        best_scaled_params = None
+        for start_params in self.search_params:
+            scaled_start_parameters = self.params_scaler.transform(
+                [start_params],
+            )
+            result = so.minimize(
+                scaled_figure_of_merit_function,
+                scaled_start_parameters,
+                jac=scaled_jacobian_function,
+                bounds=scaled_search_region,
+                tol=self.search_precision,
+            )
+            # Check if these parameters give better predicted results than any
+            # others found so far in this search.
+            current_best_scaled_cost = result.fun
+            curr_best_scaled_params = result.x
+            if current_best_scaled_cost < best_scaled_cost:
+                best_scaled_cost = current_best_scaled_cost
+                best_scaled_params = curr_best_scaled_params
+
+        return best_scaled_params
+
 
 class GaussianProcessLearner(MachineLearner, mp.Process):
     '''
@@ -2230,77 +2306,6 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
 
         return biased_cost
 
-    def _find_predicted_minimum(
-        self,
-        scaled_figure_of_merit_function,
-        scaled_search_region,
-    ):
-        '''
-        Find the predicted minimum of `scaled_figure_of_merit_function()`.
-
-        The search for the minimum is constrained to be within
-        `scaled_search_region`.
-
-        The `scaled_figure_of_merit_function()` should take inputs in scaled
-        units and generate outputs in scaled units. This is necessary because
-        `scipy.optimize.minimize()` (which is used internally here) can struggle
-        if the numbers are too small or too large. Using scaled parameters and
-        figures of merit brings the numbers closer to ~1, which can improve the
-        behavior of `scipy.optimize.minimize()`. 
-
-        Args:
-            scaled_figure_of_merit_function (function): This should be a
-                function which accepts an array of scaled parameter values and
-                returns a predicted figure of merit. Importantly, both the input
-                parameter values and the returned value should be in scaled
-                units.
-            scaled_search_region (array): The scaled parameter-space bounds for
-                the search. The returned minimum position will be constrained to
-                be within this region. The `scaled_search_region` should be a 2D
-                array of shape `(self.num_params, 2)` where the first column
-                specifies lower bounds and the second column specifies upper
-                bounds for each parameter (in scaled units).
-
-        Returns:
-            best_scaled_params (array): The scaled parameter values which
-                minimize `scaled_figure_of_merit_function()` within
-                `scaled_search_region`. They are provided as a 1D array of
-                values in scaled units.
-        '''
-        # TODO: Consider moving this method to the parent MachineLearner class
-        # so that NeuralNetLearner.find_next_parameters() can be refactored to
-        # use it. This will require some changes (such as accepting a jacobian
-        # function).
-        # Generate the list of starting points for the search.
-        self.update_search_params()
-
-        # Search for parameters which minimize the provided
-        # scaled_figure_of_merit_function, starting at a few different points in
-        # parameter-space. The search for the next parameters will be performed
-        # in scaled units because so.minimize() can struggle with very large or
-        # very small values.
-        best_scaled_cost = float('inf')
-        best_scaled_params = None
-        for start_params in self.search_params:
-            scaled_start_parameters = self.params_scaler.transform(
-                [start_params],
-            )
-            result = so.minimize(
-                scaled_figure_of_merit_function,
-                scaled_start_parameters, 
-                bounds=scaled_search_region,
-                tol=self.search_precision,
-            )
-            # Check if these parameters give better predicted results than any
-            # others found so far in this search.
-            current_best_scaled_cost = result.fun
-            curr_best_scaled_params = result.x
-            if current_best_scaled_cost < best_scaled_cost:
-                best_scaled_cost = current_best_scaled_cost
-                best_scaled_params = curr_best_scaled_params
-
-        return best_scaled_params
-
     def find_next_parameters(self):
         '''
         Get the next parameters to test.
@@ -2838,25 +2843,23 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                 Defaults to `None`.
 
         Return:
-            next_params (array): The next parameter values to try.
+            next_params (array): The next parameter values to try, stored in a
+                1D array.
         '''
         # Set default values.
         if net_index is None:
             net_index = nr.randint(self.num_nets)
-        
-        # Initialize some attributes for keeping track of predicted results.
-        next_params = None
-        next_cost = float('inf')
+        net = self.neural_net[net_index]
 
         # Create functions for the search.
-        def search_function(scaled_params):
+        def scaled_cost_function(scaled_params):
             scaled_cost = self.predict_cost(
                 scaled_params,
                 net_index=net_index,
                 perform_scaling=False,
             )
             return scaled_cost
-        def search_jacobian(scaled_params):
+        def scaled_cost_jacobian_function(scaled_params):
             scaled_jacobian = self.predict_cost_gradient(
                 scaled_params,
                 net_index=net_index,
@@ -2864,29 +2867,36 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             )
             return scaled_jacobian
 
-        # Search for parameters which minimize the predicted cost, starting at a
-        # few different points in parameter-space. The search for the next
-        # parameters will be performed in scaled units because so.minimize() can
-        # struggle with very large or very small values.
-        self.neural_net[net_index].start_opt()
-        net_scaler = self.neural_net[net_index]._param_scaler
-        scaled_search_region = net_scaler.transform(self.search_region.T).T
-        self.update_search_params()
-        for start_params in self.search_params:
-            scaled_start_parameters = net_scaler.transform([start_params])
-            result = so.minimize(
-                fun=search_function,
-                x0=scaled_start_parameters,
-                jac=search_jacobian,
-                bounds=scaled_search_region,
-                tol=self.search_precision,
-            )
-            # Check if these parameters give better predicted results than any
-            # others found so far in this search.
-            if result.fun < next_cost:
-                next_params = net_scaler.inverse_transform([result.x])[0]
-                next_cost = result.fun
-        self.neural_net[net_index].stop_opt()
+        # MachineLearner._find_predicted_minimum() needs self.params_scaler.
+        # Currently, NeuralNetLearner does not have a self.params_scaler, which
+        # is instead handled by each of of the nets in self.neural_net. As a bit
+        # of a hack, we'll assign self.params_scaler to the current net's
+        # ParameterScaler. We'll also use that ParameterScaler for a few other
+        # lines in this method. In the future we should consider giving
+        # NeuralNetLearner its own ParameterScaler.
+        params_scaler = net._param_scaler
+        self.params_scaler = params_scaler
+
+        # Set bounds on the parameter-space for the search.
+        scaled_search_region = params_scaler.transform(self.search_region.T).T
+
+        # Find the scaled parameters which minimize the predicted cost function.
+        net.start_opt()
+        next_scaled_params = self._find_predicted_minimum(
+            scaled_figure_of_merit_function=scaled_cost_function,
+            scaled_search_region=scaled_search_region,
+            scaled_jacobian_function=scaled_cost_jacobian_function,
+        )
+        net.stop_opt()
+
+        # Convert scaled parameters to real/unscaled units and get the predicted
+        # cost.
+        next_params = params_scaler.inverse_transform([next_scaled_params])[0]
+        next_cost = self.predict_cost(
+            next_params,
+            net_index=net_index,
+            perform_scaling=True,
+        )
 
         # Increment the counter.
         self.params_count += 1
