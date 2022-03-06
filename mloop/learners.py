@@ -2219,10 +2219,10 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                 `perform_scaling` is `False`.
         '''
         # Determine the predicted cost and uncertainty.
-        cost, uncertainty = self.gaussian_process.predict(
+        cost, uncertainty = self.predict_cost(
             params,
             perform_scaling=perform_scaling,
-            return_std=True,
+            return_uncertainty=True,
         )
 
         # Calculate the biased cost.
