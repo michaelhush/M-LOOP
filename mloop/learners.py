@@ -1591,6 +1591,8 @@ class MachineLearner(Learner):
             scaled_start_parameters = self.params_scaler.transform(
                 [start_params],
             )
+            # Extract 1D array from 2D array.
+            scaled_start_parameters = scaled_start_parameters[0]
             result = so.minimize(
                 scaled_figure_of_merit_function,
                 scaled_start_parameters,
