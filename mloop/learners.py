@@ -1536,6 +1536,7 @@ class MachineLearner(Learner):
         self,
         scaled_figure_of_merit_function,
         scaled_search_region,
+        params_scaler,
         scaled_jacobian_function=None,
     ):
         '''
@@ -1563,6 +1564,8 @@ class MachineLearner(Learner):
                 array of shape `(self.num_params, 2)` where the first column
                 specifies lower bounds and the second column specifies upper
                 bounds for each parameter (in scaled units).
+            params_scaler (mloop.utilities.ParameterScaler): A `ParameterScaler`
+                instance for converting parameters to scaled units.
             scaled_jacobian_function (function, optional): An optional function
                 giving the Jacobian of `scaled_figure_of_merit_function()` which
                 will be used by `scipy.optimize.minimize()` if provided. As with
@@ -1588,7 +1591,7 @@ class MachineLearner(Learner):
         best_scaled_cost = float('inf')
         best_scaled_params = None
         for start_params in self.search_params:
-            scaled_start_parameters = self.params_scaler.transform(
+            scaled_start_parameters = params_scaler.transform(
                 [start_params],
             )
             # Extract 1D array from 2D array.
@@ -2343,6 +2346,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         next_scaled_params = self._find_predicted_minimum(
             scaled_figure_of_merit_function=scaled_biased_cost_function,
             scaled_search_region=scaled_search_region,
+            params_scaler=self.params_scaler,
         )
 
         # Convert the scaled parameters to real/unscaled units.
@@ -2522,6 +2526,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         best_scaled_params = self._find_predicted_minimum(
             scaled_figure_of_merit_function=scaled_cost_function,
             scaled_search_region=scaled_search_region,
+            params_scaler=self.params_scaler,
         )
 
         # Calculate some other related values in scaled units.
@@ -2869,15 +2874,8 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             )
             return scaled_jacobian
 
-        # MachineLearner._find_predicted_minimum() needs self.params_scaler.
-        # Currently, NeuralNetLearner does not have a self.params_scaler, which
-        # is instead handled by each of of the nets in self.neural_net. As a bit
-        # of a hack, we'll assign self.params_scaler to the current net's
-        # ParameterScaler. We'll also use that ParameterScaler for a few other
-        # lines in this method. In the future we should consider giving
-        # NeuralNetLearner its own ParameterScaler.
+        # Get the ParameterScaler used for this neural net.
         params_scaler = net._param_scaler
-        self.params_scaler = params_scaler
 
         # Set bounds on the parameter-space for the search.
         scaled_search_region = params_scaler.transform(self.search_region.T).T
@@ -2887,6 +2885,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         next_scaled_params = self._find_predicted_minimum(
             scaled_figure_of_merit_function=scaled_cost_function,
             scaled_search_region=scaled_search_region,
+            params_scaler=params_scaler,
             scaled_jacobian_function=scaled_cost_jacobian_function,
         )
         net.stop_opt()
