@@ -870,46 +870,79 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         the best measured cost.
 
         Keyword Args:
-            points (int): the number of points to sample along each cross section. Default value is 100.
-            cross_section_center (array): parameter array where the centre of
-                the cross section should be taken. If None, the parameters for
+            points (int): The number of points to sample along each cross
+                section. Defaults to `100`.
+            cross_section_center (array): Parameter array where the center of
+                the cross section should be taken. If `None`, the parameters for
                 the best measured cost are used. Default `None`.
 
         Returns:
-            a tuple (cross_arrays, cost_arrays, uncer_arrays)
-            cross_parameter_arrays (list): a list of arrays for each cross section, with the values of the varied parameter going from the minimum to maximum value.
-            cost_arrays (list): a list of arrays for the costs evaluated along
+            A tuple (cross_arrays, cost_arrays, uncer_arrays)
+            cross_parameter_arrays (list): A list of arrays for each cross
+                section, with the values of the varied parameter going from the
+                minimum to maximum allowed value.
+            cost_arrays (list): A list of arrays for the costs evaluated along
                 each cross section through `cross_section_center`.
-            uncertainty_arrays (list): a list of uncertainties
+            uncertainty_arrays (list): A list of uncertainties corresponding to
+                the costs in `cost_arrays`.
         '''
+        # Interpret/check inputs.
         points = int(points)
         if points <= 0:
-            self.log.error('Points provided must be larger than zero:' + repr(points))
-            raise ValueError
+            msg = 'Points provided must be larger than zero: ' + repr(points)
+            self.log.error(msg)
+            raise ValueError(msg)
 
         if cross_section_center is None:
             cross_section_center = self.best_params
         else:
             cross_section_center = np.array(cross_section_center)
             if not self.check_in_boundary(cross_section_center):
-                self.log.error('cross_section_center not in boundaries:' + repr(cross_section_center))
-                raise ValueError
+                msg = 'cross_section_center not in boundaries: ' + repr(cross_section_center)
+                self.log.error(msg)
+                raise ValueError(msg)
 
-        cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
+        # Generate a list of values for each parameter, each ranging from the
+        # minimum to the maximum value allowed for the given parameter.
+        cross_parameter_arrays = [
+            np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)
+        ]
+
+        # Create a cross section for each parameter.
         scaled_cost_arrays = []
         scaled_uncertainty_arrays = []
         for ind in range(self.num_params):
-            sample_parameters = np.array([cross_section_center for _ in range(points)])
+            # Create the arrays of parameter values, each row is a 1D array of
+            # parameter values for one point in the cross section. All of the
+            # rows have the exact same values for all of the parameters except
+            # for the one which is varied for this cross section.
+            sample_parameters = np.array(
+                [cross_section_center for _ in range(points)],
+            )
             sample_parameters[:, ind] = cross_parameter_arrays[ind]
-            if self.params_scaler is not None:
-                scaled_sample_parameters = self.params_scaler.transform(sample_parameters)
 
-            (costs, uncers) = self.gaussian_process.predict(scaled_sample_parameters,return_std=True)
+            # Get the predicted cost and uncertainty for each point.
+            # TODO: Maybe vectorize super().predict_cost() so that it can accept
+            # 2D arrays where each row is a set of parameter values, in which
+            # case it would then return a 1D array of costs, and optionally a 1D
+            # array of cost uncertainties as well.
+            scaled_sample_parameters = self.params_scaler.transform(
+                sample_parameters,
+            )
+            (costs, uncers) = self.gaussian_process.predict(
+                scaled_sample_parameters,
+                return_std=True,
+            )
             scaled_cost_arrays.append(costs)
             scaled_uncertainty_arrays.append(uncers)
+
+        # Put results into arrays and convert scaled units to real units.
         cross_parameter_arrays = np.array(cross_parameter_arrays)
-        cost_arrays = self.cost_scaler.inverse_transform(np.array(scaled_cost_arrays))
+        cost_arrays = self.cost_scaler.inverse_transform(
+            np.array(scaled_cost_arrays),
+        )
         uncertainty_arrays = np.array(scaled_uncertainty_arrays) * self.cost_scaler.scale_
+
         return (cross_parameter_arrays,cost_arrays,uncertainty_arrays)
 
     def create_visualizations(self,
