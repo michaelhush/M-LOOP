@@ -20,8 +20,8 @@ python_version = sys.version_info[0]
 
 #For libraries with different names in pythons 2 and 3
 if python_version < 3:
-    import Queue #@UnresolvedImport @UnusedImport
-    empty_exception = Queue.Empty
+    import Queue as queue  #@UnresolvedImport @UnusedImport
+    empty_exception = queue.Empty
 else:
     import queue
     empty_exception = queue.Empty

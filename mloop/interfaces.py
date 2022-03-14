@@ -83,6 +83,12 @@ class Interface(threading.Thread):
         
         self.params_out_queue = mp.Queue()
         self.costs_in_queue = mp.Queue()
+        # mp.Queue was stripping traceback information from errors, so the error
+        # queue will use a queue.Queue instance, which is fine since the
+        # interface and controller run in the same process, though different
+        # threads. Access via mloop.utilies since the import there handles
+        # Python 2 or 3 compatability.
+        self.interface_error_queue = mlu.queue.Queue()
         self.end_event = mp.Event()
         
         self.interface_wait = float(interface_wait)
@@ -92,18 +98,42 @@ class Interface(threading.Thread):
     
     def run(self):
         '''
-        The run sequence for the interface. This method does not need to be overloaded create a working interface. 
-        
+        The run sequence for the interface.
+
+        This method does NOT need to be overloaded create a working interface.
         '''
         self.log.debug('Entering main loop of interface.')
         try:
             while not self.end_event.is_set():
+                # Wait for the next set of parameter values to test.
                 try:
                     params_dict = self.params_out_queue.get(True, self.interface_wait)
                 except mlu.empty_exception:
                     continue
-                else:
+
+                # Try to run self.get_next_cost_dict(), passing any errors on to
+                # the controller. The one exception is that the
+                # InterfaceInterrupt error is handled locally. Note that the
+                # interface and controller run in separate threads which is why
+                # the error has to be passed through a queue rather than just
+                # raised here.
+                try:
                     cost_dict = self.get_next_cost_dict(params_dict)
+                except Exception as err:
+                    # Take care of special case that InterfaceInterrupts should
+                    # be handled locally.
+                    if isinstance(err, InterfaceInterrupt):
+                        raise
+                    else:
+                        # Send the error to the controller and set the end event
+                        # to shut down the interface. Setting the end event here
+                        # and now prevents the interface from running another
+                        # iteration when there already are more items in
+                        # self.params_out_queue.
+                        self.interface_error_queue.put(err)
+                        self.end_event.set()
+                else:
+                    # Send the results back to the controller.
                     self.costs_in_queue.put(cost_dict)
         except InterfaceInterrupt:
             pass

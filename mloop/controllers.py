@@ -6,6 +6,7 @@ __metaclass__ = type
 
 import datetime
 from importlib import import_module
+import traceback
 from mloop import __version__
 import mloop.utilities as mlu
 import mloop.learners as mll
@@ -173,6 +174,7 @@ class Controller():
 
         self.params_out_queue = interface.params_out_queue
         self.costs_in_queue = interface.costs_in_queue
+        self.interface_error_queue = interface.interface_error_queue
         self.end_interface = interface.end_event
 
         #Other options
@@ -285,15 +287,38 @@ class Controller():
 
     def _get_cost_and_in_dict(self):
         '''
-        Get cost, uncertainty, parameters, bad and extra data from experiment. Stores in a list of history and also puts variables in their appropriate 'current' variables
-        Note returns nothing, stores everything in the internal storage arrays and the curr_variables
+        Get cost, uncertainty, parameters, bad and extra data from experiment.
+
+        This method stores results in lists and also puts data in the
+        appropriate 'current' variables. This method doesn't return anything and
+        instead stores all of its results in the internal storage arrays and the
+        'current' variables.
+        
+        If the interface encounters an error, it will pass the error to the
+        controller here so that the error can be re-raised in the controller's
+        thread (note that the interface runs in a separate thread).
         '''
         while True:
             try:
                 in_dict = self.costs_in_queue.get(True, self.controller_wait)
             except mlu.empty_exception:
-                continue
+                # Check for an error from the interface.
+                try:
+                    err = self.interface_error_queue.get_nowait()
+                except mlu.empty_exception:
+                    # The interface didn't send an error, so go back to waiting
+                    # for results.
+                    continue
+                else:
+                    # Log and re-raise the error sent by the interface.
+                    msg = 'The interface raised an error with traceback:\n'
+                    msg = msg + '\n'.join(
+                        traceback.format_tb(err.__traceback__),
+                    )
+                    self.log.error(msg)
+                    raise err
             else:
+                # Got a cost dict, so exit this while loop.
                 break
 
         self.num_in_costs += 1
