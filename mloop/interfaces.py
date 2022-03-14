@@ -14,6 +14,7 @@ import multiprocessing as mp
 import mloop.utilities as mlu
 import mloop.testing as mlt
 import logging
+import warnings
 
 def create_interface(interface_type='file', 
                       **interface_config_dict):
@@ -48,9 +49,18 @@ def create_interface(interface_type='file',
 
 class InterfaceInterrupt(Exception):
     '''
-    Exception that is raised when the interface is ended with the end event, or some other interruption.  
+    The `InterfaceInterrupt` is now deprecated.
+    
+    The `Interface` class can now handle arbitrary errors, so there is no need
+    for `Interface.get_next_cost_dict()` to raise an `InterfaceInterrupt` in
+    particular. Instead raise an appropriate error given the situation.
     '''
     def __init__(self):
+        warnings.warn(
+            "InterfaceInterrupt is now deprecated. Instead the `Interface` "
+            "class can now handle arbitrary errors, so simply raise an "
+            "appropriate error given the situation."
+        )
         super(InterfaceInterrupt,self).__init__()
     
 
@@ -83,6 +93,12 @@ class Interface(threading.Thread):
         
         self.params_out_queue = mp.Queue()
         self.costs_in_queue = mp.Queue()
+        # mp.Queue was stripping traceback information from errors, so the error
+        # queue will use a queue.Queue instance, which is fine since the
+        # interface and controller run in the same process, though different
+        # threads. Access via mloop.utilies since the import there handles
+        # Python 2 or 3 compatability.
+        self.interface_error_queue = mlu.queue.Queue()
         self.end_event = mp.Event()
         
         self.interface_wait = float(interface_wait)
@@ -92,33 +108,66 @@ class Interface(threading.Thread):
     
     def run(self):
         '''
-        The run sequence for the interface. This method does not need to be overloaded create a working interface. 
-        
+        The run sequence for the interface.
+
+        This method does NOT need to be overloaded create a working interface.
         '''
         self.log.debug('Entering main loop of interface.')
-        try:
-            while not self.end_event.is_set():
-                try:
-                    params_dict = self.params_out_queue.get(True, self.interface_wait)
-                except mlu.empty_exception:
-                    continue
-                else:
-                    cost_dict = self.get_next_cost_dict(params_dict)
-                    self.costs_in_queue.put(cost_dict)
-        except InterfaceInterrupt:
-            pass
+        while not self.end_event.is_set():
+            # Wait for the next set of parameter values to test.
+            try:
+                params_dict = self.params_out_queue.get(
+                    True,
+                    self.interface_wait,
+                )
+            except mlu.empty_exception:
+                continue
+
+            # Try to run self.get_next_cost_dict(), passing any errors on to the
+            # controller. Note that the interface and controller run in separate
+            # threads which is why the error has to be passed through a queue
+            # rather than just raised here. If it were raised here, then the
+            # interface thread would crash and the controller thread would get
+            # stuck indefinitely waiting for results from the interface.
+            try:
+                cost_dict = self.get_next_cost_dict(params_dict)
+            except Exception as err:
+                # Send the error to the controller and set the end event to shut
+                # down the interface. Setting the end event here and now
+                # prevents the interface from running another iteration when
+                # there are more items in self.params_out_queue already.
+                self.interface_error_queue.put(err)
+                self.end_event.set()
+            else:
+                # Send the results back to the controller.
+                self.costs_in_queue.put(cost_dict)
         self.log.debug('Interface ended')
         #self.log = None
         
-    def get_next_cost_dict(self,params_dict):
+    def get_next_cost_dict(self, params_dict):
         '''
-        Abstract method. This is the only method that needs to be implemented to make a working interface. Given the parameters the interface must then produce a new cost. This may occur by running an experiment or program. If you wish to abruptly end this interface for whatever reason please raise the exception InterfaceInterrupt, which will then be safely caught.
-        
+        Abstract method.
+
+        This is the only method that needs to be implemented to make a working
+        interface.
+
+        Given the parameters the interface must then produce a new cost. This
+        may occur by running an experiment or program. If an error is raised by
+        this method, the optimization will halt.
+
         Args:
-            params_dict (dictionary): A dictionary containing the parameters. Use params_dict['params'] to access them.
-        
+            params_dict (dictionary): A dictionary containing the parameters.
+                Use `params_dict['params']` to access them.
+
         Returns:
-            cost_dict (dictionary): The cost and other properties derived from the experiment when it was run with the parameters. If just a cost was produced provide {'cost':[float]}, if you also have an uncertainty provide {'cost':[float],'uncer':[float]}. If the run was bad you can simply provide {'bad':True}. For completeness you can always provide all three using {'cost':[float],'uncer':[float],'bad':[bool]}. Providing any extra keys will also be saved byt he controller.
+            cost_dict (dictionary): The cost and other properties derived from
+                the experiment when it was run with the parameters. If just a
+                cost was produced provide `{'cost': [float]}`, if you also have
+                an uncertainty provide `{'cost': [float], 'uncer': [float]}`. If
+                the run was bad you can simply provide `{'bad': True}`. For
+                completeness you can always provide all three using
+                `{'cost': [float], 'uncer':[float], 'bad': [bool]}`. Any extra
+                keys provided will also be saved by the controller.
         '''
         pass
     
@@ -182,8 +231,6 @@ class FileInterface(Interface):
                 break
             else:
                 time.sleep(self.interface_wait)
-        else:
-            raise InterfaceInterrupt
         return in_dict
         
     
