@@ -81,29 +81,70 @@ def create_controller(interface,
 
 class Controller():
     '''
-    Abstract class for controllers. The controller controls the entire M-LOOP process. The controller for each algorithm all inherit from this class. The class stores a variety of data which all algorithms use and also all of the archiving and saving features.
-    In order to implement your own controller class the minimum requirement is to add a learner to the learner variable. And implement the next_parameters method, where you provide the appropriate information to the learner and get the next parameters.
-    See the RandomController for a simple implementation of a controller.
-    Note the first three keywords are all possible halting conditions for the controller. If any of them are satisfied the controller will halt (meaning an and condition is used).
-    Also creates an empty variable learner. The simplest way to make a working controller is to assign a learner of some kind to this variable, and add appropriate queues and events from it.
+    Abstract class for controllers.
+
+    The controller controls the entire M-LOOP process. The controllers for each
+    algorithm all inherit from this class. The class stores a variety of data
+    which all algorithms use and also includes all of the archiving and saving
+    features.
+    
+    In order to implement your own controller class the minimum requirement is
+    to add a learner to the learner variable and implement the
+    `next_parameters()` method where you provide the appropriate information to
+    the learner and get the next parameters. See the `RandomController` for a
+    simple implementation of a controller. Note the first three keywords are all
+    possible halting conditions for the controller. If any of them are satisfied
+    the controller will halt (meaning an OR condition is used). This base class
+    also creates an empty attribute `self.learner`. The simplest way to make a
+    working controller is to assign a learner of some kind to this variable, and
+    add appropriate queues and events from it.
+
     Args:
-        interface (interface): The interface process. Is run by learner.
+        interface (interface): The interface process. It is run by the
+            controller.
+
     Keyword Args:
-        max_num_runs (Optional [float]): The number of runs before the controller stops. If set to float('+inf') the controller will run forever. Default float('inf'), meaning the controller will run until another condition is met.
-        target_cost (Optional [float]): The target cost for the run. If a run achieves a cost lower than the target, the controller is stopped. Default float('-inf'), meaning the controller will run until another condition is met.
-        max_num_runs_without_better_params (Optional [float]): Puts a limit on the number of runs are allowed before a new better set of parameters is found. Default float('inf'), meaning the controller will run until another condition is met.
-        controller_archive_filename (Optional [string]): Filename for archive. Contains costs, parameter history and other details depending on the controller type. Default 'ControllerArchive.mat'
-        controller_archive_file_type (Optional [string]): File type for archive. Can be either 'txt' a human readable text file, 'pkl' a python dill file, 'mat' a matlab file or None if there is no archive. Default 'mat'.
-        archive_extra_dict (Optional [dict]): A dictionary with any extra variables that are to be saved to the archive. If None, nothing is added. Default None.
-        start_datetime (Optional datetime): Datetime for when controller was started.
+        max_num_runs (Optional [float]): The number of runs before the
+            controller stops. If set to `float('+inf')` the controller will run
+            forever assuming no other halting conditions are met. Default
+            `float('inf')`, meaning the controller will run until another
+            halting condition is met.
+        target_cost (Optional [float]): The target cost for the run. If a run
+            achieves a cost lower than the target, the controller is stopped.
+            Default `float('-inf')`, meaning the controller will run until
+            another halting condition is met.
+        max_num_runs_without_better_params (Optional [float]): The optimization
+            will halt if the number of consecutive runs without improving over
+            the best measured value thus far exceeds this number. Default
+            `float('inf')`, meaning the controller will run until another
+            halting condition is met.
+        controller_archive_filename (Optional [string]): Filename for archive.
+            The archive contains costs, parameter history and other details
+            depending on the controller type. Default
+            `'controller_archive'`.
+        controller_archive_file_type (Optional [string]): File type for archive.
+            Can be either `'txt'` for a human readable text file, `'pkl'` for a
+            python pickle file, `'mat'` for a matlab file, or `None` to forgo
+            saving a controller archive. Default `'txt'`.
+        archive_extra_dict (Optional [dict]): A dictionary with any extra
+            variables that are to be saved to the archive. If `None`, nothing is
+            added. Default `None`.
+        start_datetime (Optional datetime): Datetime for when the controller was
+            started.
+
     Attributes:
-        params_out_queue (queue): Queue for parameters to next be run by experiment.
-        costs_in_queue (queue): Queue for costs (and other details) that have been returned by experiment.
-        end_interface (event): Event used to trigger the end of the interface
-        learner (None): The placeholder for the learner, creating this variable is the minimum requirement to make a working controller class.
-        learner_params_queue (queue): The parameters queue for the learner
-        learner_costs_queue (queue): The costs queue for the learner
-        end_learner (event): Event used to trigger the end of the learner
+        params_out_queue (queue): Queue for parameters to next be run by the
+            experiment.
+        costs_in_queue (queue): Queue for costs (and other details) that have
+            been returned by experiment.
+        interface_error_queue (queue): Queue for returning errors encountered by
+            the interface.
+        end_interface (event): Event used to trigger the end of the interface.
+        learner (None): The placeholder for the learner. Creating this variable
+            is the minimum requirement to make a working controller class.
+        learner_params_queue (queue): The parameters queue for the learner.
+        learner_costs_queue (queue): The costs queue for the learner.
+        end_learner (event): Event used to trigger the end of the learner.
         num_in_costs (int): Counter for the number of costs received.
         num_out_params (int): Counter for the number of parameters received.
         out_params (list): List of all parameters sent out by controller.
