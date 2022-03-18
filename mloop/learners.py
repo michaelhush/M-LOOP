@@ -8,6 +8,7 @@ __metaclass__ = type
 
 import threading
 import numpy as np
+import math
 import random
 import numpy.random as nr
 import scipy.optimize as so
@@ -759,9 +760,12 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         evolution_strategy (Optional [string]): the differential evolution strategy to use, options are 'best1', 'best2', 'rand1' and 'rand2'. The default is 'best1'.
         population_size (Optional [int]): multiplier proportional to the number of parameters in a generation. The generation population is set to population_size * parameter_num. Default 15.
         mutation_scale (Optional [tuple]): The mutation scale when picking new points. Otherwise known as differential weight. When provided as a tuple (min,max) a mutation constant is picked randomly in the interval. Default (0.5,1.0).
+        elite  (Optional [float]): When selecting random agents only select from the fraction of the best agents given by elite.
         cross_over_probability (Optional [float]): The recombination constand or crossover probability, the probability a new points will be added to the population.
         restart_tolerance (Optional [float]): when the current population have a spread less than the initial tolerance, namely stdev(curr_pop) < restart_tolerance stdev(init_pop), it is likely the population is now in a minima, and so the search is started again.
-
+        restart_to_best (Optional [bool]): upon restart use the current best params rather than first_params.
+        lifetime (Optional [int]): re-evaluate each agent after a number of iterations given by lifetime.  This avoids drifts present in physical hardware.  lifetime <= 0 indicates infinite lifetime which is the standard DE method.
+            
     Attributes:
         has_trust_region (bool): Whether the learner has a trust region.
         num_population_members (int): The number of parameters in a generation.
@@ -777,8 +781,11 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                  evolution_strategy='best1',
                  population_size=15,
                  mutation_scale=(0.5, 1),
+                 elite=1.0,
                  cross_over_probability=0.7,
                  restart_tolerance=0.01,
+                 restart_to_best=False,
+                 lifetime=0,
                  **kwargs):
 
         super(DifferentialEvolutionLearner,self).__init__(**kwargs)
@@ -811,8 +818,11 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             self.log.error(msg)
             raise ValueError(msg)
 
+        self.lifetime = lifetime
         self.evolution_strategy = evolution_strategy
         self.restart_tolerance = restart_tolerance
+        self.restart_to_best = bool(restart_to_best)
+            
 
         if len(mutation_scale) == 2 and (np.any(np.array(mutation_scale) <= 2) or np.any(np.array(mutation_scale) > 0)):
             self.mutation_scale = mutation_scale
@@ -831,9 +841,13 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         else:
             self.log.error('Population size must be greater or equal to 5:' + repr(population_size))
 
-        self.num_population_members = self.population_size * self.num_params
+        if elite < 0 or elite > 1:
+            self.log.error('Elite must be between 0 and 1:' + repr(elite))
+        else:
+            self.elite = elite
 
-        self.first_sample = True
+
+        self.num_population_members = self.population_size * self.num_params
 
         self.params_generations = []
         self.costs_generations = []
@@ -850,6 +864,8 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
                                   'population_size':self.population_size,
                                   'num_population_members':self.num_population_members,
                                   'restart_tolerance':self.restart_tolerance,
+                                  'restart_to_best':self.restart_to_best,
+                                  'lifetime':self.lifetime,
                                   'first_params':self.first_params,
                                   'has_trust_region':self.has_trust_region,
                                   'trust_region':self.trust_region})
@@ -861,14 +877,17 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
         try:
 
-            self.generate_population()
+            self.generate_population(first_params=self.first_params)
 
             while not self.end_event.is_set():
 
                 self.next_generation()
 
                 if self.curr_std < self.restart_tolerance * self.init_std:
-                    self.generate_population()
+                    if self.restart_to_best:
+                        self.generate_population(first_params=self.population[self.min_index])
+                    else:
+                        self.generate_population()
 
         except LearnerInterrupt:
             return
@@ -881,18 +900,20 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         self.costs_generations.append(np.copy(self.population_costs))
         self.generation_count += 1
 
-    def generate_population(self):
+    def generate_population(self, first_params=[np.inf]):
         '''
         Sample a new random set of variables
         '''
 
         self.population = []
         self.population_costs = []
+        self.population_age = []
         self.min_index = 0
 
-        if np.all(np.isfinite(self.first_params)) and self.first_sample:
-            curr_params = self.first_params
-            self.first_sample = False
+        # TODO: right now only one first params is accepted, but should
+        # be able to give as many as desired.
+        if np.all(np.isfinite(first_params)):
+            curr_params = first_params
         else:
             curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
 
@@ -900,6 +921,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         self.population.append(curr_params)
         self.population_costs.append(curr_cost)
+        self.population_age.append(0)
 
         for index in range(1, self.num_population_members):
 
@@ -914,12 +936,15 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
             self.population.append(curr_params)
             self.population_costs.append(curr_cost)
+            self.population_age.append(0)
+
 
             if curr_cost < self.population_costs[self.min_index]:
                 self.min_index = index
 
         self.population = np.array(self.population)
         self.population_costs = np.array(self.population_costs)
+        self.population_age = np.array(self.population_age)
 
         self.init_std = np.std(self.population_costs)
         self.curr_std = self.init_std
@@ -933,24 +958,40 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
         self.curr_scale = nr.uniform(self.mutation_scale[0], self.mutation_scale[1])
 
+        # re-evaulate all agents that are older than self.lifetime
+        # and generate candidate parameters
+        candidates = []
+        for index in range(self.num_population_members):
+                
+            if self.lifetime > 0 and self.population_age[index] > self.lifetime:
+                self.population_costs[index] = self.put_params_and_get_cost(self.population[index])
+                self.population_age[index] = 0
+                
+            candidates.append(self.mutation_func(index))
+
+        self.min_index = np.argmin(self.population_costs)
+
         for index in range(self.num_population_members):
 
-            curr_params = self.mutate(index)
+            curr_params = self.mutate(index, candidates[index])
 
             curr_cost = self.put_params_and_get_cost(curr_params)
 
             if curr_cost < self.population_costs[index]:
                 self.population[index] = curr_params
                 self.population_costs[index] = curr_cost
+                self.population_age[index] = 0
+            else:
+                self.population_age[index] += 1
 
-                if curr_cost < self.population_costs[self.min_index]:
-                    self.min_index = index
+        
+        self.min_index = np.argmin(self.population_costs)
 
         self.curr_std = np.std(self.population_costs)
 
         self.save_generation()
 
-    def mutate(self, index):
+    def mutate(self, index, candidate_params):
         '''
         Mutate the parameters at index.
 
@@ -959,7 +1000,6 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
 
         fill_point = nr.randint(0, self.num_params)
-        candidate_params = self.mutation_func(index)
         crossovers = nr.rand(self.num_params) < self.cross_over_probability
         crossovers[fill_point] = True
         mutated_params = np.where(crossovers, candidate_params, self.population[index])
@@ -1017,15 +1057,28 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
 
     def random_index_sample(self, index, num_picks):
         '''
-        Randomly select a num_picks of indexes, without index.
+        Randomly select a num_picks of indexes, without index, from 
+        a subset of all cases given by self.elite, where 1 selects from
+        all and 0 gives the num_picks best
 
         Args:
             index(int): The index that is not included
             num_picks(int): The number of picks.
         '''
-        rand_indexes = list(range(self.num_population_members))
-        rand_indexes.remove(index)
-        return random.sample(rand_indexes, num_picks)
+        
+        # Begin by removing index from list of costs and indices
+        rand_costs = np.delete(self.population_costs, index) # np.delete returns a copy
+        rand_indexes = np.delete(np.arange(self.num_population_members), index)
+
+        locations = np.argsort(rand_costs)
+        rand_indexes = rand_indexes[locations] # indices sorted by increasing cost
+        
+        # now remove a fraction given by elite
+        num = math.ceil(self.num_population_members*self.elite)
+        if num < num_picks: num = num_picks
+        
+        
+        return random.sample(rand_indexes[:num], num_picks)
 
     def update_archive(self):
         '''
@@ -1037,6 +1090,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             'costs_generations':self.costs_generations,
             'population':self.population,
             'population_costs':self.population_costs,
+            'population_age':self.population_age,
             'init_std':self.init_std,
             'curr_std':self.curr_std,
             'generation_count':self.generation_count,
@@ -2155,7 +2209,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
         # Ensure that all of the limits are positive numbers.
         if not np.all(bounds > 0):
             msg = ('Noise level bounds must all be positive numbers: ' +
-                   repr(msg))
+                   repr(bounds))
             self.log.error(msg)
             raise ValueError(msg)
         # Ensure that the dimensions are correct.
