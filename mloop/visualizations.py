@@ -1328,7 +1328,6 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         #Trust region
         self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(training_dict['trust_region'], dtype=float))
-        self.nn_training_file_dir = self.training_file_dir
         # Cost scaler
         self.cost_scaler_init_index = training_dict['cost_scaler_init_index']
         if not self.cost_scaler_init_index is None:

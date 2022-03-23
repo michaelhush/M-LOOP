@@ -2698,11 +2698,6 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             # default value.
             self.initial_regularizations = [None] * self.num_nets
 
-        # Set training file directory to None for now since no nets will be
-        # loaded here. The NeuralNetVisualizer will overwrite this when it needs
-        # to load the nets.
-        self.nn_training_file_dir = None
-
         # The scaler will be initialised when we're ready to fit it
         self.cost_scaler = None
         self.cost_scaler_init_index = None
@@ -2759,7 +2754,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         self._construct_net()
         for i, n in enumerate(self.neural_net):
             n.load(self.training_dict['net_' + str(i)],
-                   extra_search_dirs=[self.nn_training_file_dir])
+                   extra_search_dirs=[self.training_file_dir])
 
     def _fit_neural_net(self,index):
         '''
