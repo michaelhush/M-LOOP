@@ -29,7 +29,6 @@ no_delay = True                        #whether to wait for the GP to make predi
 #Training source options
 training_type = 'random'               #training type can be random, differential_evolution, or nelder_mead
 first_params = [1.9, -1.0]             #first parameters to try in initial training
-gp_training_filename = None            #filename for training from previous experiment
-gp_training_file_type = 'pkl'          #training data file type
+training_filename = None               #filename for training from previous experiment
 
 #if you use nelder_mead for the initial training source see the CompleteNelderMeadConfig.txt for options. 

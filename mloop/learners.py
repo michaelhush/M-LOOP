@@ -19,6 +19,7 @@ import multiprocessing as mp
 import sklearn.gaussian_process as skg
 import sklearn.gaussian_process.kernels as skk
 import sklearn.preprocessing as skp
+import warnings
 
 from mloop import __version__
 import mloop.neuralnet as mlnn
@@ -1078,10 +1079,6 @@ class MachineLearner(Learner):
             previous optimization from which to extract past results for use in
             the current optimization. If `None`, no past results will be used.
             Default `None`.
-        training_file_type (Optional [str]): File type of the training archive.
-            Can be `'txt'`, `'pkl'`, `'mat'`, or `None`. If set to `None`, then
-            the file type will be determined automatically. This argument has no
-            effect if `training_filename` is set to `None`. Default `None`.
 
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
@@ -1106,28 +1103,28 @@ class MachineLearner(Learner):
                  minimum_uncertainty = 1e-8,
                  predict_global_minima_at_end = True,
                  training_filename=None,
-                 training_file_type=None,
                  **kwargs):
         # Prepare logger now so that logging can be done before calling parent's
         # __init__() method.
         self._prepare_logger()
 
+        # Handle deprecated arguments. This code can be deleted with the release
+        # of M-LOOP 4.0.0 or above.
+        if 'training_file_type' in kwargs:
+            msg = (
+                "The training_file_type has been deprecated and its value will "
+                "be ignored."
+            )
+            warnings.warn(msg)
+
         if training_filename is not None:
             # Automatically determine training_file_type if necessary.
             training_filename = str(training_filename)
-            if training_file_type is None:
-                training_file_type = mlu.get_file_type(training_filename)
-            training_file_type = str(training_file_type)
-            if not mlu.check_file_type_supported(training_file_type):
-                msg = 'Training file type not supported: ' + repr(training_file_type)
-                self.log.error(msg)
-                raise ValueError(msg)
             self.training_file_dir = os.path.dirname(training_filename)
 
             # Get the training dictionary.
             training_dict = mlu.get_dict_from_file(
                 training_filename,
-                training_file_type,
             )
             self.training_dict = training_dict
 
@@ -1634,10 +1631,10 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             that all of the correlation lengths are the same. If it is an array
             with length equal to the number of the parameters then all the
             parameters have their own independent length scale. If it is set to
-            `None` and a learner archive from a Gaussian process optimization
-            is provided for `gp_training_filename`, then it will be set to the
-            value recorded for `length_scale` in that learner archive. If set to
-            `None` but `gp_training_filename` does not specify a learner archive
+            `None` and a learner archive from a Gaussian process optimization is
+            provided for `training_filename`, then it will be set to the value
+            recorded for `length_scale` in that learner archive. If set to
+            `None` but `training_filename` does not specify a learner archive
             from a Guassian process optimization, then it is assumed that all of
             the length scales should be independent and they are all given an
             initial value of equal to one tenth of their allowed range. Default
@@ -1667,9 +1664,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             (variance, not standard deviation) in the costs. This is only used
             if `cost_has_noise` is `True`. If it is set to `None` and a learner
             archive from a Gaussian process optimization is provided for
-            `gp_training_filename`, then it will be set to the value recorded
-            for `noise_level` in that learner archive. If set to `None` but
-            `gp_training_filename` does not specify a learner archive from a
+            `training_filename`, then it will be set to the value recorded for
+            `noise_level` in that learner archive. If set to `None` but
+            `training_filename` does not specify a learner archive from a
             Guassian process optimization, then it will automatically be set to
             the variance of the training data costs.
         noise_level_bounds (Optional [array]): The limits on the fitted
@@ -1678,14 +1675,9 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             and `cost_has_noise` are both set to `True`. If set to `None`, the
             value `[1e-5 * var, 1e5 * var]` will be used where `var` is the
             variance of the training data costs. Default `None`.
-        gp_training_filename (Optional [str]): The name of a learner archive
-            from a previous optimization from which to extract past results for
-            use in the current optimization. If `None`, no past results will be
-            used. Default `None`.
-        gp_training_file_type (Optional [str]): File type of the training
-            archive. Can be `'txt'`, `'pkl'`, `'mat'`, or `None`. If set to
-            `None`, then the file type will be determined automatically. This
-            argument has no effect if `gp_training_filename` is set to `None`.
+        training_filename (Optional [str]): The name of a learner archive from a
+            previous optimization from which to extract past results for use in
+            the current optimization. If `None`, no past results will be used.
             Default `None`.
         trust_region (Optional [float or array]): The trust region defines the
             maximum distance the learner will travel from the current best set
@@ -1756,36 +1748,49 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
                  cost_has_noise=True,
                  noise_level=None,
                  noise_level_bounds=None,
-                 gp_training_filename =None,
-                 gp_training_file_type = None,
                  **kwargs):
-
-        if gp_training_filename is not None:
-            super(GaussianProcessLearner,self).__init__(
-                training_filename=gp_training_filename,
-                training_file_type=gp_training_file_type,
-                **kwargs
+        # Handle deprecated arguments. This code can be deleted with the release
+        # of M-LOOP 4.0.0 or above.
+        if 'gp_training_file_type' in kwargs:
+            msg = (
+                "The gp_training_file_type has been deprecated and its value "
+                "will be ignored."
             )
+            warnings.warn(msg)
+        if 'gp_training_filename' in kwargs:
+            msg = (
+                "The gp_training_filename argument has been renamed to "
+                "training_filename, please update your code accordingly. Using "
+                "gp_training_filename will not work in a future version of "
+                "M-LOOP."
+            )
+            warnings.warn(msg)
+            # If a value was provided for training_filename as well, error out,
+            # otherwise set training_filename to the value for
+            # gp_training_filename for backwards-compatability.
+            if 'training_filename' in kwargs:
+                raise ValueError(
+                    "Value provided for both training_filename and "
+                    "gp_training_filename. The gp_training_filename argument "
+                    "is deprecated - use only training_filename instead."
+                )
+            else:
+                kwargs['training_filename'] = kwargs['gp_training_filename']
 
-            # Maintain backwards compatability with archives generated by
-            # previous versions of M-LOOP.
-            # M-LOOP versions <= 3.1.1 didn't scale noise level and didn't
-            # record the M-LOOP version. Mark that noise levels should be
-            # unscaled later, which is necessary for plotting for archives from
-            # older versions of M-LOOP. Since only Gaussian learner archives
-            # save a noise level, this should only be done if the training
-            # archive was from a Gaussian learner optimization.
-            self._scale_deprecated_noise_levels = False
-            if self._learner_type_matches_training_archive:
-                if 'mloop_version' not in self.training_dict:
-                    self._scale_deprecated_noise_levels = True
+        # Run parent's initialization.
+        super(GaussianProcessLearner,self).__init__(**kwargs)
 
-        else:
-            super(GaussianProcessLearner,self).__init__(**kwargs)
-
-            # Maintain backwards compatability with archives generated by
-            # previous versions of M-LOOP.
-            self._scale_deprecated_noise_levels = False
+        # Maintain backwards compatability with archives generated by previous
+        # versions of M-LOOP. M-LOOP versions <= 3.1.1 didn't scale noise level
+        # and didn't record the M-LOOP version. Mark that noise levels should be
+        # unscaled later, which is necessary for plotting data from archives
+        # generated by older versions of M-LOOP. Since only Gaussian learner
+        # archives save a noise level, this should only be done if the training
+        # archive was from a Gaussian learner optimization.
+        self._scale_deprecated_noise_levels = False
+        if self._learner_type_matches_training_archive:
+            if 'mloop_version' not in self.training_dict:
+                self._scale_deprecated_noise_levels = True
 
         # Parameters that should only be loaded if a training archive was
         # provided and it has the same learner type.
@@ -2579,60 +2584,100 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             values. Setting to `True` can reduce overfitting of the model, but
             can slow down the fitting due to the computational cost of trying
             different values. Default `False`.
-        nn_training_filename (Optional [str]): The name of a learner archive
-            from a previous optimization from which to extract past results for
-            use in the current optimization. If `None`, no past results will be
-            used. Default `None`.
-        nn_training_file_type (Optional [str]): File type of the training
-            archive. Can be `'txt'`, `'pkl'`, `'mat'`, or `None`. If set to
-            `None`, then the file type will be determined automatically. This
-            argument has no effect if `nn_training_filename` is set to `None`.
+        training_filename (Optional [str]): The name of a learner archive from a
+            previous optimization from which to extract past results for use in
+            the current optimization. If `None`, no past results will be used.
             Default `None`.
-        trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction.
-        default_bad_cost (Optional [float]): If a run is reported as bad and default_bad_cost is provided, the cost for the bad run is set to this default value. If default_bad_cost is None, then the worst cost received is set to all the bad runs. Default None.
-        default_bad_uncertainty (Optional [float]): If a run is reported as bad and default_bad_uncertainty is provided, the uncertainty for the bad run is set to this default value. If default_bad_uncertainty is None, then the uncertainty is set to a tenth of the best to worst cost range. Default None.
-        minimum_uncertainty (Optional [float]): The minimum uncertainty associated with provided costs. Must be above zero to avoid fitting errors. Default 1e-8.
-        predict_global_minima_at_end (Optional [bool]): If True finds the global minima when the learner is ended. Does not if False. Default True.
+        trust_region (Optional [float or array]): The trust region defines the
+            maximum distance the learner will travel from the current best set
+            of parameters. If `None`, the learner will search everywhere. If a
+            float, this number must be between 0 and 1 and defines maximum
+            distance the learner will venture as a fraction of the boundaries.
+            If it is an array, it must have the same size as the number of
+            parameters and the numbers define the maximum absolute distance that
+            can be moved along each direction.
+        default_bad_cost (Optional [float]): If a run is reported as bad and
+            `default_bad_cost` is provided, the cost for the bad run is set to
+            this default value. If `default_bad_cost` is `None`, then the worst
+            cost received is set to all the bad runs. Default `None`.
+        default_bad_uncertainty (Optional [float]): If a run is reported as bad
+            and `default_bad_uncertainty` is provided, the uncertainty for the
+            bad run is set to this default value. If `default_bad_uncertainty`
+            is `None`, then the uncertainty is set to one tenth of the best to
+            worst cost range. Default `None`.
+        minimum_uncertainty (Optional [float]): The minimum uncertainty
+            associated with provided costs. Must be above zero to avoid fitting
+            errors. Default `1e-8`.
+        predict_global_minima_at_end (Optional [bool]): If `True`, find the
+            global minima when the learner is ended. Does not if `False`.
+            Default `True`.
 
     Attributes:
         all_params (array): Array containing all parameters sent to learner.
         all_costs (array): Array containing all costs sent to learner.
         all_uncers (array): Array containing all uncertainties sent to learner.
-        scaled_costs (array): Array contaning all the costs scaled to have zero mean and a standard deviation of 1.
-        bad_run_indexs (list): list of indexes to all runs that were marked as bad.
+        scaled_costs (array): Array contaning all the costs scaled to have zero
+            mean and a standard deviation of 1.
+        bad_run_indexs (list): list of indexes to all runs that were marked as
+            bad.
         best_cost (float): Minimum received cost, updated during execution.
-        best_params (array): Parameters of best run. (reference to element in params array).
-        best_index (int): index of the best cost and params.
+        best_params (array): Parameters of best run. (reference to element in
+            params array).
+        best_index (int): Index of the best cost and params.
         worst_cost (float): Maximum received cost, updated during execution.
-        worst_index (int): index to run with worst cost.
-        cost_range (float): Difference between worst_cost and best_cost
-        generation_num (int): Number of sets of parameters to generate each generation. Set to 5.
-        noise_level_history (list): List of noise levels found after each fit.
-        cost_count (int): Counter for the number of costs, parameters and uncertainties added to learner.
-        params_count (int): Counter for the number of parameters asked to be evaluated by the learner.
-        neural_net (NeuralNet): Neural net that is fitted to data and used to make predictions.
-        cost_scaler (StandardScaler): Scaler used to normalize the provided costs.
-        cost_scaler_init_index (int): The number of params to use to initialise cost_scaler.
+        worst_index (int): Index to run with worst cost.
+        cost_range (float): Difference between `worst_cost` and `best_cost`
+        generation_num (int): Number of sets of parameters to generate each
+            generation. Set to `3`.
+        cost_count (int): Counter for the number of costs, parameters and
+            uncertainties added to learner.
+        params_count (int): Counter for the number of parameters asked to be
+            evaluated by the learner.
+        neural_net (NeuralNet): Neural net that is fitted to data and used to
+            make predictions.
+        cost_scaler (StandardScaler): Scaler used to normalize the provided
+            costs.
+        cost_scaler_init_index (int): The number of params to use to initialise
+            `cost_scaler`.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
     _ARCHIVE_TYPE = 'neural_net_learner'
 
     def __init__(self,
                  update_hyperparameters=False,
-                 nn_training_filename =None,
-                 nn_training_file_type =None,
                  **kwargs):
-
-        if nn_training_filename is not None:
-            super(NeuralNetLearner,self).__init__(
-                training_filename=nn_training_filename,
-                training_file_type=nn_training_file_type,
-                **kwargs
+        # Handle deprecated arguments. This code can be deleted with the release
+        # of M-LOOP 4.0.0 or above.
+        if 'nn_training_file_type' in kwargs:
+            msg = (
+                "The nn_training_file_type has been deprecated and its value "
+                "will be ignored."
             )
-        else:
-            super(NeuralNetLearner,self).__init__(**kwargs)
+            warnings.warn(msg)
+        if 'nn_training_filename' in kwargs:
+            msg = (
+                "The nn_training_filename argument has been renamed to "
+                "training_filename, please update your code accordingly. Using "
+                "nn_training_filename will not work in a future version of "
+                "M-LOOP."
+            )
+            warnings.warn(msg)
+            # If a value was provided for training_filename as well, error out,
+            # otherwise set training_filename to the value for
+            # nn_training_filename for backwards-compatability.
+            if 'training_filename' in kwargs:
+                raise ValueError(
+                    "Value provided for both training_filename and "
+                    "nn_training_filename. The nn_training_filename argument "
+                    "is deprecated - use only training_filename instead."
+                )
+            else:
+                kwargs['training_filename'] = kwargs['nn_training_filename']
 
-        #Constants, limits and tolerances
+        # Run parent's initialization.
+        super(NeuralNetLearner,self).__init__(**kwargs)
+
+        # Constants, limits and tolerances.
         self.num_nets = 3
         self.generation_num = 3
 
