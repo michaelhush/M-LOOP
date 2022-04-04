@@ -93,8 +93,8 @@ def show_all_default_visualizations(controller,
         max_parameters_per_plot=max_parameters_per_plot,
     )
 
-    log.info('Showing visualizations, close all to end M-LOOP.')
     if show_plots:
+        log.info('Showing visualizations, close all to end M-LOOP.')
         plt.show()
 
 def show_all_default_visualizations_from_archive(controller_filename,
@@ -176,8 +176,8 @@ def show_all_default_visualizations_from_archive(controller_filename,
         learner_visualizer_init_kwargs=learner_visualizer_init_kwargs,
     )
 
-    log.info('Showing visualizations, close all to end M-LOOP.')
     if show_plots:
+        log.info('Showing visualizations, close all to end M-LOOP.')
         plt.show()
 
 def create_learner_visualizer_from_archive(filename, controller_type=None, **kwargs):
