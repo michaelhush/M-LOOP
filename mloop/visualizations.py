@@ -1431,14 +1431,18 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         res = []
         for net_index in range(self.num_nets):
             cross_parameter_arrays = [ np.linspace(min_p, max_p, points) for (min_p,max_p) in zip(self.min_boundary,self.max_boundary)]
-            scaled_cost_arrays = []
+            cost_arrays = []
             for ind in range(self.num_params):
                 sample_parameters = np.array([cross_section_center for _ in range(points)])
                 sample_parameters[:, ind] = cross_parameter_arrays[ind]
-                costs = self.predict_costs_from_param_array(sample_parameters, net_index)
-                scaled_cost_arrays.append(costs)
+                costs = self.predict_costs_from_param_array(
+                    sample_parameters,
+                    net_index,
+                    perform_scaling=True,
+                )
+                cost_arrays.append(costs)
             cross_parameter_arrays = np.array(cross_parameter_arrays)
-            cost_arrays = self.cost_scaler.inverse_transform(np.array(scaled_cost_arrays))
+            cost_arrays = np.array(cost_arrays)
             res.append((cross_parameter_arrays, cost_arrays))
         return res
 
