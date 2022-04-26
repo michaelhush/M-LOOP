@@ -834,6 +834,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         # Optimization options not loaded by parent class.
         self.min_boundary = training_dict['min_boundary']
         self.max_boundary = training_dict['max_boundary']
+        self.diff_boundary = self.max_boundary - self.min_boundary
         self.param_names = mlu._param_names_from_file_dict(training_dict)
         self.cost_has_noise = bool(training_dict['cost_has_noise'])
         #Trust region
@@ -848,13 +849,20 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
 
         if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.max_boundary)):
             self.finite_flag = True
-            self.param_scaler = lambda p: (p-self.min_boundary)/self.diff_boundary
+            self.params_scaler = mlu.ParameterScaler(
+                self.min_boundary,
+                self.max_boundary,
+            )
+            self.params_scaler.partial_fit()
         else:
             self.finite_flag = False
 
+        # Determine where the trust region is in scaled units so that it can be
+        # marked on the cross section plots.
         if self.has_trust_region:
-            self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
-            self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
+            self.update_search_region()
+            self.scaled_trust_min = self.params_scaler.transform([self.search_min])[0]
+            self.scaled_trust_max = self.params_scaler.transform([self.search_max])[0]
 
         # Record value of update_hyperparameters used for optimization. Note that
         # self.update_hyperparameters is always set to False here above
@@ -1324,6 +1332,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
         # Archive data not loaded by parent class.
         self.min_boundary = self.training_dict['min_boundary']
         self.max_boundary = self.training_dict['max_boundary']
+        self.diff_boundary = self.max_boundary - self.min_boundary
         self.param_names = mlu._param_names_from_file_dict(training_dict)
         #Trust region
         self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
@@ -1345,13 +1354,20 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
 
         if np.all(np.isfinite(self.min_boundary)) and np.all(np.isfinite(self.max_boundary)):
             self.finite_flag = True
-            self.param_scaler = lambda p: (p-self.min_boundary)/self.diff_boundary
+            self.params_scaler = mlu.ParameterScaler(
+                self.min_boundary,
+                self.max_boundary,
+            )
+            self.params_scaler.partial_fit()
         else:
             self.finite_flag = False
 
+        # Determine where the trust region is in scaled units so that it can be
+        # marked on the cross section plots.
         if self.has_trust_region:
-            self.scaled_trust_min = self.param_scaler(np.maximum(self.best_params - self.trust_region, self.min_boundary))
-            self.scaled_trust_max = self.param_scaler(np.minimum(self.best_params + self.trust_region, self.max_boundary))
+            self.update_search_region()
+            self.scaled_trust_min = self.params_scaler.transform([self.search_min])[0]
+            self.scaled_trust_max = self.params_scaler.transform([self.search_max])[0]
 
         self.param_numbers = np.arange(self.num_params)
 
