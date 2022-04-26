@@ -2805,6 +2805,8 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             net_index = nr.randint(self.num_nets)
         net = self.neural_net[net_index]
         cost = net.predict_cost(params, perform_scaling=perform_scaling)
+        if perform_scaling:
+            cost = self.cost_scaler.inverse_transform([[cost]])[0, 0]
         return cost
 
     def predict_cost_gradient(
@@ -2849,20 +2851,58 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             params,
             perform_scaling=perform_scaling,
         )
+        # Account for the learner's scaler as well.
+        if perform_scaling:
+            cost_gradient = cost_gradient * float(self.cost_scaler.scale_)
         # scipy.optimize.minimize() doesn't seem to like a 32-bit Jacobian, so
         # convert to 64-bit.
         cost_gradient = cost_gradient.astype(np.float64)
         return cost_gradient
 
-    def predict_costs_from_param_array(self,params,net_index=None):
+    def predict_costs_from_param_array(
+        self,
+        params,
+        net_index=None,
+        perform_scaling=True,
+    ):
         '''
-        Produces a prediction of costs from an array of params.
+        Produces an array of predictsd costs from an array of params.
+
+        This method is similar to `self.predict_cost()` except that it accepts
+        many different sets of parameter values simultaneously and returns a
+        predicted cost for each set of parameter values.
+
+        Args:
+            params (array): A 2D array containing the values for each parameter.
+                This should essentially be a list of sets of parameters values,
+                where each set specifies one value for each parameter. In other
+                words, each row of the array should be one set of parameter
+                values which could be passed to `self.predict_cost()`. These
+                should be in real/unscaled units if `perform_scaling` is `True`
+                or they should be in scaled units if `perform_scaling` is
+                `False`.
+            net_index (int, optional): The index of the neural net to use to
+                predict the cost. If `None` then a net will be randomly chosen.
+                Defaults to `None`.
+            perform_scaling (bool, optional): Whether or not the parameters and
+                costs should be scaled. If `True` then this method takes in
+                parameter values in real/unscaled units then returns a predicted
+                cost in real/unscaled units. If `False`, then this method takes
+                parameter values in scaled units and returns a cost in scaled
+                units. Note that this method cannot determine on its own if the
+                values in `params` are in real/unscaled units or scaled units;
+                it is up to the caller to pass the correct values. Defaults to
+                `True`.
 
         Returns:
-            float : Predicted cost at paramters
+            list: A list of floats giving the predicted cost for each set of
+                parameter values.
         '''
         # TODO: Can do this more efficiently.
-        return [self.predict_cost(param,net_index) for param in params]
+        costs = [
+            self.predict_cost(param, net_index, perform_scaling) for param in params
+        ]
+        return costs
 
     def update_archive(self):
         '''
