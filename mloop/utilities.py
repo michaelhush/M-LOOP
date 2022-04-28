@@ -12,7 +12,6 @@ import datetime
 import sys
 import os
 import numpy as np
-import numpy.random as nr
 import base64
 import mloop
 
@@ -41,6 +40,12 @@ mloop_path = os.path.dirname(mloop.__file__)
 
 #Set numpy to have no limit on printing to ensure all values are saved
 np.set_printoptions(threshold=np.inf)
+
+# Create a random number generator that can be used throughout M-LOOP. Users
+# could also seed this generator if they want to fix the random numbers
+# generated in M-LOOP (though this won't affect the generators used by M-LOOP
+# dependencies, such as tensorflow).
+rng = np.random.default_rng()
 
 def config_logger(**kwargs):
     '''
@@ -131,7 +136,7 @@ def generate_filename_suffix(file_type, file_datetime=None, random_bytes=False):
     date_string = datetime_to_string(file_datetime)
     filename_suffix = '_' + date_string 
     if random_bytes:
-        random_string = base64.urlsafe_b64encode(nr.bytes(6)).decode()
+        random_string = base64.urlsafe_b64encode(rng.bytes(6)).decode()
         filename_suffix = filename_suffix + '_' + random_string
     filename_suffix = filename_suffix + '.' + file_type
     return filename_suffix

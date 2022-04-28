@@ -9,7 +9,6 @@ __metaclass__ = type
 import threading
 import numpy as np
 import random
-import numpy.random as nr
 import scipy.optimize as so
 import logging
 import datetime
@@ -474,7 +473,7 @@ class RandomLearner(Learner, threading.Thread):
         '''
         self.log.debug('Starting Random Learner')
         if self.first_params is None:
-            next_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+            next_params = mlu.rng.uniform(self.min_boundary, self.max_boundary)
         else:
             next_params = self.first_params
         while not self.end_event.is_set():
@@ -490,9 +489,12 @@ class RandomLearner(Learner, threading.Thread):
                 if self.has_trust_region:
                     temp_min = np.maximum(self.min_boundary, self.best_params - self.trust_region)
                     temp_max = np.minimum(self.max_boundary, self.best_params + self.trust_region)
-                    next_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
+                    next_params = mlu.rng.uniform(temp_min, temp_max)
                 else:
-                    next_params =  self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+                    next_params = mlu.rng.uniform(
+                        self.min_boundary,
+                        self.max_boundary,
+                    )
 
         self._shut_down()
         self.log.debug('Ended Random Learner')
@@ -562,7 +564,7 @@ class NelderMeadLearner(Learner, threading.Thread):
             raise ValueError(msg)
 
         if initial_simplex_corner is None:
-            diff_roll = (self.diff_boundary - self.init_simplex_disp) * nr.rand(self.num_params)
+            diff_roll = (self.diff_boundary - self.init_simplex_disp) * mlu.rng.random(self.num_params)
             diff_roll[diff_roll==float('+inf')]= 0
             self.init_simplex_corner = self.min_boundary
             self.init_simplex_corner[self.init_simplex_corner==float('-inf')]=0
@@ -895,7 +897,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             curr_params = self.first_params
             self.first_sample = False
         else:
-            curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+            curr_params = mlu.rng.uniform(self.min_boundary, self.max_boundary)
 
         curr_cost = self.put_params_and_get_cost(curr_params)
 
@@ -907,9 +909,12 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             if self.has_trust_region:
                 temp_min = np.maximum(self.min_boundary,self.population[self.min_index] - self.trust_region)
                 temp_max = np.minimum(self.max_boundary,self.population[self.min_index] + self.trust_region)
-                curr_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
+                curr_params = mlu.rng.uniform(temp_min, temp_max)
             else:
-                curr_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+                curr_params = mlu.rng.uniform(
+                    self.min_boundary,
+                    self.max_boundary,
+                )
 
             curr_cost = self.put_params_and_get_cost(curr_params)
 
@@ -932,7 +937,10 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         Evolve the population by a single generation
         '''
 
-        self.curr_scale = nr.uniform(self.mutation_scale[0], self.mutation_scale[1])
+        self.curr_scale = mlu.rng.uniform(
+            self.mutation_scale[0],
+            self.mutation_scale[1],
+        )
 
         for index in range(self.num_population_members):
 
@@ -959,18 +967,18 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             index (int): Index of the point to be mutated.
         '''
 
-        fill_point = nr.randint(0, self.num_params)
+        fill_point = mlu.rng.integers(0, self.num_params)
         candidate_params = self.mutation_func(index)
-        crossovers = nr.rand(self.num_params) < self.cross_over_probability
+        crossovers = mlu.rng.random(self.num_params) < self.cross_over_probability
         crossovers[fill_point] = True
         mutated_params = np.where(crossovers, candidate_params, self.population[index])
 
         if self.has_trust_region:
             temp_min = np.maximum(self.min_boundary,self.population[self.min_index] - self.trust_region)
             temp_max = np.minimum(self.max_boundary,self.population[self.min_index] + self.trust_region)
-            rand_params = temp_min + nr.rand(self.num_params) * (temp_max - temp_min)
+            rand_params = mlu.rng.uniform(temp_min, temp_max)
         else:
-            rand_params = self.min_boundary + nr.rand(self.num_params) * self.diff_boundary
+            rand_params = mlu.rng.uniform(self.min_boundary, self.max_boundary)
 
         projected_params = np.where(np.logical_or(mutated_params < self.min_boundary, mutated_params > self.max_boundary), rand_params, mutated_params)
 
@@ -1527,7 +1535,9 @@ class MachineLearner(Learner):
         self.search_params = []
         self.search_params.append(self.best_params)
         for _ in range(self.parameter_searches):
-            self.search_params.append(self.search_min + nr.uniform(size=self.num_params) * self.search_diff)
+            self.search_params.append(
+                mlu.rng.uniform(self.search_min, self.search_max),
+            )
 
     def _find_predicted_minimum(
         self,
@@ -2802,7 +2812,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                 in scaled units if `perform_scaling` is `False`.
         '''
         if net_index is None:
-            net_index = nr.randint(self.num_nets)
+            net_index = mlu.rng.integers(self.num_nets)
         net = self.neural_net[net_index]
         cost = net.predict_cost(params, perform_scaling=perform_scaling)
         if perform_scaling:
@@ -2845,7 +2855,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
                 it will be in scaled units if `perform_scaling` is `False`.
         '''
         if net_index is None:
-            net_index = nr.randint(self.num_nets)
+            net_index = mlu.rng.integers(self.num_nets)
         net = self.neural_net[net_index]
         cost_gradient = net.predict_cost_gradient(
             params,
@@ -2937,7 +2947,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
         '''
         # Set default values.
         if net_index is None:
-            net_index = nr.randint(self.num_nets)
+            net_index = mlu.rng.integers(self.num_nets)
         net = self.neural_net[net_index]
 
         # Create functions for the search.
@@ -3082,7 +3092,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
 
         # Set default values.
         if net_index is None:
-            net_index = nr.randint(self.num_nets)
+            net_index = mlu.rng.integers(self.num_nets)
 
         # Call self.find_next_parameters() since that method searches for the
         # predicted minimum.

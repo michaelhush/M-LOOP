@@ -7,7 +7,6 @@ __metaclass__ = type
 import numpy as np
 import threading
 import mloop.utilities as mlu
-import numpy.random as nr
 import logging
 import os
 import time
@@ -51,8 +50,8 @@ class TestLandscape():
             min_scale (float): Natural log of minimum scale factor. Default 0.
             max_scale (float): Natural log of maximum scale factor. Default 3.
         '''
-        mini = min_region + nr.rand(self.num_params) * (max_region - min_region)
-        scal = np.exp(min_scale + nr.rand(self.num_params) * (max_scale - min_scale))
+        mini = mlu.rng.uniform(min_region, max_region)
+        scal = np.exp(mlu.rng.uniform(min_scale, max_scale))
         self.set_quadratic_landscape(minimum = mini,scale = scal)
     
     def set_quadratic_landscape(self, minimum = None, scale = None):
@@ -102,7 +101,7 @@ class TestLandscape():
         
         self.noise_prop = proportional
         self.noise_abs = absolute
-        self.noise_function = lambda p,c,u : (c *(1 + nr.normal()*self.noise_prop) + nr.normal()*self.noise_abs,np.sqrt((c*self.noise_prop)**2 + (self.noise_abs)**2))
+        self.noise_function = lambda p,c,u : (c *(1 + mlu.rng.normal()*self.noise_prop) + mlu.rng.normal()*self.noise_abs,np.sqrt((c*self.noise_prop)**2 + (self.noise_abs)**2))
     
     def set_bad_region(self, min_boundary, max_boundary, bad_cost=None, bad_uncer=None):
         '''
