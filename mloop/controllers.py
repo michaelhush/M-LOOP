@@ -4,15 +4,18 @@ Module of all the controllers used in M-LOOP. The controllers, as the name sugge
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+import os
 import datetime
 from importlib import import_module
+import logging
 import traceback
+
+import numpy as np
+
 from mloop import __version__
 import mloop.utilities as mlu
 import mloop.learners as mll
 import mloop.interfaces as mli
-import logging
-import os
 
 controller_dict = {'random':1,'nelder_mead':2,'gaussian_process':3,'differential_evolution':4,'neural_net':5}
 number_of_controllers = len(controller_dict)
@@ -314,6 +317,12 @@ class Controller():
         Keyword Args:
             **kwargs: any additional data to be attached to file sent to experiment
         '''
+        # Do one last check to ensure parameter values are within the allowed
+        # limits before sending those values to the interface.
+        assert np.all(params >= self.learner.min_boundary)
+        assert np.all(params <= self.learner.max_boundary)
+        
+        # Send the parameters to the interface and update various attributes.
         out_dict = {'params':params}
         out_dict.update(kwargs)
         self.params_out_queue.put(out_dict)
