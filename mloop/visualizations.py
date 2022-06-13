@@ -216,11 +216,17 @@ def create_learner_visualizer_from_archive(filename, controller_type=None, **kwa
         log.debug('Creating neural net visualizer.')
         visualizer = NeuralNetVisualizer(filename, **kwargs)
     elif controller_type == 'gaussian_process':
-        log.debug('Creating gaussian process visualizer.')
+        log.debug('Creating Gaussian process visualizer.')
         visualizer = GaussianProcessVisualizer(filename, **kwargs)
     elif controller_type == 'differential_evolution':
         log.debug('Creating differential evolution visualizer.')
         visualizer = DifferentialEvolutionVisualizer(filename, **kwargs)
+    elif controller_type == 'random':
+        log.debug('Creating random visualizer.')
+        visualizer = RandomVisualizer(filename, **kwargs)
+    elif controller_type == 'nelder_mead':
+        log.debug('Creating Nelder-Mead visualizer.')
+        visualizer = NelderMeadVisualizer(filename, **kwargs)
     else:
         message = ('create_learner_visualizer_from_archive() not implemented '
                    'for type: {type_}.').format(type_=controller_type)
@@ -598,6 +604,43 @@ class ControllerVisualizer():
             self.param_names,
         )
         plt.legend(artists, legend_labels ,loc=legend_loc)
+
+
+class RandomVisualizer:
+    '''
+    Visualization class for the random learner.
+
+    Currently no learner plots are generated for the random learner. However,
+    controller visualizations may still be generated.
+    '''
+    def __init__(self, filename, file_type=None, **kwargs):
+        pass
+
+    def create_visualizations(self, *args, **kwargs):
+        log = logging.getLogger(__name__)
+        log.warning(
+            "No visualizations are currently implemented for the random "
+            "learner."
+        )
+
+
+class NelderMeadVisualizer:
+    '''
+    Visualization class for the Nelder-Mead learner.
+
+    Currently no learner plots are generated for the Nelder-Mead learner.
+    However, controller visualizations may still be generated.
+    '''
+    def __init__(self, filename, file_type=None, **kwargs):
+        pass
+
+    def create_visualizations(self, *args, **kwargs):
+        log = logging.getLogger(__name__)
+        log.warning(
+            "No visualizations are currently implemented for the Nelder-Mead "
+            "learner."
+        )
+
 
 def create_differential_evolution_learner_visualizations(filename,
                                                          file_type=None,

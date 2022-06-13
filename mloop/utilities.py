@@ -299,6 +299,8 @@ def get_controller_type_from_learner_archive(learner_filename):
         'gaussian_process_learner': 'gaussian_process',
         'neural_net_learner': 'neural_net',
         'differential_evolution': 'differential_evolution',
+        'random_learner': 'random',
+        'nelder_mead_learner': 'nelder_mead',
     }
     if archive_type in ARCHIVE_CONTROLLER_MAPPING:
         controller_type = ARCHIVE_CONTROLLER_MAPPING[archive_type]
