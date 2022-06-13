@@ -38,6 +38,9 @@ You have two options when installing M-LOOP, you can perform a basic installatio
 Installing from source
 ----------------------
 
+Note: If using Anaconda Python, it may be necessary to install Tensorflow using ``conda`` *before* installing M-LOOP with Pip, otherwise Tensorflow may not install correctly.
+This can be done with the command ``conda install tensorflow``.
+
 M-LOOP can be installed from the latest source code with three commands::
 
    git clone git://github.com/michaelhush/M-LOOP.git
@@ -55,6 +58,9 @@ in the M-LOOP directory.
 
 Installing with pip
 -------------------
+
+Note: If using Anaconda Python, it may be necessary to install Tensorflow using ``conda`` *before* installing M-LOOP with Pip, otherwise Tensorflow may not install correctly.
+This can be done with the command ``conda install tensorflow``.
 
 M-LOOP can be installed with pip with a single command::
 
@@ -91,13 +97,13 @@ Package        Version
 docutils       >=0.3
 matplotlib     >=1.5
 numpy          >=1.11
-pip            >=7.0  
+pip            >=7.0
 pytest         >=2.9
-setuptools     >=26   
+setuptools     >=26
 scikit-learn   >=0.18
 scipy          >=0.17
-tensorflow     >=1.1.0
-============   =======  
+tensorflow     >=2.0.0
+============   =======
 
 These packages should be automatically installed by pip or the script setup.py when you install M-LOOP. The setup script itself requires pytest-runner.
 
