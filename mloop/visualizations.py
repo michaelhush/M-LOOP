@@ -617,7 +617,11 @@ class RandomVisualizer:
         pass
 
     def create_visualizations(self, *args, **kwargs):
-        pass
+        log = logging.getLogger(__name__)
+        log.warning(
+            "No visualizations are currently implemented for the random "
+            "learner."
+        )
 
 
 class NelderMeadVisualizer:
@@ -631,7 +635,11 @@ class NelderMeadVisualizer:
         pass
 
     def create_visualizations(self, *args, **kwargs):
-        pass
+        log = logging.getLogger(__name__)
+        log.warning(
+            "No visualizations are currently implemented for the Nelder-Mead "
+            "learner."
+        )
 
 
 def create_differential_evolution_learner_visualizations(filename,
