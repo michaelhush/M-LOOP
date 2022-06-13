@@ -280,24 +280,11 @@ def create_learner_visualizations(filename,
     )
     visualizer.create_visualizations(**learner_visualization_kwargs)
 
-def _color_from_controller_name(controller_name):
+def _color_list_from_num_options(num_of_params):
     '''
-    Gives a color (as a number between zero an one) corresponding to each controller name string.
-    '''
-    global cmap
-    # If controller_name isn't in the mlc.controller_dict dictionary, assume it
-    # is the name of a third party controller provided by an external package.
-    if controller_name not in mlc.controller_dict:
-        controller_name = 'third_party'
-
-    # Determine the color.
-    index = mlc.controller_dict[controller_name]
-    fraction = float(index) / float(mlc.number_of_controllers)
-    return cmap(fraction)
-
-def _color_list_from_num_of_params(num_of_params):
-    '''
-    Gives a list of colors based on the number of parameters.
+    Gives a list of colors based on a number of options.
+    
+    A distinct color will be generated for each option.
     '''
     global cmap
     return [cmap(float(x)/num_of_params) for x in range(num_of_params)]
@@ -413,8 +400,14 @@ class ControllerVisualizer():
         else:
             self.finite_flag = False
 
-        self.unique_types = set(self.out_type)
-        self.cost_colors = [_color_from_controller_name(x) for x in self.out_type]
+        self.unique_types = list(set(self.out_type))
+        out_type_colors = _color_list_from_num_options(
+            len(self.unique_types),
+        )
+        self.out_type_color_mapping = {
+            self.unique_types[j]: out_type_colors[j] for j in range(len(self.unique_types))
+        }
+        self.cost_colors = [self.out_type_color_mapping[x] for x in self.out_type]
         self.in_numbers = np.arange(1,self.num_in_costs+1)
         self.out_numbers = np.arange(1,self.num_out_params+1)
         self.param_numbers = np.arange(self.num_params)
@@ -485,7 +478,15 @@ class ControllerVisualizer():
         plt.title('Controller: Cost vs run number.')
         artists = []
         for ut in self.unique_types:
-            artists.append(plt.Line2D((0,1),(0,0), color=_color_from_controller_name(ut), marker='o', linestyle=''))
+            artists.append(
+                plt.Line2D(
+                    (0,1),
+                    (0,0),
+                    color=self.out_type_color_mapping[ut],
+                    marker='o',
+                    linestyle='',
+                )
+            )
         plt.legend(artists,self.unique_types,loc=legend_loc)
 
     def _ensure_parameter_subset_valid(self, parameter_subset):
@@ -515,7 +516,7 @@ class ControllerVisualizer():
 
         # Generate set of distinct colors for plotting.
         num_params = len(parameter_subset)
-        param_colors = _color_list_from_num_of_params(num_params)
+        param_colors = _color_list_from_num_options(num_params)
 
         global figure_counter, run_label, scale_param_label, legend_loc
         figure_counter += 1
@@ -576,7 +577,7 @@ class ControllerVisualizer():
 
         # Generate set of distinct colors for plotting.
         num_params = len(parameter_subset)
-        param_colors = _color_list_from_num_of_params(num_params)
+        param_colors = _color_list_from_num_options(num_params)
 
         global figure_counter, run_label, run_label, scale_param_label, legend_loc
         figure_counter += 1
@@ -718,7 +719,7 @@ class DifferentialEvolutionVisualizer():
         self.param_numbers = np.arange(self.num_params)
 
         self.gen_numbers = np.arange(1,self.num_generations+1)
-        self.param_colors = _color_list_from_num_of_params(self.num_params)
+        self.param_colors = _color_list_from_num_options(self.num_params)
         self.gen_plot = np.array([np.full(self.num_population_members, ind, dtype=int) for ind in self.gen_numbers]).flatten()
 
     def create_visualizations(self,
@@ -795,7 +796,7 @@ class DifferentialEvolutionVisualizer():
 
         # Generate set of distinct colors for plotting.
         num_params = len(parameter_subset)
-        param_colors = _color_list_from_num_of_params(num_params)
+        param_colors = _color_list_from_num_options(num_params)
 
         if self.params_generations.size == 0:
             self.log.warning('Unable to plot DE: params vs generations as the initial generation did not complete.')
@@ -1125,7 +1126,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
 
         # Generate set of distinct colors for plotting.
         num_params = len(parameter_subset)
-        param_colors = _color_list_from_num_of_params(num_params)
+        param_colors = _color_list_from_num_options(num_params)
 
         global figure_counter, legend_loc
         figure_counter += 1
@@ -1246,7 +1247,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
 
         # Generate set of distinct colors for plotting.
         num_params = len(parameter_subset)
-        param_colors = _color_list_from_num_of_params(num_params)
+        param_colors = _color_list_from_num_options(num_params)
 
         global figure_counter, fit_label, legend_loc, log_length_scale_label
         figure_counter += 1
@@ -1562,7 +1563,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
 
         # Generate set of distinct colors for plotting.
         num_params = len(parameter_subset)
-        param_colors = _color_list_from_num_of_params(num_params)
+        param_colors = _color_list_from_num_options(num_params)
 
         # Generate labels for legends.
         legend_labels = mlu._generate_legend_labels(
@@ -1702,7 +1703,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
 
         # Generate set of distinct colors for plotting.
         num_nets = len(all_losses)
-        net_colors = _color_list_from_num_of_params(num_nets)
+        net_colors = _color_list_from_num_options(num_nets)
 
         artists=[]
         legend_labels=[]
@@ -1750,7 +1751,7 @@ class NeuralNetVisualizer(mll.NeuralNetLearner):
 
         # Generate set of distinct colors for plotting.
         num_nets = len(regularization_histories)
-        net_colors = _color_list_from_num_of_params(num_nets)
+        net_colors = _color_list_from_num_options(num_nets)
 
         artists=[]
         legend_labels=[]
