@@ -65,6 +65,9 @@ class Learner():
         bad_run_indexs (list): list of indexes to all runs that were marked as
             bad.
     '''
+    # Subclasses should override OUT_TYPE with the name of the learner as it
+    # should appear in the out_type list in the controller archive.
+    OUT_TYPE = ''
 
     def __init__(self,
                  num_params=None,
@@ -429,6 +432,7 @@ class RandomLearner(Learner, threading.Thread):
         first_params (Optional [array]): The first parameters to test. If None will just randomly sample the initial condition.
         trust_region (Optional [float or array]): The trust region defines the maximum distance the learner will travel from the current best set of parameters. If None, the learner will search everywhere. If a float, this number must be between 0 and 1 and defines maximum distance the learner will venture as a percentage of the boundaries. If it is an array, it must have the same size as the number of parameters and the numbers define the maximum absolute distance that can be moved along each direction.
     '''
+    OUT_TYPE = 'random'
 
     def __init__(self,
                  trust_region=None,
@@ -522,6 +526,7 @@ class NelderMeadLearner(Learner, threading.Thread):
         simplex_costs (array): Costs associated with the parameters of the current simplex
 
     '''
+    OUT_TYPE = 'nelder_mead'
 
     def __init__(self,
                  initial_simplex_corner=None,
@@ -775,6 +780,7 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         init_std (float): The initial standard deviation in costs of the population. Calculated after sampling (or resampling) the initial population.
         curr_std (float): The current standard deviation in costs of the population. Calculated after sampling each generation.
     '''
+    OUT_TYPE = 'differential_evolution'
 
     def __init__(self,
                  first_params = None,
@@ -1749,6 +1755,7 @@ class GaussianProcessLearner(MachineLearner, mp.Process):
             parameters.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
+    OUT_TYPE = 'gaussian_process'
     _ARCHIVE_TYPE = 'gaussian_process_learner'
     _DEFAULT_SCALED_LENGTH_SCALE = 1e-1
     _DEFAULT_SCALED_LENGTH_SCALE_BOUNDS = np.array([1e-3, 1e1])
@@ -2653,6 +2660,7 @@ class NeuralNetLearner(MachineLearner, mp.Process):
             `cost_scaler`.
         has_trust_region (bool): Whether the learner has a trust region.
     '''
+    OUT_TYPE = 'neural_net'
     _ARCHIVE_TYPE = 'neural_net_learner'
 
     def __init__(self,

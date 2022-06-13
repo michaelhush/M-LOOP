@@ -309,14 +309,30 @@ class Controller():
                                   'param_names':self.param_names})
 
 
-    def _put_params_and_out_dict(self, params,  param_type=None, **kwargs):
+    def _put_params_and_out_dict(self, params, param_type=None, **kwargs):
         '''
-        Send parameters to queue and whatever additional keywords. Saves sent variables in appropriate storage arrays.
+        Send parameters to queue with optional additional keyword arguments.
+
+        This method also saves sent variables in appropriate storage arrays.
+
         Args:
-            params (array) : array of values to be sent to file
+            params (array): Array of values to be experimentall tested.
+            param_type (Optional, str): The learner type which generated the
+                parameter values. Because some learners use other learners as
+                trainers, the parameter type can be different for different
+                iterations during a given optimization. This value will be
+                stored in `self.out_type` and in the `out_type` list in the
+                controller archive. If `None`, then it will be set to
+                `self.learner.OUT_TYPE`. Default `None`.
         Keyword Args:
-            **kwargs: any additional data to be attached to file sent to experiment
+            **kwargs: Any additional keyword arguments will be stored in
+                `self.out_extras` and in the `out_extras` list in the controller
+                archive.
         '''
+        # Set default values if needed.
+        if param_type is None:
+            param_type = self.learner.OUT_TYPE
+
         # Do one last check to ensure parameter values are within the allowed
         # limits before sending those values to the interface.
         assert np.all(params >= self.learner.min_boundary)
@@ -330,8 +346,7 @@ class Controller():
         self.last_out_params = params
         self.out_params.append(params)
         self.out_extras.append(kwargs)
-        if param_type is not None:
-            self.out_type.append(param_type)
+        self.out_type.append(param_type)
         self.log.info('params ' + str(params))
         #self.log.debug('Put params num:' + repr(self.num_out_params ))
 
@@ -498,13 +513,19 @@ class Controller():
         self.log.debug('Start controller loop.')
         self.log.info('Run:' + str(self.num_in_costs +1))
         next_params = self._first_params()
-        self._put_params_and_out_dict(next_params)
+        self._put_params_and_out_dict(
+            next_params,
+            param_type=self.learner.OUT_TYPE,
+        )
         self.save_archive()
         self._get_cost_and_in_dict()
         while self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1))
             next_params = self._next_params()
-            self._put_params_and_out_dict(next_params)
+            self._put_params_and_out_dict(
+                next_params,
+                param_type=self.learner.OUT_TYPE,
+            )
             self.save_archive()
             self._get_cost_and_in_dict()
         self.log.debug('End controller loop.')
@@ -514,7 +535,8 @@ class Controller():
 
     def _first_params(self):
         '''
-        Checks queue to get first  parameters.
+        Checks queue to get the first parameters.
+
         Returns:
             Parameters for first experiment
         '''
@@ -558,7 +580,6 @@ class RandomController(Controller):
                                          **self.remaining_kwargs)
 
         self._update_controller_with_learner_attributes()
-        self.out_type.append('random')
 
         self.log.debug('Random controller init completed.')
 
@@ -579,7 +600,6 @@ class NelderMeadController(Controller):
                                              **self.remaining_kwargs)
 
         self._update_controller_with_learner_attributes()
-        self.out_type.append('nelder_mead')
 
 
 class DifferentialEvolutionController(Controller):
@@ -598,7 +618,6 @@ class DifferentialEvolutionController(Controller):
                                                         **self.remaining_kwargs)
 
         self._update_controller_with_learner_attributes()
-        self.out_type.append('differential_evolution')
 
 
 class MachineLearnerController(Controller):
@@ -615,7 +634,6 @@ class MachineLearnerController(Controller):
 
     def __init__(self, interface,
                  training_type='differential_evolution',
-                 machine_learner_type='machine_learner',
                  num_training_runs=None,
                  no_delay=True,
                  num_params=None,
@@ -628,11 +646,6 @@ class MachineLearnerController(Controller):
                  **kwargs):
 
         super(MachineLearnerController,self).__init__(interface, **kwargs)
-        self.machine_learner_type = machine_learner_type
-
-        self.last_training_cost = None
-        self.last_training_bad = None
-        self.last_training_run_flag = False
 
         if num_training_runs is None:
             if num_params is None:
@@ -696,23 +709,14 @@ class MachineLearnerController(Controller):
         self.remaining_kwargs = self.ml_learner.remaining_kwargs
         self.generation_num = self.ml_learner.generation_num
 
-
-    def _put_params_and_out_dict(self, params):
-        '''
-        Override _put_params_and_out_dict function, used when the training learner creates parameters. Makes the default param_type the training type and sets last_training_run_flag.
-        '''
-        super(MachineLearnerController,self)._put_params_and_out_dict(params, param_type=self.training_type)
-        self.last_training_run_flag = True
-
     def _get_cost_and_in_dict(self):
         '''
-        Call _get_cost_and_in_dict() of parent Controller class. But also sends cost to machine learning learner and saves the cost if the parameters came from a trainer.
+        Get cost, uncertainty, parameters, bad, and extra data from experiment.
+        
+        This method calls `_get_cost_and_in_dict()` of the parent `Controller`
+        class and additionally sends the results to machine learning learner.
         '''
         super(MachineLearnerController,self)._get_cost_and_in_dict()
-        if self.last_training_run_flag:
-            self.last_training_cost = self.curr_cost
-            self.last_training_bad = self.curr_bad
-            self.last_training_run_flag = False
         self.ml_learner_costs_queue.put((self.curr_params,
                                          self.curr_cost,
                                          self.curr_uncer,
@@ -734,14 +738,20 @@ class MachineLearnerController(Controller):
         self.log.debug('Starting training optimization.')
         self.log.info('Run:' + str(self.num_in_costs +1) + ' (training)')
         next_params = self._first_params()
-        self._put_params_and_out_dict(next_params)
+        self._put_params_and_out_dict(
+            next_params,
+            param_type=self.learner.OUT_TYPE,
+        )
         self.save_archive()
         self._get_cost_and_in_dict()
 
         while (self.num_in_costs < self.num_training_runs) and self.check_end_conditions():
             self.log.info('Run:' + str(self.num_in_costs +1) + ' (training)')
             next_params = self._next_params()
-            self._put_params_and_out_dict(next_params)
+            self._put_params_and_out_dict(
+                next_params,
+                param_type=self.learner.OUT_TYPE,
+            )
             self.save_archive()
             self._get_cost_and_in_dict()
 
@@ -749,7 +759,10 @@ class MachineLearnerController(Controller):
             #Start last training run
             self.log.info('Run:' + str(self.num_in_costs +1) + ' (training)')
             next_params = self._next_params()
-            self._put_params_and_out_dict(next_params)
+            self._put_params_and_out_dict(
+                next_params,
+                param_type=self.learner.OUT_TYPE,
+            )
 
             self.log.debug('Starting ML optimization.')
             # This may be a race. Although the cost etc. is put in the queue to
@@ -771,12 +784,18 @@ class MachineLearnerController(Controller):
             if ml_consec==self.generation_num or (self.no_delay and self.ml_learner_params_queue.empty()):
                 self.log.info('Run:' + str(run_num) + ' (trainer)')
                 next_params = self._next_params()
-                self._put_params_and_out_dict(next_params)
+                self._put_params_and_out_dict(
+                    next_params,
+                    param_type=self.learner.OUT_TYPE,
+                )
                 ml_consec = 0
             else:
                 self.log.info('Run:' + str(run_num) + ' (machine learner)')
                 next_params = self.ml_learner_params_queue.get()
-                super(MachineLearnerController,self)._put_params_and_out_dict(next_params, param_type=self.machine_learner_type)
+                self._put_params_and_out_dict(
+                    next_params,
+                    param_type=self.ml_learner.OUT_TYPE,
+                )
                 ml_consec += 1
                 ml_count += 1
 
@@ -786,8 +805,6 @@ class MachineLearnerController(Controller):
             if ml_count==self.generation_num:
                 self.new_params_event.set()
                 ml_count = 0
-
-
 
     def _shut_down(self):
         '''
@@ -849,36 +866,42 @@ class GaussianProcessController(MachineLearnerController):
     Keyword Args:
     '''
 
-    def __init__(self, interface,
-                 num_params=None,
-                 min_boundary=None,
-                 max_boundary=None,
-                 trust_region=None,
-                 learner_archive_filename = mll.default_learner_archive_filename,
-                 learner_archive_file_type = mll.default_learner_archive_file_type,
-                 param_names=None,
-                 **kwargs):
+    def __init__(
+        self,
+        interface,
+        num_params=None,
+        min_boundary=None,
+        max_boundary=None,
+        trust_region=None,
+        learner_archive_filename = mll.default_learner_archive_filename,
+        learner_archive_file_type = mll.default_learner_archive_file_type,
+        param_names=None,
+        **kwargs,
+    ):
 
-        super(GaussianProcessController,self).__init__(interface,
-                                                       machine_learner_type='gaussian_process',
-                                                       num_params=num_params,
-                                                       min_boundary=min_boundary,
-                                                       max_boundary=max_boundary,
-                                                       trust_region=trust_region,
-                                                       learner_archive_filename=learner_archive_filename,
-                                                       learner_archive_file_type=learner_archive_file_type,
-                                                       param_names=param_names,
-                                                       **kwargs)
+        super(GaussianProcessController,self).__init__(
+            interface,
+            num_params=num_params,
+            min_boundary=min_boundary,
+            max_boundary=max_boundary,
+            trust_region=trust_region,
+            learner_archive_filename=learner_archive_filename,
+            learner_archive_file_type=learner_archive_file_type,
+            param_names=param_names,
+            **kwargs,
+        )
 
-        self.ml_learner = mll.GaussianProcessLearner(start_datetime=self.start_datetime,
-                                                     num_params=num_params,
-                                                     min_boundary=min_boundary,
-                                                     max_boundary=max_boundary,
-                                                     trust_region=trust_region,
-                                                     learner_archive_filename=learner_archive_filename,
-                                                     learner_archive_file_type=learner_archive_file_type,
-                                                     param_names=param_names,
-                                                     **self.remaining_kwargs)
+        self.ml_learner = mll.GaussianProcessLearner(
+            start_datetime=self.start_datetime,
+            num_params=num_params,
+            min_boundary=min_boundary,
+            max_boundary=max_boundary,
+            trust_region=trust_region,
+            learner_archive_filename=learner_archive_filename,
+            learner_archive_file_type=learner_archive_file_type,
+            param_names=param_names,
+            **self.remaining_kwargs,
+        )
 
         self._update_controller_with_machine_learner_attributes()
 
@@ -891,35 +914,41 @@ class NeuralNetController(MachineLearnerController):
     Keyword Args:
     '''
 
-    def __init__(self, interface,
-                 num_params=None,
-                 min_boundary=None,
-                 max_boundary=None,
-                 trust_region=None,
-                 learner_archive_filename = mll.default_learner_archive_filename,
-                 learner_archive_file_type = mll.default_learner_archive_file_type,
-                 param_names=None,
-                 **kwargs):
+    def __init__(
+        self,
+        interface,
+        num_params=None,
+        min_boundary=None,
+        max_boundary=None,
+        trust_region=None,
+        learner_archive_filename = mll.default_learner_archive_filename,
+        learner_archive_file_type = mll.default_learner_archive_file_type,
+        param_names=None,
+        **kwargs,
+    ):
 
-        super(NeuralNetController,self).__init__(interface,
-                                                machine_learner_type='neural_net',
-                                                num_params=num_params,
-                                                min_boundary=min_boundary,
-                                                max_boundary=max_boundary,
-                                                trust_region=trust_region,
-                                                learner_archive_filename=learner_archive_filename,
-                                                learner_archive_file_type=learner_archive_file_type,
-                                                param_names=param_names,
-                                                **kwargs)
+        super(NeuralNetController,self).__init__(
+            interface,
+            num_params=num_params,
+            min_boundary=min_boundary,
+            max_boundary=max_boundary,
+            trust_region=trust_region,
+            learner_archive_filename=learner_archive_filename,
+            learner_archive_file_type=learner_archive_file_type,
+            param_names=param_names,
+            **kwargs,
+        )
 
-        self.ml_learner = mll.NeuralNetLearner(start_datetime=self.start_datetime,
-                                               num_params=num_params,
-                                               min_boundary=min_boundary,
-                                               max_boundary=max_boundary,
-                                               trust_region=trust_region,
-                                               learner_archive_filename=learner_archive_filename,
-                                               learner_archive_file_type=learner_archive_file_type,
-                                               param_names=param_names,
-                                               **self.remaining_kwargs)
+        self.ml_learner = mll.NeuralNetLearner(
+            start_datetime=self.start_datetime,
+            num_params=num_params,
+            min_boundary=min_boundary,
+            max_boundary=max_boundary,
+            trust_region=trust_region,
+            learner_archive_filename=learner_archive_filename,
+            learner_archive_file_type=learner_archive_file_type,
+            param_names=param_names,
+            **self.remaining_kwargs,
+        )
 
         self._update_controller_with_machine_learner_attributes()
