@@ -285,7 +285,15 @@ def _color_from_controller_name(controller_name):
     Gives a color (as a number between zero an one) corresponding to each controller name string.
     '''
     global cmap
-    return cmap(float(mlc.controller_dict[controller_name])/float(mlc.number_of_controllers))
+    # If controller_name isn't in the mlc.controller_dict dictionary, assume it
+    # is the name of a third party controller provided by an external package.
+    if controller_name not in mlc.controller_dict:
+        controller_name = 'third_party'
+
+    # Determine the color.
+    index = mlc.controller_dict[controller_name]
+    fraction = float(index) / float(mlc.number_of_controllers)
+    return cmap(fraction)
 
 def _color_list_from_num_of_params(num_of_params):
     '''
