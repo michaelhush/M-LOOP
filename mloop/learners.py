@@ -248,7 +248,9 @@ class Learner():
             self.log.error(msg)
             raise ValueError(msg)
         if not self.check_in_boundary(params):
-            self.log.warning('Parameters sent to queue are not within boundaries. Params:' + repr(params))
+            msg = 'Parameters sent to queue are not within boundaries. Params:' + repr(params)
+            self.log.error(msg)
+            raise RuntimeError(msg)
         #self.log.debug('Learner puts params.')
         self.params_out_queue.put(params)
         #self.log.debug('Learner waiting for costs.')
