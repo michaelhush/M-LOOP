@@ -108,7 +108,7 @@ class Controller():
         max_num_runs (Optional [float]): The number of runs before the
             controller stops. If set to `float('+inf')` the controller will run
             forever assuming no other halting conditions are met. Default
-            `float('inf')`, meaning the controller will run until another
+            `float('+inf')`, meaning the controller will run until another
             halting condition is met.
         target_cost (Optional [float]): The target cost for the run. If a run
             achieves a cost lower than the target, the controller is stopped.
@@ -117,7 +117,13 @@ class Controller():
         max_num_runs_without_better_params (Optional [float]): The optimization
             will halt if the number of consecutive runs without improving over
             the best measured value thus far exceeds this number. Default
-            `float('inf')`, meaning the controller will run until another
+            `float('+inf')`, meaning the controller will run until another
+            halting condition is met.
+        max_duration (Optional [float]): The maximum duration of the
+            optimization, in seconds of wall time. The actual duration may
+            exceed this value slightly, but no new iterations will start after
+            `max_duration` seconds have elapsed since `start_datetime`. Default
+            is `float('+inf')`, meaning the controller will run until another
             halting condition is met.
         controller_archive_filename (Optional [string]): Filename for archive.
             The archive contains costs, parameter history and other details
@@ -158,24 +164,27 @@ class Controller():
         best_index (float): The run number that produced the best cost.
     '''
 
-    def __init__(self, interface,
-                 max_num_runs = float('+inf'),
-                 target_cost = float('-inf'),
-                 max_num_runs_without_better_params = float('+inf'),
-                 controller_archive_filename=default_controller_archive_filename,
-                 controller_archive_file_type=default_controller_archive_file_type,
-                 archive_extra_dict = None,
-                 start_datetime = None,
-                 **kwargs):
+    def __init__(
+        self,
+        interface,
+        max_num_runs=float('+inf'),
+        target_cost=float('-inf'),
+        max_num_runs_without_better_params=float('+inf'),
+        max_duration=float('+inf'),
+        controller_archive_filename=default_controller_archive_filename,
+        controller_archive_file_type=default_controller_archive_file_type,
+        archive_extra_dict = None,
+        start_datetime = None,
+        **kwargs,
+    ):
 
-        #Make logger
+        # Make the logger.
         self.remaining_kwargs = mlu._config_logger(start_datetime=start_datetime, **kwargs)
         self.log = logging.getLogger(__name__)
 
-        #Variable that are included in archive
+        # Variables that are included in the controller archive.
         self.num_in_costs = 0
         self.num_out_params = 0
-        self.num_last_best_cost = 0
         self.out_params = []
         self.out_type = []
         self.out_extras = []
@@ -188,26 +197,28 @@ class Controller():
         self.best_index = float('nan')
         self.best_params = float('nan')
 
-        #Variables that used internally
+        # Variables that are used internally.
         self.last_out_params = None
         self.curr_params = None
         self.curr_cost = None
         self.curr_uncer = None
         self.curr_bad = None
         self.curr_extras = None
+        self.num_last_best_cost = 0
+        self.halt_reasons = []
 
-        #Constants
+        # Constants.
         self.controller_wait = float(1)
 
-        #Learner related variables
+        # Learner-related variables.
         self.learner_params_queue = None
         self.learner_costs_queue = None
         self.end_learner = None
         self.learner = None
 
-        #Variables set by user
+        # Variables set by user.
 
-        #save interface and extract important variables
+        # Store the interface and extract important attributes from it.
         if isinstance(interface, mli.Interface):
             self.interface = interface
         else:
@@ -219,25 +230,36 @@ class Controller():
         self.interface_error_queue = interface.interface_error_queue
         self.end_interface = interface.end_event
 
-        #Other options
+        # Halting options.
+        self.max_num_runs = float(max_num_runs)
+        if self.max_num_runs <= 0:
+            msg = f"max_num_runs must be greater than zero but was {max_num_runs}."
+            self.log.error(msg)
+            raise ValueError(msg)
+        self.target_cost = float(target_cost)
+        self.max_num_runs_without_better_params = float(max_num_runs_without_better_params)
+        if self.max_num_runs_without_better_params <= 0:
+            msg = f"max_num_runs_without_better_params must be greater than zero but was {max_num_runs_without_better_params}."
+            self.log.error(msg)
+            raise ValueError(msg)
+        self.max_duration = float(max_duration)
+        if self.max_duration <= 0:
+            msg = f"max_duration must be greater than zero but was {max_duration}."
+            self.log.error(msg)
+            raise ValueError(msg)
+
+        # Other options.
         if start_datetime is None:
             start_datetime = datetime.datetime.now()
         if isinstance(start_datetime, datetime.datetime):
             self.start_datetime = start_datetime
         else:
-            raise ValueError(
+            msg = (
                 "start_datetime must be of type datetime.datetime but was "
                 f"{start_datetime} (type: {type(start_datetime)})."
             )
-        self.max_num_runs = float(max_num_runs)
-        if self.max_num_runs<=0:
-            self.log.error('Number of runs must be greater than zero. max_num_runs:'+repr(self.max_num_run))
-            raise ValueError
-        self.target_cost = float(target_cost)
-        self.max_num_runs_without_better_params = float(max_num_runs_without_better_params)
-        if self.max_num_runs_without_better_params<=0:
-            self.log.error('Max number of repeats must be greater than zero. max_num_runs:'+repr(max_num_runs_without_better_params))
-            raise ValueError
+            self.log.error(msg)
+            raise ValueError(msg)
 
         if mlu.check_file_type_supported(controller_archive_file_type):
             self.controller_archive_file_type = controller_archive_file_type
@@ -285,11 +307,41 @@ class Controller():
 
     def check_end_conditions(self):
         '''
-        Check whether either of the three end contions have been met: number_of_runs, target_cost or max_num_runs_without_better_params.
+        Check whether any of the end contions have been met.
+
+        In particular this method check for any of the following conditions:
+
+        * If the number of iterations has reached `max_num_runs`.
+        * If the `target_cost` has been reached.
+        * If `max_num_runs_without_better_params` iterations in a row have
+          occurred without any improvement.
+        * If `max_duration` seconds or more has elapsed since `start_datetime`.
+
         Returns:
-            bool : True, if the controlled should continue, False if the controller should end.
+            bool: `True`, if the controller should continue or `False` if one or
+                more halting conditions have been met and the controller should
+                end.
         '''
-        return (self.num_in_costs < self.max_num_runs) and (self.best_cost > self.target_cost) and (self.num_last_best_cost < self.max_num_runs_without_better_params)
+        # Determine how long it has been since self.start_datetime.
+        duration = datetime.datetime.now() - self.start_datetime
+        duration = duration.total_seconds()  # Convert to seconds.
+
+        # Check all of the halting conditions. Many if statements are used
+        # instead of elif blocks so that we can mark if the optimization halted
+        # for more than one reason.
+        if self.num_in_costs >= self.max_num_runs:
+            self.halt_reasons.append('Maximum number of runs reached.')
+        if self.best_cost <= self.target_cost:
+            self.halt_reasons.append('Target cost reached.')
+        if self.num_last_best_cost >= self.max_num_runs_without_better_params:
+            self.halt_reasons.append(
+                'Maximum number of runs without better params reached.'
+            )
+        if duration > self.max_duration:
+            self.halt_reasons.append('Maximum duration reached.')
+        
+        # The optimization should only continue if self.halt_reasons is empty.
+        return not bool(self.halt_reasons)
 
     def _update_controller_with_learner_attributes(self):
         '''
@@ -456,6 +508,7 @@ class Controller():
             log.warning('Closing down controller.')
         except Exception:
             self.log.warning('Controller ended due to exception of some kind. Starting shut down...')
+            self.halt_reasons.append('Error occurred.')
             self._shut_down()
             self.log.warning('Safely shut down. Below are results found before exception.')
             self.print_results()
@@ -492,17 +545,13 @@ class Controller():
         '''
         Print results from optimization run to the logs
         '''
-        self.log.info('Optimization ended because:-')
-        if self.num_in_costs >= self.max_num_runs:
-            self.log.info('Maximum number of runs reached.')
-        if self.best_cost <= self.target_cost:
-            self.log.info('Target cost reached.')
-        if self.num_last_best_cost >= self.max_num_runs_without_better_params:
-            self.log.info('Maximum number of runs without better params reached.')
-        self.log.info('Results:-')
-        self.log.info('Best parameters found:' + str(self.best_params))
-        self.log.info('Best cost returned:' + str(self.best_cost) + ' +/- ' + str(self.best_uncer))
-        self.log.info('Best run number:' + str(self.best_index))
+        self.log.info('Optimization ended because:')
+        for reason in self.halt_reasons:
+            self.log.info('\t* ' + reason)
+        self.log.info('Results:')
+        self.log.info('\t* Best parameters found:' + str(self.best_params))
+        self.log.info('\t* Best cost returned:' + str(self.best_cost) + ' +/- ' + str(self.best_uncer))
+        self.log.info('\t* Best run number:' + str(self.best_index))
 
     def _optimization_routine(self):
         '''
@@ -842,16 +891,16 @@ class MachineLearnerController(Controller):
         '''
         super(MachineLearnerController,self).print_results()
         try:
-            self.log.info('Predicted best parameters:' + str(self.predicted_best_parameters))
+            self.log.info('\t* Predicted best parameters:' + str(self.predicted_best_parameters))
             try:
                 errorstring = ' +/- ' + str(self.predicted_best_uncertainty)
             except AttributeError:
                 errorstring = ''
-            self.log.info('Predicted best cost:' + str(self.predicted_best_cost) + errorstring)
+            self.log.info('\t* Predicted best cost:' + str(self.predicted_best_cost) + errorstring)
         except AttributeError:
             pass
         try:
-            self.log.info('Predicted number of local minima:' + str(self.number_of_local_minima))
+            self.log.info('\t* Predicted number of local minima:' + str(self.number_of_local_minima))
         except AttributeError:
             pass
 

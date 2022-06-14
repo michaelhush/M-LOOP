@@ -5,6 +5,7 @@
 max_num_runs = 1000                       #number of planned runs
 target_cost = 0.1                         #cost to beat
 max_num_runs_without_better_params = 100  #max allowed number of runs between finding better parameters
+max_duration = 36000                      #the optimization will not start a new iteration after max_duration seconds.
 
 #Parameter controls
 num_params = 2                            #Number of parameters
