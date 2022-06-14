@@ -111,20 +111,28 @@ Simply delete this keyword if your experiment works with any set of parameters w
 Halting conditions
 ~~~~~~~~~~~~~~~~~~
 
-The halting conditions define when the optimization will stop. We present three options here:
+The halting conditions define when the optimization will stop.
+We present four options here:
 
 .. include:: ../examples/tutorial_config.txt
    :literal:
    :start-after: #Halting conditions
    :end-before: #Learner options
 
-max_num_runs is the maximum number of runs that the optimization algorithm is allowed to run. max_num_runs_without_better_params is the maximum number of runs allowed before a lower cost and better parameters is found. Finally, when target_cost is set, if a run produces a cost that is less than this value the optimization process will stop.
+``max_num_runs`` is the maximum number of runs that the optimization algorithm is allowed to run.
+``max_num_runs_without_better_params`` is the maximum number of runs allowed before a lower cost and better parameters is found.
+If a run produces a cost that is less than ``target_cost`` then the optimization will stop.
+Finally, if the optimization proceeds for longer than ``max_duration`` seconds, then the optimization will end once the current iteration finishes (so the actual duration may exceed ``max_duration`` somewhat as the final iteration finishes).
 
 When multiple halting conditions are set, the optimization process will halt when any one of them is met. 
 
-If you do not have any prior knowledge of the problem use only the keyword max_num_runs and set it to the highest value you can wait for. If you have some knowledge about what the minimum attainable cost is or there is some cost threshold you need to achieve, you might want to set the target_cost. max_num_runs_without_better_params is useful if you want to let the optimization algorithm run as long as it needs until there is a good chance the global optimum has been found. 
+If you do not have any prior knowledge of the problem use only the keyword ``max_num_runs`` or  ``max_duration`` and set it to the highest value you can wait for.
+If you have some knowledge about what the minimum attainable cost is or if there is some cost threshold you need to achieve, you might want to set the ``target_cost``.
+``max_num_runs_without_better_params`` is useful if you want to let the optimization algorithm run as long as it needs until there is a good chance the global optimum has been found.
+If you have some time constraint for how long you would like the optimization to take, set ``max_duration``.
 
-If you do not want one of the halting conditions, simply delete it from your file. For example if you just wanted the algorithm to search as long as it can until it found a global minimum you could set:
+If you do not want one of the halting conditions, simply delete it from your file.
+For example if you just wanted the algorithm to search as long as it can until it found a global minimum you could set:
 
 .. include:: ../examples/tutorial_config.txt
    :literal:

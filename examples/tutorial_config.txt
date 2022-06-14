@@ -14,7 +14,8 @@ trust_region = 0.4                        #maximum % move distance from best par
 #Halting conditions
 max_num_runs = 1000                       #maximum number of runs
 max_num_runs_without_better_params = 50   #maximum number of runs without finding better parameters
-target_cost = 0.01                        #optimization halts when a cost below this target is found 
+target_cost = 0.01                        #optimization halts when a cost below this target is found
+max_duration = 36000                      #the optimization will not start a new iteration after max_duration seconds.
 
 #Learner options
 cost_has_noise = True                     #whether the costs are corrupted by noise or not
