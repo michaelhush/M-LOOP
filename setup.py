@@ -26,7 +26,7 @@ def main():
                 'M-LOOP = mloop.cmd:run_mloop'
             ],
         },
-        
+
         setup_requires=['pytest-runner'],
         install_requires = ['pip>=7.0',
                             'docutils>=0.3',
@@ -49,7 +49,7 @@ def main():
         license = 'MIT',
         keywords = 'automated machine learning optimization optimisation science experiment quantum',
         url = 'https://github.com/michaelhush/M-LOOP/', 
-        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/3.2.1',
+        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v3.3.0',
     
         classifiers = ['Development Status :: 2 - Pre-Alpha',
                       'Intended Audience :: Science/Research',
@@ -59,9 +59,9 @@ def main():
                       'Operating System :: MacOS :: MacOS X',
                       'Operating System :: POSIX :: Linux',
                       'Operating System :: Microsoft :: Windows',
-    				  'Programming Language :: Python :: 2.7',
-    				  'Programming Language :: Python :: 3.4',
-    				  'Programming Language :: Python :: 3.5',
+                      'Programming Language :: Python :: 2.7',
+                      'Programming Language :: Python :: 3.4',
+                      'Programming Language :: Python :: 3.5',
                       'Programming Language :: Python :: Implementation :: CPython',
                       'Topic :: Scientific/Engineering',
                       'Topic :: Scientific/Engineering :: Artificial Intelligence',
