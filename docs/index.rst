@@ -36,6 +36,7 @@ Contents
    visualizations
    examples
    contributing
+   changelog
    api/index
    
 Indices
