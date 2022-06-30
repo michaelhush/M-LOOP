@@ -351,12 +351,19 @@ class Controller():
         self.learner_costs_queue = self.learner.costs_in_queue
         self.end_learner = self.learner.end_event
         self.remaining_kwargs = self.learner.remaining_kwargs
+        self.num_params = self.learner.num_params,
+        self.min_boundary = self.learner.min_boundary
+        self.max_boundary = self.learner.max_boundary
         self.param_names = self.learner.param_names
 
-        self.archive_dict.update({'num_params':self.learner.num_params,
-                                  'min_boundary':self.learner.min_boundary,
-                                  'max_boundary':self.learner.max_boundary,
-                                  'param_names':self.param_names})
+        self.archive_dict.update(
+            {
+                'num_params': self.num_params,
+                'min_boundary': self.min_boundary,
+                'max_boundary': self.max_boundary,
+                'param_names': self.param_names,
+            }
+        )
 
 
     def _put_params_and_out_dict(self, params, param_type=None, **kwargs):
@@ -366,7 +373,7 @@ class Controller():
         This method also saves sent variables in appropriate storage arrays.
 
         Args:
-            params (array): Array of values to be experimentall tested.
+            params (array): Array of values to be experimentally tested.
             param_type (Optional, str): The learner type which generated the
                 parameter values. Because some learners use other learners as
                 trainers, the parameter type can be different for different
@@ -385,9 +392,8 @@ class Controller():
 
         # Do one last check to ensure parameter values are within the allowed
         # limits before sending those values to the interface.
-        assert np.all(params >= self.learner.min_boundary)
-        assert np.all(params <= self.learner.max_boundary)
-        
+        params = self._enforce_boundaries(params)
+
         # Send the parameters to the interface and update various attributes.
         out_dict = {'params':params}
         out_dict.update(kwargs)
@@ -399,6 +405,77 @@ class Controller():
         self.out_type.append(param_type)
         self.log.info('params ' + str(params))
         #self.log.debug('Put params num:' + repr(self.num_out_params ))
+
+    def _enforce_boundaries(self, params):
+        '''
+        Enforce the minimum and maximum parameter boundaries.
+
+        If the values in params extend outside of the allowed boundaries set by
+        `self.min_boundary` and `self.max_boundary` by a nontrivial amount, then
+        this method will raise an `RuntimeError`.
+
+        To avoid numerical precision problems, this method actually gently clips
+        values which barely exceed the boundaries. This is because variables are
+        internally scaled and thus may very slightly violate the boundaries
+        after being unscaled. If a parameter's value only slightly exceeds the
+        boundaries, then its value will be set equal to the boundary. If a value
+        exceeds the boundary by a nontrivial amount, then a `RuntimeError` will
+        be raised.
+
+        Note that although this method is forgiving about input parameter values
+        very slightly exceeding the boundaries, it is completely strict about
+        returning parameter values which obey the boundaries. Thus it is safe to
+        assume that the returned values are within the range set by
+        `self.min_boundary` and `self.max_boundary` (inclusively).
+
+        Args:
+            params (array): Array of values to be experimentally tested.
+
+        Raises:
+            RuntimeError: A `RuntimeError` is raised if any value in `params`
+                exceeds the parameter value boundaries by a nontrivial amount.
+
+        Returns:
+            array: The input `params`, except that any values which slightly
+                exceed the boundaries will have been clipped to stay within the
+                boundaries exactly.
+        '''
+        # Check for any values barely below the minimum boundary.
+        is_below = (params < self.min_boundary)
+        is_close = np.isclose(params, self.min_boundary)
+        barely_below = np.logical_and(is_below, is_close)
+        # The line below leaves most params entries untouched. It just takes the
+        # ones which are barely below the boundary and moves them up to the
+        # minimum boundary.
+        params = np.where(barely_below, self.min_boundary, params)
+
+        # Perform a similar procedure for the maximum boundary.
+        is_above = (params > self.max_boundary)
+        is_close = np.isclose(params, self.max_boundary)
+        barely_above = np.logical_and(is_above, is_close)
+        params = np.where(barely_above, self.max_boundary, params)
+
+        # Ensure that all values are within the boundaries now. If a parameter
+        # was well outside the boundaries then the above should not have changed
+        # its value and the checks below will be violated.
+        if not np.all(params >= self.min_boundary):
+            msg = (
+                f"Minimum boundary violated. Parameter values are {params}, "
+                f"minimum bounday is {self.min_boundary}, and "
+                f"(params - boundary) is {params - self.min_boundary}."
+            )
+            self.log.error(msg)
+            raise RuntimeError(msg)
+        if not np.all(params <= self.max_boundary):
+            msg = (
+                f"Maximum boundary violated. Parameter values are {params}, "
+                f"maximum bounday is {self.min_boundary}, and "
+                f"(boundary - params) is {self.max_boundary - params})."
+            )
+            self.log.error(msg)
+            raise RuntimeError(msg)
+
+        return params
 
     def _get_cost_and_in_dict(self):
         '''
