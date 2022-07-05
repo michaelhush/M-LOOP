@@ -351,7 +351,7 @@ class Controller():
         self.learner_costs_queue = self.learner.costs_in_queue
         self.end_learner = self.learner.end_event
         self.remaining_kwargs = self.learner.remaining_kwargs
-        self.num_params = self.learner.num_params,
+        self.num_params = self.learner.num_params
         self.min_boundary = self.learner.min_boundary
         self.max_boundary = self.learner.max_boundary
         self.param_names = self.learner.param_names
