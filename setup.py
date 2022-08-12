@@ -26,18 +26,18 @@ def main():
                 'M-LOOP = mloop.cmd:run_mloop'
             ],
         },
-
         setup_requires=['pytest-runner'],
-        install_requires = ['pip>=7.0',
-                            'docutils>=0.3',
-                            'numpy>=1.11',
-                            'scipy>=0.17',
-                            'matplotlib>=1.5',
-                            'pytest>=2.9',
-                            'scikit-learn>=0.18',
-                            'tensorflow>=2.0.0'],
-        tests_require=['pytest','setuptools>=26'],
-        
+        install_requires = [
+            'pip>=7.0',
+            'docutils>=0.3',
+            'numpy>=1.11',
+            'scipy>=0.17',
+            'matplotlib>=1.5',
+            'pytest>=2.9',
+            'scikit-learn>=0.18',
+            'tensorflow>=2.0.0',
+        ],
+        tests_require=['pytest', 'setuptools>=26'],
         package_data = {
             # If any package contains *.txt or *.rst files, include them:
             '': ['*.txt','*.md'],
@@ -49,23 +49,24 @@ def main():
         license = 'MIT',
         keywords = 'automated machine learning optimization optimisation science experiment quantum',
         url = 'https://github.com/michaelhush/M-LOOP/', 
-        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v3.3.0',
-    
-        classifiers = ['Development Status :: 2 - Pre-Alpha',
-                      'Intended Audience :: Science/Research',
-                      'Intended Audience :: Manufacturing',
-                      'License :: OSI Approved :: MIT License',
-                      'Natural Language :: English',
-                      'Operating System :: MacOS :: MacOS X',
-                      'Operating System :: POSIX :: Linux',
-                      'Operating System :: Microsoft :: Windows',
-                      'Programming Language :: Python :: 2.7',
-                      'Programming Language :: Python :: 3.4',
-                      'Programming Language :: Python :: 3.5',
-                      'Programming Language :: Python :: Implementation :: CPython',
-                      'Topic :: Scientific/Engineering',
-                      'Topic :: Scientific/Engineering :: Artificial Intelligence',
-                      'Topic :: Scientific/Engineering :: Physics']
+        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v3.3.1',
+        classifiers = [
+            'Development Status :: 2 - Pre-Alpha',
+            'Intended Audience :: Science/Research',
+            'Intended Audience :: Manufacturing',
+            'License :: OSI Approved :: MIT License',
+            'Natural Language :: English',
+            'Operating System :: MacOS :: MacOS X',
+            'Operating System :: POSIX :: Linux',
+            'Operating System :: Microsoft :: Windows',
+            'Programming Language :: Python :: 2.7',
+            'Programming Language :: Python :: 3.4',
+            'Programming Language :: Python :: 3.5',
+            'Programming Language :: Python :: Implementation :: CPython',
+            'Topic :: Scientific/Engineering',
+            'Topic :: Scientific/Engineering :: Artificial Intelligence',
+            'Topic :: Scientific/Engineering :: Physics',
+        ],
     )
 
 if __name__=='__main__':
