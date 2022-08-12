@@ -32,8 +32,8 @@ This document describes the process for generating new M-LOOP releases and is in
      * ``pip install -e .`` (Make sure to cd to M-LOOP project root directory first.)
 
 #. Ensure you've checked out the master branch in your local repo and pulled the most recent changes, including the PR to bump the version numbers.
+#. Stash any local changes to the repo, including any untracked files, with `git stash --include-untracked` to be sure that they won't accidentally be included in the release.
 #. In the M-LOOP project root directory, run ``python setup.py sdist`` to make the source distribution.
-
 #. Create a release on Github.
 
    * Go to `https://github.com/michaelhush/M-LOOP/releases <https://github.com/michaelhush/M-LOOP/releases>`_ and press "Draft a new release".
@@ -50,6 +50,7 @@ This document describes the process for generating new M-LOOP releases and is in
 
 #. Do a dry run publishing to TestPyPI by running ``twine upload --repository testpypi dist/*`` in the M-LOOP project root directory.
 #. If the previous step goes well, then run ``twine upload dist/*`` to publish to real PyPI.
+#. If any local changes were stashed, you may want to reapply them with `git stash apply`.
 #. Build a new documentation version on readthedocs.
 
    * In particular a new version of "stable" should be built.
