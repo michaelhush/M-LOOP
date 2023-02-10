@@ -496,7 +496,7 @@ class ParameterScaler(skp.MinMaxScaler):
         *args: Additional arguments are passed to `MinMaxScaler.__init__()`.
         **kwargs: Arbitrary keyword arguments are passed to `MinMaxScaler.__init__()`.
     '''
-    def __init__(self, min_boundary, max_boundary, *args, **kwargs):
+    def __init__(self, min_boundary, max_boundary, **kwargs):
         if len(min_boundary) != len(max_boundary):
             raise ValueError(
                 "The minimum and maximum boundary arrays must have the same lengths but "
@@ -506,7 +506,7 @@ class ParameterScaler(skp.MinMaxScaler):
 
         self.min_boundary = min_boundary
         self.max_boundary = max_boundary
-        return super().__init__(*args, **kwargs)
+        return super().__init__(**kwargs)
 
     def partial_fit(self, X=None, *args, **kwargs):
         '''
