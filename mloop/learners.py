@@ -103,7 +103,7 @@ class Learner():
         if min_boundary is None:
             self.min_boundary = np.full((self.num_params,), -1.0)
         else:
-            self.min_boundary = np.array(min_boundary, dtype=np.float)
+            self.min_boundary = np.array(min_boundary, dtype=float)
         if self.min_boundary.shape != (self.num_params,):
             msg = 'min_boundary array the wrong shape:' + repr(self.min_boundary.shape)
             self.log.error(msg)
@@ -111,7 +111,7 @@ class Learner():
         if max_boundary is None:
             self.max_boundary = np.full((self.num_params,), 1.0)
         else:
-            self.max_boundary = np.array(max_boundary, dtype=np.float)
+            self.max_boundary = np.array(max_boundary, dtype=float)
         if self.max_boundary.shape != (self.num_params,):
             msg = 'max_boundary array the wrong shape:' + self.min_boundary.shape
             self.log.error(msg)
