@@ -49,7 +49,7 @@ def main():
         license = 'MIT',
         keywords = 'automated machine learning optimization optimisation science experiment quantum',
         url = 'https://github.com/michaelhush/M-LOOP/', 
-        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v3.3.1',
+        download_url = 'https://github.com/michaelhush/M-LOOP/tarball/v3.3.2',
         classifiers = [
             'Development Status :: 2 - Pre-Alpha',
             'Intended Audience :: Science/Research',
