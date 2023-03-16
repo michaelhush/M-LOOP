@@ -34,6 +34,7 @@ This document describes the process for generating new M-LOOP releases and is in
 #. Ensure you've checked out the master branch in your local repo and pulled the most recent changes, including the PR to bump the version numbers.
 #. Stash any local changes to the repo, including any untracked files, with ``git stash --include-untracked`` to be sure that they won't accidentally be included in the release.
 #. In the M-LOOP project root directory, run ``python setup.py sdist`` to make the source distribution.
+#. Delete any previous source distribution files in the ``dist/`` subdirectory of the project root directory.
 #. Create a release on Github.
 
    * Go to `https://github.com/michaelhush/M-LOOP/releases <https://github.com/michaelhush/M-LOOP/releases>`_ and press "Draft a new release".
