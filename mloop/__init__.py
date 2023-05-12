@@ -12,5 +12,5 @@ __metaclass__ = type
 
 import os
 
-__version__ = '3.3.2'
+__version__ = '3.3.3'
 __all__ = ['controllers','interfaces','launchers','learners','nnlearner','testing','utilities','visualizations','cmd']
