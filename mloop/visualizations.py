@@ -893,8 +893,6 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
         self.has_trust_region = bool(np.array(training_dict['has_trust_region']))
         self.trust_region = np.squeeze(np.array(training_dict['trust_region'], dtype=float))
 
-        self.fit_gaussian_process()
-
         self.param_numbers = np.arange(self.num_params)
         self.log_length_scale_history = np.log10(np.array(self.length_scale_history, dtype=float))
         self.noise_level_history = np.array(self.noise_level_history)
@@ -908,6 +906,7 @@ class GaussianProcessVisualizer(mll.GaussianProcessLearner):
             self.params_scaler.partial_fit()
         else:
             self.finite_flag = False
+        self.fit_gaussian_process()
 
         # Determine where the trust region is in scaled units so that it can be
         # marked on the cross section plots.
