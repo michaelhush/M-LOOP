@@ -162,6 +162,8 @@ class Controller():
         best_uncer (float): The uncertainty associated with the best cost.
         best_params (array): The best parameters received by the learner.
         best_index (float): The run number that produced the best cost.
+        best_in_extras (dict): The extra entries returned in the cost dict from
+            the best run.
     '''
 
     def __init__(
@@ -196,6 +198,7 @@ class Controller():
         self.best_uncer = float('nan')
         self.best_index = float('nan')
         self.best_params = float('nan')
+        self.best_in_extras = {}
 
         # Variables that are used internally.
         self.last_out_params = None
@@ -540,6 +543,7 @@ class Controller():
             self.best_uncer = self.curr_uncer
             self.best_index =  self.num_in_costs
             self.best_params = self.curr_params
+            self.best_in_extras = self.curr_extras
             self.num_last_best_cost = 0
         if self.curr_bad:
             self.log.info('bad run')
@@ -552,12 +556,17 @@ class Controller():
         Save the archive associated with the controller class. Only occurs if the filename for the archive is not None. Saves with the format previously set.
         '''
         if self.controller_archive_filename is not None:
-            self.archive_dict.update({'num_in_costs':self.num_in_costs,
-                                      'num_out_params':self.num_out_params,
-                                      'best_cost':self.best_cost,
-                                      'best_uncer':self.best_uncer,
-                                      'best_params':self.best_params,
-                                      'best_index':self.best_index})
+            self.archive_dict.update(
+                {
+                    'num_in_costs': self.num_in_costs,
+                    'num_out_params': self.num_out_params,
+                    'best_cost': self.best_cost,
+                    'best_uncer': self.best_uncer,
+                    'best_params': self.best_params,
+                    'best_index': self.best_index,
+                    'best_in_extras': self.best_in_extras
+                }
+            )
             try:
                 mlu.save_dict_to_file(self.archive_dict,self.total_archive_filename,self.controller_archive_file_type)
             except ValueError:
@@ -626,9 +635,11 @@ class Controller():
         for reason in self.halt_reasons:
             self.log.info('\t* ' + reason)
         self.log.info('Results:')
-        self.log.info('\t* Best parameters found:' + str(self.best_params))
-        self.log.info('\t* Best cost returned:' + str(self.best_cost) + ' +/- ' + str(self.best_uncer))
-        self.log.info('\t* Best run number:' + str(self.best_index))
+        self.log.info('\t* Best parameters found: ' + str(self.best_params))
+        self.log.info('\t* Best cost returned: ' + str(self.best_cost) + ' +/- ' + str(self.best_uncer))
+        self.log.info('\t* Best run number: ' + str(self.best_index))
+        if self.best_in_extras:
+            self.log.info('\t* Best extras: ' + str(self.best_in_extras))
 
     def _optimization_routine(self):
         '''
