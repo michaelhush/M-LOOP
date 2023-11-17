@@ -408,8 +408,8 @@ class ControllerVisualizer():
             self.unique_types[j]: out_type_colors[j] for j in range(len(self.unique_types))
         }
         self.cost_colors = [self.out_type_color_mapping[x] for x in self.out_type]
-        self.in_numbers = np.arange(1,self.num_in_costs+1)
-        self.out_numbers = np.arange(1,self.num_out_params+1)
+        self.in_numbers = np.arange(self.num_in_costs)
+        self.out_numbers = np.arange(self.num_out_params)
         self.param_numbers = np.arange(self.num_params)
 
     def create_visualizations(self,
