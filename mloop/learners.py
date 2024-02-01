@@ -460,7 +460,7 @@ class RandomLearner(Learner, threading.Thread):
 
         # Keep track of best parameters to implement trust region.
         self.best_cost = None
-        self.best_parameters = None
+        self.best_params = None
 
         self._set_trust_region(trust_region)
 
