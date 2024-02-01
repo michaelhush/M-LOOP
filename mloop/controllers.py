@@ -201,7 +201,7 @@ class Controller():
         self.best_in_extras = {}
 
         # Variables that are used internally.
-        self.last_out_params = None
+        self.last_out_params = mlu.queue.Queue()
         self.curr_params = None
         self.curr_cost = None
         self.curr_uncer = None
@@ -402,7 +402,7 @@ class Controller():
         out_dict.update(kwargs)
         self.params_out_queue.put(out_dict)
         self.num_out_params += 1
-        self.last_out_params = params
+        self.last_out_params.put(params)
         self.out_params.append(params)
         self.out_extras.append(kwargs)
         self.out_type.append(param_type)
@@ -537,7 +537,7 @@ class Controller():
         self.in_uncers.append(self.curr_uncer)
         self.in_bads.append(self.curr_bad)
         self.in_extras.append(self.curr_extras)
-        self.curr_params = self.last_out_params
+        self.curr_params = self.last_out_params.get()
         if self.curr_cost < self.best_cost:
             self.best_cost = self.curr_cost
             self.best_uncer = self.curr_uncer
