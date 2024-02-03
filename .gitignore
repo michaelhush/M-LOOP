@@ -62,6 +62,9 @@ docs/_build/
 # PyBuilder
 target/
 
-#Project specific files
+# Project specific files
 ExpConfig.txt
 .DS_Store
+
+# Editor settings
+.vscode/
