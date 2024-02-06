@@ -66,7 +66,11 @@ def _config_logger(log_filename = default_log_filename,
     Keyword Args:
         log_filename (Optional [string]) : Filename prefix for log. Default M-LOOP run . If None, no file handler is created
         file_log_level (Optional[int]) : Level of log output for file, default is logging.DEBUG = 10
+        file_log_string (Optional[string]) : String to be used for file logging.  The default is 
+            '%(asctime)s %(name)-20s %(levelname)-8s %(message)s'.  See the documentation for the standard
+            library logging module for formatting details.
         console_log_level (Optional[int]) :Level of log output for console, default is logging.INFO = 20
+        file_log_string (Optional[string]) : String to be used for file logging.  The default is '%(levelname)-8s %(message)s'.
         start_datetime (Optional datetime.datetime): The date and time to use in
             the filename suffix, represented as an instance of the datetime
             class defined in the datetime module. If set to None, then this
