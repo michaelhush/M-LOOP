@@ -54,12 +54,12 @@ def config_logger(**kwargs):
     _ = _config_logger(**kwargs)
 
 def _config_logger(log_filename = default_log_filename,
-                  file_log_level=logging.DEBUG,
-                  file_log_string='%(asctime)s %(name)-20s %(levelname)-8s %(message)s',
-                  console_log_level=logging.INFO,
-                  console_log_string='%(levelname)-8s %(message)s',
-                  start_datetime=None,
-                  **kwargs):
+                file_log_level=logging.DEBUG,
+                file_log_string='%(asctime)s %(name)-20s %(levelname)-8s %(message)s',
+                console_log_level=logging.INFO,
+                console_log_string='%(levelname)-8s %(message)s',
+                start_datetime=None,
+                **kwargs):
     '''
     Configure and the root logger.
     
