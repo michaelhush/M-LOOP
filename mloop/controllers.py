@@ -464,7 +464,7 @@ class Controller():
         if not np.all(params >= self.min_boundary):
             msg = (
                 f"Minimum boundary violated. Parameter values are {params}, "
-                f"minimum bounday is {self.min_boundary}, and "
+                f"minimum boundary is {self.min_boundary}, and "
                 f"(params - boundary) is {params - self.min_boundary}."
             )
             self.log.error(msg)
@@ -472,7 +472,7 @@ class Controller():
         if not np.all(params <= self.max_boundary):
             msg = (
                 f"Maximum boundary violated. Parameter values are {params}, "
-                f"maximum bounday is {self.min_boundary}, and "
+                f"maximum boundary is {self.max_boundary}, and "
                 f"(boundary - params) is {self.max_boundary - params})."
             )
             self.log.error(msg)
