@@ -573,7 +573,7 @@ class NelderMeadLearner(Learner, threading.Thread):
         if initial_simplex_corner is None:
             diff_roll = (self.diff_boundary - self.init_simplex_disp) * mlu.rng.random(self.num_params)
             diff_roll[diff_roll==float('+inf')]= 0
-            self.init_simplex_corner = self.min_boundary
+            self.init_simplex_corner = np.copy(self.min_boundary)
             self.init_simplex_corner[self.init_simplex_corner==float('-inf')]=0
             self.init_simplex_corner += diff_roll
         else:
