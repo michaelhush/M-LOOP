@@ -35,8 +35,7 @@ def main():
             'matplotlib>=1.5',
             'pytest>=2.9',
             'scikit-learn>=0.18',
-            'tensorflow>=2.0.0; sys_platform != "darwin"',
-            'tensorflow-macos>=2.0.0; sys_platform == "darwin"',
+            'tensorflow>=2.16.1',
         ],
         tests_require=['pytest', 'setuptools>=26'],
         package_data = {
