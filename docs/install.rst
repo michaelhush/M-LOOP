@@ -102,7 +102,7 @@ pytest         >=2.9
 setuptools     >=26
 scikit-learn   >=0.18
 scipy          >=0.17
-tensorflow     >=2.0.0
+tensorflow     >=2.16.1
 ============   =======
 
 These packages should be automatically installed by pip or the script setup.py when you install M-LOOP. The setup script itself requires pytest-runner.
