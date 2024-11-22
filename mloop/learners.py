@@ -817,6 +817,10 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
             self.mutation_func = self._rand1
         elif evolution_strategy == 'rand2':
             self.mutation_func = self._rand2
+        elif evolution_strategy == 'currtobest1':
+            self.mutation_func = self._currtobest1
+        elif evolution_strategy == 'currtobest2':
+            self.mutation_func = self._currtobest2
         else:
             msg = 'Please select a valid mutation strategy'
             self.log.error(msg)
@@ -1031,6 +1035,30 @@ class DifferentialEvolutionLearner(Learner, threading.Thread):
         '''
         r0, r1, r2, r3, r4 = self.random_index_sample(index, 5)
         return self.population[r0] + self.curr_scale * (self.population[r1] + self.population[r2] - self.population[r3] - self.population[r4])
+    
+    # custom evolutionary strategy
+    # may need to add a separate scaling factor
+    def _currtobest1(self, index):
+        '''
+        Use current parameter, best parameters and two others to generate mutation.
+        (see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html for a definition of the strategy).
+
+        Args:
+            index (int): Index of member to mutate.
+        '''   
+        r0, r1 = self.random_index_sample(index, 2)
+        return self.population[index] + self.curr_scale * (self.population[self.min_index] - self.population[index] + self.population[r0] - self.population[r1])
+    
+    def _currtobest2(self, index):
+        '''
+        Use current parameter, best parameters and four others to generate mutation.
+        (see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html for a definition of the strategy).
+
+        Args:
+            index (int): Index of member to mutate.
+        '''   
+        r0, r1, r2, r3 = self.random_index_sample(index, 4) 
+        return self.population[index] + self.curr_scale * (self.population[self.min_index] - self.population[index] + self.population[r0] - self.population[r1] + self.population[r2] - self.population[r3])
 
     def random_index_sample(self, index, num_picks):
         '''
