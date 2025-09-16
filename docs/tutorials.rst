@@ -234,12 +234,7 @@ Once M-LOOP has completed the optimization, it will output results in several wa
 
 M-LOOP will print results to the console.
 It will give the parameters of the experimental run that produced the lowest cost.
-It will also provide a set of parameters which are predicted to produce the lowest average cost.
-If there is no noise in the costs your experiment produced, then the best parameters and predicted best parameters will be the same.
-If there was some noise in your costs then it is possible that there will be a difference between the two.
-This is because the noise might have caused a set of experimental parameters to produce a lower cost than they typically would due to a random fluke.
-The real optimal parameters that correspond to the minimum average cost are the predicted best parameters.
-In general, use the predicted best parameters (when provided) as the final result of the experiment. 
+If using a machine-leraning-based optimizer, it will also provide a set of parameters which are predicted to produce the lowest average cost.
 
 M-LOOP will produce an archive for the controller and machine learner.
 The controller archive contains all the data gathered during the experimental run and also other configuration details set by the user.
